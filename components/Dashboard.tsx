@@ -2,9 +2,10 @@
 
 import { useEffect, useState } from 'react';
 import { GoogleGenAI } from '@google/genai';
-import { LayoutGrid, Loader2, LogOut, Sofa, Sparkles } from 'lucide-react';
+import { LayoutGrid, Loader2, LogOut, Sofa, Sparkles, Crown, ShieldAlert } from 'lucide-react';
 import { Catalog } from './Catalog';
 import { RoomEditor } from './RoomEditor';
+import { VipCenter } from './VipCenter';
 import { fileToBase64 } from '@/lib/client/image-utils';
 import { readJson, type CatalogResponse, type CatalogMutationResponse } from '@/lib/client/api';
 import { FURNITURE_CATEGORIES, type FurnitureItem } from '@/lib/dashboard-types';
@@ -12,11 +13,16 @@ import { GEMINI_CLASSIFIER_MODEL } from '@/lib/gemini-config';
 
 type DashboardProps = {
   companyName: string;
+  user: {
+    id: string;
+    role?: string;
+    vipExpiresAt?: Date | null;
+  };
   onLogout: () => void;
 };
 
-export function Dashboard({ companyName, onLogout }: DashboardProps) {
-  const [activeTab, setActiveTab] = useState<'catalog' | 'editor'>('catalog');
+export function Dashboard({ companyName, user, onLogout }: DashboardProps) {
+  const [activeTab, setActiveTab] = useState<'catalog' | 'editor' | 'vip'>('catalog');
   const [catalog, setCatalog] = useState<FurnitureItem[]>([]);
   const [isUploading, setIsUploading] = useState(false);
   const [isCatalogLoading, setIsCatalogLoading] = useState(true);
@@ -156,15 +162,35 @@ export function Dashboard({ companyName, onLogout }: DashboardProps) {
               <Sparkles size={16} />
               室内编辑器
             </button>
+            <button
+              onClick={() => setActiveTab('vip')}
+              className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all flex items-center gap-2 ${
+                activeTab === 'vip' ? 'bg-white text-zinc-900 shadow-sm' : 'text-amber-600 hover:text-amber-700'
+              }`}
+            >
+              <Crown size={16} />
+              会员中心
+            </button>
           </nav>
 
-          <button
-            onClick={onLogout}
-            className="text-zinc-500 hover:text-zinc-900 p-2 rounded-lg hover:bg-zinc-100 transition-colors"
-            title="退出登录"
-          >
-            <LogOut size={20} />
-          </button>
+          <div className="flex items-center gap-2">
+            {user.role === 'admin' && (
+              <a
+                href="/admin/codes"
+                className="text-indigo-600 hover:bg-indigo-50 px-3 py-1.5 rounded-lg text-sm font-medium transition-all flex items-center gap-1.5"
+              >
+                <ShieldAlert size={16} />
+                进入后台
+              </a>
+            )}
+            <button
+              onClick={onLogout}
+              className="text-zinc-500 hover:text-zinc-900 p-2 rounded-lg hover:bg-zinc-100 transition-colors"
+              title="退出登录"
+            >
+              <LogOut size={20} />
+            </button>
+          </div>
         </div>
       </header>
 
@@ -187,6 +213,15 @@ export function Dashboard({ companyName, onLogout }: DashboardProps) {
           <Sparkles size={16} />
           室内编辑器
         </button>
+        <button
+          onClick={() => setActiveTab('vip')}
+          className={`px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2 whitespace-nowrap ${
+            activeTab === 'vip' ? 'bg-amber-100 text-amber-900' : 'text-amber-600'
+          }`}
+        >
+          <Crown size={16} />
+          会员中心
+        </button>
       </div>
 
       <main className="flex-1 max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-4 sm:py-8">
@@ -205,6 +240,8 @@ export function Dashboard({ companyName, onLogout }: DashboardProps) {
             <Loader2 size={20} className="animate-spin" />
             正在载入图册资源...
           </div>
+        ) : activeTab === 'vip' ? (
+          <VipCenter user={user} />
         ) : (
           <RoomEditor catalog={catalog} onUploadFiles={handleUploadFiles} />
         )}

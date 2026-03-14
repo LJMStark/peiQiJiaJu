@@ -6,9 +6,14 @@ import { signOut } from '@/lib/auth-client';
 
 type DashboardShellProps = {
   companyName: string;
+  user: {
+    id: string;
+    role?: string;
+    vipExpiresAt?: Date | null;
+  };
 };
 
-export function DashboardShell({ companyName }: DashboardShellProps) {
+export function DashboardShell({ companyName, user }: DashboardShellProps) {
   const router = useRouter();
 
   const handleLogout = async () => {
@@ -17,5 +22,5 @@ export function DashboardShell({ companyName }: DashboardShellProps) {
     router.refresh();
   };
 
-  return <Dashboard companyName={companyName} onLogout={handleLogout} />;
+  return <Dashboard companyName={companyName} user={user} onLogout={handleLogout} />;
 }

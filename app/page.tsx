@@ -22,5 +22,14 @@ export default async function Home() {
     redirect(`/verify-email?email=${encodeURIComponent(session.user.email)}`);
   }
 
-  return <DashboardShell companyName={getCompanyName(session.user.name, session.user.email)} />;
+  return (
+    <DashboardShell 
+      companyName={getCompanyName(session.user.name, session.user.email)} 
+      user={{
+        id: session.user.id,
+        role: session.user.role as string | undefined,
+        vipExpiresAt: session.user.vipExpiresAt ? new Date(session.user.vipExpiresAt) : null,
+      }}
+    />
+  );
 }

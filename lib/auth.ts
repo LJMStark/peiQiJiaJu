@@ -78,6 +78,20 @@ export function createAuth(config: AuthConfigOptions = {}) {
       enabled: true,
       requireEmailVerification: true,
     },
+    user: {
+      additionalFields: {
+        role: {
+          type: 'string',
+          defaultValue: 'user',
+          input: false,
+        },
+        vipExpiresAt: {
+          type: 'date',
+          required: false,
+          input: false,
+        },
+      },
+    },
     emailVerification: {
       sendVerificationEmail: async ({ user, url }) => {
         void sendEmail({
