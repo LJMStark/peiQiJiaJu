@@ -2,13 +2,11 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { Upload, Sparkles, Image as ImageIcon, Loader2, Download, History, Clock, X, Layers, MessageSquareText, Lightbulb, Sofa } from 'lucide-react';
-import { GoogleGenAI } from '@google/genai';
 import Image from 'next/image';
 import { motion, AnimatePresence } from 'motion/react';
 import { readJson, type RoomsResponse, type RoomMutationResponse, type HistoryResponse, type HistoryMutationResponse } from '@/lib/client/api';
 import { type FurnitureItem, type HistoryItem, type PlacedFurniture, type RoomImage } from '@/lib/dashboard-types';
-import { imageUrlToBase64, inferAspectRatio } from '@/lib/client/image-utils';
-import { GEMINI_IMAGE_MODEL } from '@/lib/gemini-config';
+import { inferAspectRatio } from '@/lib/client/image-utils';
 import { FurniturePreviewModal } from './room-editor/FurniturePreviewModal';
 import { FurnitureDrawer } from './room-editor/FurnitureDrawer';
 import { FeedbackModal } from './room-editor/FeedbackModal';
@@ -82,13 +80,21 @@ export function RoomEditor({ catalog, onUploadFiles }: RoomEditorProps) {
 
   const handleFurnitureUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
+      setError(null);
       setIsUploadingFurniture(true);
-      const uploadedItems = await onUploadFiles(Array.from(e.target.files));
-      if (uploadedItems && uploadedItems.length > 0) {
-        setSelectedFurnitures(prev => [...prev, ...uploadedItems]);
+      try {
+        const uploadedItems = await onUploadFiles(Array.from(e.target.files));
+        if (uploadedItems && uploadedItems.length > 0) {
+          setSelectedFurnitures(prev => [...prev, ...uploadedItems]);
+        }
+      } catch (uploadError) {
+        setError(uploadError instanceof Error ? uploadError.message : 'Failed to upload furniture.');
+      } finally {
+        if (furnitureInputRef.current) {
+          furnitureInputRef.current.value = '';
+        }
+        setIsUploadingFurniture(false);
       }
-      if (furnitureInputRef.current) furnitureInputRef.current.value = '';
-      setIsUploadingFurniture(false);
     }
   };
 
@@ -160,106 +166,27 @@ export function RoomEditor({ catalog, onUploadFiles }: RoomEditorProps) {
     setBatchProgress({ current, total });
     
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.NEXT_PUBLIC_GEMINI_API_KEY });
-      
-      let prompt = `你是一位顶级的室内设计师和高级图像合成专家。
-我按顺序提供了两张图片：
-[图片 1]：基础场景（室内房间实景图）。
-[图片 2]：目标物体（需要放入房间的家具参考图）。
-
-【核心任务】
-以 [图片 1] 为绝对的基础背景，将 [图片 2] 中的主体家具完美、无痕地合成到 [图片 1] 中。
-严禁改变 [图片 1] 的房间结构、墙壁、地板和其他不相关的背景元素！
-
-【高级合成规范】
-1. 空间透视与比例 (Perspective & Scale)：
-   - 严格遵循 [图片 1] 的空间透视灭点（Vanishing Points）。
-   - 确保新家具的三维透视形变与房间的地板、墙面完全吻合。
-   - 准确评估房间的物理尺度，使新家具的比例（长宽高）与周围环境（如门、窗、其他家具）保持绝对协调。
-2. 光影与材质 (Lighting & Shadows)：
-   - 深度分析 [图片 1] 的主光源方向、色温和环境光（Ambient Light）。
-   - 为新家具重新生成符合房间光源的受光面、背光面和高光。
-   - 必须在家具底部和接触面生成准确的接触阴影（Contact Shadows）和投射阴影（Cast Shadows），阴影的软硬程度需与房间现有阴影一致。
-   - 如果地板是反光材质（如瓷砖、抛光木地板），必须生成新家具的真实倒影。
-3. 遮挡与融合 (Occlusion & Blending)：
-   - 妥善处理新家具与房间原有物品的前后遮挡关系。
-   - 边缘融合必须自然，无明显的抠图白边或生硬过渡。
-4. 智能替换与摆放 (Placement)：
-   - 优先识别并替换 [图片 1] 中与 [图片 2] 功能相似的旧家具。
-   - 如果是新增家具，请选择符合室内设计美学和动线逻辑的合理位置。`;
-
-      if (customInstruction.trim()) {
-        prompt += `\n\n【用户的特别指示与反馈】\n${customInstruction}`;
-      }
-
       for (const room of roomImages) {
         for (const furniture of selectedFurnitures) {
           current++;
           setBatchProgress({ current, total });
           
           try {
-            const [roomBase64, furnitureBase64] = await Promise.all([
-              imageUrlToBase64(room.imageUrl),
-              imageUrlToBase64(furniture.imageUrl),
-            ]);
-
-            const response = await ai.models.generateContent({
-              model: GEMINI_IMAGE_MODEL,
-              contents: {
-                parts: [
-                  {
-                    inlineData: {
-                      data: roomBase64,
-                      mimeType: room.mimeType,
-                    },
-                  },
-                  {
-                    inlineData: {
-                      data: furnitureBase64,
-                      mimeType: furniture.mimeType,
-                    },
-                  },
-                  {
-                    text: prompt,
-                  },
-                ],
+            const response = await fetch('/api/generate', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
               },
-              config: {
-                imageConfig: {
-                  aspectRatio: room.aspectRatio || "1:1",
-                  imageSize: "2K"
-                }
-              }
+              body: JSON.stringify({
+                roomImageId: room.id,
+                furnitureItemId: furniture.id,
+                customInstruction: customInstruction.trim() ? customInstruction : null,
+              }),
             });
+            const payload = await readJson<HistoryMutationResponse>(response);
 
-            let foundImage = false;
-            for (const part of response.candidates?.[0]?.content?.parts || []) {
-              if (part.inlineData) {
-                const finalImage = `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;
-                const saveResponse = await fetch('/api/history', {
-                  method: 'POST',
-                  headers: {
-                    'Content-Type': 'application/json',
-                  },
-                  body: JSON.stringify({
-                    roomImageId: room.id,
-                    furnitureItemId: furniture.id,
-                    generatedDataUrl: finalImage,
-                    customInstruction: customInstruction.trim() ? customInstruction : null,
-                  }),
-                });
-                const payload = await readJson<HistoryMutationResponse>(saveResponse);
-
-                setCurrentGeneratedImage(payload.item.generatedImage);
-                foundImage = true;
-                setHistory((previous) => [payload.item, ...previous]);
-                break;
-              }
-            }
-
-            if (!foundImage) {
-              console.warn(`组合生成失败: 房间 ${room.id}, 家具 ${furniture.id}`);
-            }
+            setCurrentGeneratedImage(payload.item.generatedImage);
+            setHistory((previous) => [payload.item, ...previous]);
           } catch (err: unknown) {
             console.error("单个组合生成错误:", err);
             const msg = getErrorMessage(err);

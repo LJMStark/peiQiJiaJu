@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { requireVerifiedRequestSession } from '@/lib/auth-session';
 import { badRequest, errorResponse } from '@/lib/server/api-utils';
 import { createFurnitureItem, listFurnitureItems } from '@/lib/server/assets';
+import { classifyFurnitureFile } from '@/lib/server/gemini';
 
 export async function GET(request: Request) {
   const authState = await requireVerifiedRequestSession(request);
@@ -33,10 +34,15 @@ export async function POST(request: Request) {
   }
 
   try {
+    const resolvedCategory = await classifyFurnitureFile(
+      file,
+      typeof category === 'string' ? category : null
+    );
+
     const item = await createFurnitureItem(authState.session.user.id, {
       file,
       name: typeof name === 'string' ? name : null,
-      category: typeof category === 'string' ? category : null,
+      category: resolvedCategory,
     });
 
     return NextResponse.json({ item }, { status: 201 });

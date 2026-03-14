@@ -1,15 +1,12 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { GoogleGenAI } from '@google/genai';
 import { LayoutGrid, Loader2, LogOut, Sofa, Sparkles, Crown, ShieldAlert } from 'lucide-react';
 import { Catalog } from './Catalog';
 import { RoomEditor } from './RoomEditor';
 import { VipCenter } from './VipCenter';
-import { fileToBase64 } from '@/lib/client/image-utils';
 import { readJson, type CatalogResponse, type CatalogMutationResponse } from '@/lib/client/api';
-import { FURNITURE_CATEGORIES, type FurnitureItem } from '@/lib/dashboard-types';
-import { GEMINI_CLASSIFIER_MODEL } from '@/lib/gemini-config';
+import type { FurnitureItem } from '@/lib/dashboard-types';
 
 type DashboardProps = {
   companyName: string;
@@ -49,7 +46,6 @@ export function Dashboard({ companyName, user, onLogout }: DashboardProps) {
     setIsUploading(true);
     setCatalogError(null);
     const newItems: FurnitureItem[] = [];
-    const ai = new GoogleGenAI({ apiKey: process.env.NEXT_PUBLIC_GEMINI_API_KEY });
 
     try {
       for (const file of files) {
@@ -57,37 +53,9 @@ export function Dashboard({ companyName, user, onLogout }: DashboardProps) {
           continue;
         }
 
-        const base64Data = await fileToBase64(file);
-        let category = '其他';
-
-        try {
-          const response = await ai.models.generateContent({
-            model: GEMINI_CLASSIFIER_MODEL,
-            contents: [
-              {
-                inlineData: {
-                  data: base64Data,
-                  mimeType: file.type,
-                },
-              },
-              {
-                text: "You are a furniture classifier. Classify the given image into EXACTLY ONE of these categories: 沙发, 床, 书桌, 餐桌, 茶几, 椅子, 柜子, 灯具, 装饰, 其他. Return ONLY the category name, nothing else. If it's a sofa, return 沙发. If it's a bed, return 床. If it's a desk, return 书桌. If it's a dining table, return 餐桌. If it's a coffee table, return 茶几. If it's a chair, return 椅子. If it's a cabinet/storage, return 柜子. If it's lighting, return 灯具. If it's decoration, return 装饰. Otherwise return 其他.",
-              },
-            ],
-          });
-
-          const result = response.text?.trim();
-          if (result && FURNITURE_CATEGORIES.some((value) => value === result)) {
-            category = result;
-          }
-        } catch (error) {
-          console.error('Classification failed', error);
-        }
-
         const formData = new FormData();
         formData.append('file', file);
         formData.append('name', file.name.replace(/\.[^/.]+$/, ''));
-        formData.append('category', category);
 
         const response = await fetch('/api/catalog', {
           method: 'POST',
