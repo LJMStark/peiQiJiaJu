@@ -1,10 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getRequestSession } from '@/lib/auth-session';
+import { unauthorized, errorResponse } from '@/lib/server/api-utils';
 import { deleteRoomImage } from '@/lib/server/assets';
-
-function unauthorized() {
-  return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-}
 
 export async function DELETE(
   request: Request,
@@ -20,8 +17,6 @@ export async function DELETE(
     await deleteRoomImage(session.user.id, id);
     return NextResponse.json({ success: true });
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Failed to delete room image.';
-    const status = message.includes('not found') ? 404 : 400;
-    return NextResponse.json({ error: message }, { status });
+    return errorResponse(error, 'Failed to delete room image.');
   }
 }

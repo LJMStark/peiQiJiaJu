@@ -3,8 +3,9 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState, useTransition } from 'react';
-import { ArrowRight, Lock, Mail } from 'lucide-react';
-import { signIn } from '@/lib/auth-client';
+import { ArrowRight, Lock, Mail, RefreshCw } from 'lucide-react';
+import { signIn, sendVerificationEmail } from '@/lib/auth-client';
+import { getAuthErrorMessage } from '@/lib/auth-errors';
 
 export function SignInForm() {
   const router = useRouter();
@@ -12,10 +13,14 @@ export function SignInForm() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+  const [needsVerification, setNeedsVerification] = useState(false);
+  const [isResending, setIsResending] = useState(false);
 
   const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setError('');
+    setSuccess('');
 
     if (!email.trim() || !password.trim()) {
       setError('请输入邮箱和密码。');
@@ -29,7 +34,15 @@ export function SignInForm() {
       });
 
       if (response.error) {
-        setError(response.error.message ?? '登录失败，请稍后重试。');
+        const code = response.error.code;
+
+        if (response.error.status === 403 || code === 'EMAIL_NOT_VERIFIED') {
+          setNeedsVerification(true);
+          setError('您的邮箱尚未验证。请查收验证邮件，或点击下方按钮重新发送。');
+          return;
+        }
+
+        setError(getAuthErrorMessage(code, response.error.message));
         return;
       }
 
@@ -37,6 +50,28 @@ export function SignInForm() {
       router.refresh();
     });
   };
+
+  const handleResendVerification = async () => {
+    setError('');
+    setSuccess('');
+    setIsResending(true);
+
+    const response = await sendVerificationEmail({
+      email: email.trim().toLowerCase(),
+      callbackURL: '/',
+    });
+
+    setIsResending(false);
+
+    if (response.error) {
+      setError(getAuthErrorMessage(response.error.code, '验证邮件发送失败，请稍后重试。'));
+      return;
+    }
+
+    setSuccess('验证邮件已重新发送，请查收邮箱。');
+  };
+
+  const isLoading = isPending || isResending;
 
   return (
     <form onSubmit={handleSubmit} className="space-y-5">
@@ -86,9 +121,33 @@ export function SignInForm() {
         </div>
       ) : null}
 
+      {success ? (
+        <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+          {success}
+        </div>
+      ) : null}
+
+      {needsVerification ? (
+        <button
+          type="button"
+          onClick={handleResendVerification}
+          disabled={isResending}
+          className="w-full border border-indigo-200 bg-indigo-50 text-indigo-700 font-medium py-3 px-4 rounded-xl hover:bg-indigo-100 active:scale-[0.98] transition-all flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
+        >
+          {isResending ? (
+            <div className="w-5 h-5 border-2 border-indigo-300 border-t-indigo-600 rounded-full animate-spin" />
+          ) : (
+            <>
+              <RefreshCw size={16} />
+              重新发送验证邮件
+            </>
+          )}
+        </button>
+      ) : null}
+
       <button
         type="submit"
-        disabled={isPending}
+        disabled={isLoading}
         className="w-full bg-zinc-900 text-white font-medium py-3.5 px-4 rounded-xl hover:bg-zinc-800 active:scale-[0.98] transition-all flex items-center justify-center gap-2 group disabled:opacity-70 disabled:cursor-not-allowed"
       >
         {isPending ? (

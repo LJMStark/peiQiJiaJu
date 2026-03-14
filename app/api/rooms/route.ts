@@ -1,14 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getRequestSession } from '@/lib/auth-session';
+import { unauthorized, badRequest, errorResponse } from '@/lib/server/api-utils';
 import { createRoomImage, listRoomImages } from '@/lib/server/assets';
-
-function unauthorized() {
-  return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-}
-
-function badRequest(message: string) {
-  return NextResponse.json({ error: message }, { status: 400 });
-}
 
 export async function GET(request: Request) {
   const session = await getRequestSession(request);
@@ -20,8 +13,7 @@ export async function GET(request: Request) {
     const items = await listRoomImages(session.user.id);
     return NextResponse.json({ items });
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Failed to load room images.';
-    return NextResponse.json({ error: message }, { status: 500 });
+    return errorResponse(error, 'Failed to load room images.', 500);
   }
 }
 
@@ -49,7 +41,6 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ item }, { status: 201 });
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Failed to upload room image.';
-    return NextResponse.json({ error: message }, { status: 400 });
+    return errorResponse(error, 'Failed to upload room image.');
   }
 }

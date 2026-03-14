@@ -1,10 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getRequestSession } from '@/lib/auth-session';
+import { unauthorized, errorResponse } from '@/lib/server/api-utils';
 import { createHistoryItem, listHistoryItems } from '@/lib/server/assets';
-
-function unauthorized() {
-  return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-}
 
 export async function GET(request: Request) {
   const session = await getRequestSession(request);
@@ -16,8 +13,7 @@ export async function GET(request: Request) {
     const items = await listHistoryItems(session.user.id);
     return NextResponse.json({ items });
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Failed to load generation history.';
-    return NextResponse.json({ error: message }, { status: 500 });
+    return errorResponse(error, 'Failed to load generation history.', 500);
   }
 }
 
@@ -38,8 +34,6 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ item }, { status: 201 });
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Failed to save generation history.';
-    const status = message.includes('not found') ? 404 : 400;
-    return NextResponse.json({ error: message }, { status });
+    return errorResponse(error, 'Failed to save generation history.');
   }
 }

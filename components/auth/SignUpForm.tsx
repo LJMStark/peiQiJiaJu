@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useState, useTransition } from 'react';
 import { ArrowRight, Building2, Lock, Mail } from 'lucide-react';
 import { signUp } from '@/lib/auth-client';
+import { getAuthErrorMessage } from '@/lib/auth-errors';
 
 export function SignUpForm() {
   const router = useRouter();
@@ -42,12 +43,11 @@ export function SignUpForm() {
       });
 
       if (response.error) {
-        setError(response.error.message ?? '注册失败，请稍后重试。');
+        setError(getAuthErrorMessage(response.error.code, response.error.message));
         return;
       }
 
-      router.push('/');
-      router.refresh();
+      router.push(`/verify-email?email=${encodeURIComponent(email.trim().toLowerCase())}`);
     });
   };
 

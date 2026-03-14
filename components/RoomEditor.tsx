@@ -1,13 +1,17 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { Upload, Sparkles, Image as ImageIcon, CheckCircle2, Loader2, Download, History, Clock, X, Layers, MessageSquareText, Maximize2, Lightbulb, Sofa, ThumbsUp, ThumbsDown } from 'lucide-react';
+import { Upload, Sparkles, Image as ImageIcon, Loader2, Download, History, Clock, X, Layers, MessageSquareText, Lightbulb, Sofa } from 'lucide-react';
 import { GoogleGenAI } from '@google/genai';
 import Image from 'next/image';
 import { motion, AnimatePresence } from 'motion/react';
-import { FURNITURE_CATEGORIES, type FurnitureItem, type HistoryItem, type PlacedFurniture, type RoomImage } from '@/lib/dashboard-types';
+import { readJson, type RoomsResponse, type RoomMutationResponse, type HistoryResponse, type HistoryMutationResponse } from '@/lib/client/api';
+import { type FurnitureItem, type HistoryItem, type PlacedFurniture, type RoomImage } from '@/lib/dashboard-types';
 import { imageUrlToBase64, inferAspectRatio } from '@/lib/client/image-utils';
 import { GEMINI_IMAGE_MODEL } from '@/lib/gemini-config';
+import { FurniturePreviewModal } from './room-editor/FurniturePreviewModal';
+import { FurnitureDrawer } from './room-editor/FurnitureDrawer';
+import { FeedbackModal } from './room-editor/FeedbackModal';
 
 const COMMON_FURNITURE = ['沙发', '床', '餐桌', '茶几', '椅子', '书桌', '衣柜', '电视柜'];
 const RECOMMENDED_INSTRUCTIONS = [
@@ -24,34 +28,11 @@ type RoomEditorProps = {
   onUploadFiles: (files: File[]) => Promise<FurnitureItem[]>;
 };
 
-type RoomsResponse = {
-  items: RoomImage[];
-  error?: string;
-};
-
-type RoomMutationResponse = {
-  item: RoomImage;
-  error?: string;
-};
-
-type HistoryResponse = {
-  items: HistoryItem[];
-  error?: string;
-};
-
-type HistoryMutationResponse = {
-  item: HistoryItem;
-  error?: string;
-};
-
-async function readJson<T>(response: Response): Promise<T> {
-  const payload = (await response.json()) as T & { error?: string };
-
-  if (!response.ok) {
-    throw new Error(payload.error ?? 'Request failed.');
+function getErrorMessage(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message;
   }
-
-  return payload;
+  return String(error);
 }
 
 export function RoomEditor({ catalog, onUploadFiles }: RoomEditorProps) {
@@ -279,21 +260,23 @@ export function RoomEditor({ catalog, onUploadFiles }: RoomEditorProps) {
             if (!foundImage) {
               console.warn(`组合生成失败: 房间 ${room.id}, 家具 ${furniture.id}`);
             }
-          } catch (err: any) {
+          } catch (err: unknown) {
             console.error("单个组合生成错误:", err);
-            if (err.message && err.message.includes("Requested entity was not found")) {
+            const msg = getErrorMessage(err);
+            if (msg.includes("Requested entity was not found")) {
               throw err;
             }
           }
         }
       }
 
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("批量生成错误:", err);
-      if (err.message && err.message.includes("Requested entity was not found")) {
+      const msg = getErrorMessage(err);
+      if (msg.includes("Requested entity was not found")) {
         setError("当前 AI 服务暂不可用，请联系管理员检查 Gemini API 配置。");
       } else {
-        setError(err.message || "生成过程中发生错误。");
+        setError(msg || "生成过程中发生错误。");
       }
     } finally {
       setIsGenerating(false);
@@ -322,10 +305,16 @@ export function RoomEditor({ catalog, onUploadFiles }: RoomEditorProps) {
     }
   };
 
+  const handleFeedbackSubmit = () => {
+    if (feedbackText.trim()) {
+      setCustomInstruction(prev => prev ? `${prev}\n[修正反馈]: ${feedbackText}` : `[修正反馈]: ${feedbackText}`);
+      setIsFeedbackModalOpen(false);
+      setFeedbackText('');
+      handleGenerate();
+    }
+  };
+
   const totalCombos = roomImages.length * selectedFurnitures.length;
-  const filteredCatalog = activeCategory === '全部' 
-    ? catalog 
-    : catalog.filter(item => item.category === activeCategory || (!item.category && activeCategory === '其他'));
 
   return (
     <div className="space-y-8">
@@ -534,7 +523,7 @@ export function RoomEditor({ catalog, onUploadFiles }: RoomEditorProps) {
             {currentGeneratedImage && !isGenerating && (
               <div className="flex items-center gap-2">
                 <span className="text-xs text-zinc-500 bg-zinc-100 px-2 py-1 rounded-md hidden sm:inline-block">
-                  💡 提示：您可以将左侧家具直接拖拽到此图片上进行手动摆放
+                  提示：您可以将左侧家具直接拖拽到此图片上进行手动摆放
                 </span>
                 <a 
                   href={currentGeneratedImage.imageUrl} 
@@ -549,7 +538,6 @@ export function RoomEditor({ catalog, onUploadFiles }: RoomEditorProps) {
           </div>
           
           <div className="flex-1 p-4 sm:p-6 flex flex-col items-center justify-center min-h-[300px] sm:min-h-[400px] bg-zinc-50/30 relative">
-            {/* Prominent Progress Overlay */}
             <AnimatePresence>
               {isGenerating && batchProgress && (
                 <motion.div 
@@ -567,7 +555,6 @@ export function RoomEditor({ catalog, onUploadFiles }: RoomEditorProps) {
                       正在生成第 <span className="font-bold text-indigo-600 text-lg mx-1">{batchProgress.current}</span> 个组合，共 <span className="font-bold text-zinc-900 text-lg mx-1">{batchProgress.total}</span> 个
                     </p>
                     
-                    {/* Thick Progress Bar */}
                     <div className="w-full h-4 bg-zinc-100 rounded-full overflow-hidden mb-3 shadow-inner">
                       <div 
                         className="h-full bg-indigo-500 transition-all duration-500 ease-out rounded-full"
@@ -622,7 +609,6 @@ export function RoomEditor({ catalog, onUploadFiles }: RoomEditorProps) {
               >
                 <Image src={currentGeneratedImage.imageUrl} alt="Generated visualization" fill className="object-contain bg-zinc-100" unoptimized />
                 
-                {/* Placed Furnitures */}
                 {placedFurnitures.map(pf => (
                   <div
                     key={pf.instanceId}
@@ -666,7 +652,6 @@ export function RoomEditor({ catalog, onUploadFiles }: RoomEditorProps) {
                       <X size={14} />
                     </button>
                     
-                    {/* Simple resize buttons */}
                     <div className="absolute -bottom-3 left-1/2 -translate-x-1/2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-30">
                       <button
                         onClick={(e) => {
@@ -690,7 +675,6 @@ export function RoomEditor({ catalog, onUploadFiles }: RoomEditorProps) {
                   </div>
                 ))}
                 
-                {/* Feedback Button */}
                 <div className="absolute bottom-4 right-4 z-30">
                   <button
                     onClick={() => setIsFeedbackModalOpen(true)}
@@ -743,7 +727,6 @@ export function RoomEditor({ catalog, onUploadFiles }: RoomEditorProps) {
                 onClick={() => loadHistoryItem(item)}
                 className="bg-white border border-zinc-200 rounded-2xl overflow-hidden shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 cursor-pointer group flex flex-col"
               >
-                {/* Main Result Image */}
                 <div className="relative aspect-[4/3] bg-zinc-100 overflow-hidden">
                   <Image
                     src={item.generatedImage.imageUrl}
@@ -753,21 +736,18 @@ export function RoomEditor({ catalog, onUploadFiles }: RoomEditorProps) {
                     unoptimized
                   />
                   
-                  {/* Hover Overlay */}
                   <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col items-center justify-center gap-3">
                     <div className="bg-white text-zinc-900 font-medium text-sm px-4 py-2 rounded-full shadow-lg transform translate-y-4 group-hover:translate-y-0 transition-transform duration-300">
                       点击恢复此状态
                     </div>
                   </div>
 
-                  {/* Timestamp Badge */}
                   <div className="absolute top-3 right-3 bg-white/90 backdrop-blur-md text-zinc-700 text-xs font-medium px-2.5 py-1.5 rounded-lg shadow-sm flex items-center gap-1.5">
                     <Clock size={12} />
                     {new Date(item.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                   </div>
                 </div>
 
-                {/* Parameters Info */}
                 <div className="p-4 bg-white flex-1 flex flex-col justify-between border-t border-zinc-100">
                   <div className="flex items-center gap-3 mb-3">
                     <div className="text-xs font-medium text-zinc-400 uppercase tracking-wider w-12">家具</div>
@@ -808,234 +788,34 @@ export function RoomEditor({ catalog, onUploadFiles }: RoomEditorProps) {
         </div>
       )}
 
-      {/* Furniture Preview Modal */}
+      {/* Extracted Sub-Components */}
       {previewFurniture && (
-        <div 
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm"
-          onClick={() => setPreviewFurniture(null)}
-        >
-          <div 
-            className="relative w-full max-w-3xl aspect-square md:aspect-video bg-zinc-900 rounded-2xl overflow-hidden shadow-2xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <button 
-              onClick={() => setPreviewFurniture(null)}
-              className="absolute top-4 right-4 z-10 bg-black/50 text-white p-2 rounded-full hover:bg-black/70 transition-colors"
-            >
-              <X size={20} />
-            </button>
-            <Image src={previewFurniture.imageUrl} alt={previewFurniture.name} fill className="object-contain p-4" unoptimized />
-            <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/90 via-black/50 to-transparent p-6 pt-12">
-              <h3 className="text-white text-xl font-medium">{previewFurniture.name}</h3>
-            </div>
-          </div>
-        </div>
+        <FurniturePreviewModal
+          furniture={previewFurniture}
+          onClose={() => setPreviewFurniture(null)}
+        />
       )}
 
-      {/* Furniture Selection Drawer */}
-      <AnimatePresence>
-        {isDrawerOpen && (
-          <div className="fixed inset-0 z-50 flex justify-end overflow-hidden">
-            <motion.div 
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="absolute inset-0 bg-black/30 backdrop-blur-sm"
-              onClick={() => setIsDrawerOpen(false)}
-            />
-            <motion.div 
-              initial={{ x: '100%' }}
-              animate={{ x: 0 }}
-              exit={{ x: '100%' }}
-              transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-              className="relative w-full max-w-md bg-white h-full shadow-2xl flex flex-col"
-            >
-              <div className="p-4 border-b border-zinc-200 flex items-center justify-between bg-zinc-50">
-                <div className="flex items-center gap-2">
-                  <Layers size={20} className="text-indigo-600" />
-                  <h3 className="text-lg font-bold text-zinc-900">选择家具</h3>
-                </div>
-                <button 
-                  onClick={() => setIsDrawerOpen(false)}
-                  className="p-2 text-zinc-500 hover:text-zinc-900 hover:bg-zinc-200 rounded-lg transition-colors"
-                >
-                  <X size={20} />
-                </button>
-              </div>
-              
-              <div className="p-4 border-b border-zinc-100">
-                {/* Category Tabs */}
-                <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-2">
-                  {FURNITURE_CATEGORIES.map(category => (
-                    <button
-                      key={category}
-                      onClick={() => setActiveCategory(category)}
-                      className={`px-3 py-1.5 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${
-                        activeCategory === category 
-                          ? 'bg-zinc-900 text-white' 
-                          : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200'
-                      }`}
-                    >
-                      {category}
-                    </button>
-                  ))}
-                </div>
-              </div>
+      <FurnitureDrawer
+        isOpen={isDrawerOpen}
+        onClose={() => setIsDrawerOpen(false)}
+        catalog={catalog}
+        selectedFurnitures={selectedFurnitures}
+        activeCategory={activeCategory}
+        onCategoryChange={setActiveCategory}
+        onToggleFurniture={toggleFurniture}
+        onPreview={setPreviewFurniture}
+        onUploadClick={() => furnitureInputRef.current?.click()}
+        isUploading={isUploadingFurniture}
+      />
 
-              <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                  <button
-                    onClick={() => !isUploadingFurniture && furnitureInputRef.current?.click()}
-                    disabled={isUploadingFurniture}
-                    className={`aspect-square border-2 border-dashed rounded-xl flex flex-col items-center justify-center transition-colors ${
-                      isUploadingFurniture 
-                        ? 'border-zinc-200 bg-zinc-50 text-zinc-400 cursor-not-allowed' 
-                        : 'border-zinc-200 text-zinc-500 hover:bg-zinc-50 hover:border-zinc-300'
-                    }`}
-                  >
-                    {isUploadingFurniture ? (
-                      <>
-                        <Loader2 size={20} className="mb-1 text-indigo-500 animate-spin" />
-                        <span className="text-xs font-medium text-indigo-500">识别中...</span>
-                      </>
-                    ) : (
-                      <>
-                        <Upload size={20} className="mb-1 text-zinc-400" />
-                        <span className="text-xs font-medium">上传家具</span>
-                      </>
-                    )}
-                  </button>
-                  {filteredCatalog.map((item) => {
-                    const isSelected = selectedFurnitures.some(f => f.id === item.id);
-                    return (
-                      <div
-                        key={item.id}
-                        draggable
-                        onDragStart={(e) => {
-                          e.dataTransfer.setData('application/json', JSON.stringify({ type: 'NEW', furnitureId: item.id }));
-                        }}
-                        onClick={() => toggleFurniture(item)}
-                        className={`relative aspect-square rounded-xl overflow-hidden border-2 transition-all cursor-pointer group ${
-                          isSelected 
-                            ? 'border-indigo-500 ring-2 ring-indigo-500/20' 
-                            : 'border-zinc-100 hover:border-zinc-300'
-                        }`}
-                      >
-                        <Image src={item.imageUrl} alt={item.name} fill className="object-contain bg-zinc-50 p-2" unoptimized />
-                        {isSelected && (
-                          <div className="absolute top-2 right-2 bg-indigo-500 text-white rounded-full p-0.5 z-10 shadow-sm">
-                            <CheckCircle2 size={16} />
-                          </div>
-                        )}
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setPreviewFurniture(item);
-                          }}
-                          className="absolute bottom-2 right-2 bg-white/90 text-zinc-700 p-1.5 rounded-md opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity hover:bg-zinc-100 hover:text-zinc-900 shadow-sm z-10"
-                          title="放大查看"
-                        >
-                          <Maximize2 size={14} />
-                        </button>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-              
-              <div className="p-4 border-t border-zinc-200 bg-zinc-50">
-                <button 
-                  onClick={() => setIsDrawerOpen(false)}
-                  className="w-full py-3 bg-zinc-900 text-white rounded-xl font-medium hover:bg-zinc-800 transition-colors shadow-sm flex items-center justify-center gap-2"
-                >
-                  确认选择 ({selectedFurnitures.length} 件)
-                </button>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
-
-      {/* Feedback Modal */}
-      <AnimatePresence>
-        {isFeedbackModalOpen && (
-          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
-            <motion.div 
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="absolute inset-0 bg-black/40 backdrop-blur-sm"
-              onClick={() => setIsFeedbackModalOpen(false)}
-            />
-            <motion.div 
-              initial={{ opacity: 0, scale: 0.95, y: 20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="relative w-full max-w-lg bg-white rounded-2xl shadow-2xl overflow-hidden"
-            >
-              <div className="p-5 border-b border-zinc-100 flex items-center justify-between">
-                <h3 className="text-lg font-bold text-zinc-900 flex items-center gap-2">
-                  <MessageSquareText size={20} className="text-indigo-600" />
-                  提供优化反馈
-                </h3>
-                <button 
-                  onClick={() => setIsFeedbackModalOpen(false)}
-                  className="text-zinc-400 hover:text-zinc-600 transition-colors p-1"
-                >
-                  <X size={20} />
-                </button>
-              </div>
-              <div className="p-5">
-                <p className="text-sm text-zinc-600 mb-4">
-                  如果生成的图像在透视、光影或摆放位置上不够理想，请告诉我们具体问题。您的反馈将直接附加到下一次生成的提示词中，帮助 AI 更精准地理解您的意图。
-                </p>
-                <div className="mb-4">
-                  <div className="flex flex-wrap gap-2 mb-3">
-                    {['透视不对', '阴影太假', '大小比例不协调', '遮挡关系错误', '没有倒影', '位置放错了'].map(tag => (
-                      <button
-                        key={tag}
-                        onClick={() => setFeedbackText(prev => prev ? `${prev}，${tag}` : tag)}
-                        className="text-xs px-3 py-1.5 bg-zinc-50 border border-zinc-200 text-zinc-600 rounded-full hover:bg-zinc-100 hover:border-zinc-300 transition-colors"
-                      >
-                        {tag}
-                      </button>
-                    ))}
-                  </div>
-                  <textarea
-                    value={feedbackText}
-                    onChange={(e) => setFeedbackText(e.target.value)}
-                    placeholder="例如：请把沙发的阴影调得更柔和一些，并且确保它完全贴合木地板的透视线..."
-                    className="w-full px-4 py-3 rounded-xl border border-zinc-200 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none transition-all resize-none h-32 text-sm"
-                  />
-                </div>
-                <div className="flex gap-3">
-                  <button
-                    onClick={() => setIsFeedbackModalOpen(false)}
-                    className="flex-1 py-2.5 rounded-xl font-medium text-zinc-700 bg-zinc-100 hover:bg-zinc-200 transition-colors"
-                  >
-                    取消
-                  </button>
-                  <button
-                    onClick={() => {
-                      if (feedbackText.trim()) {
-                        setCustomInstruction(prev => prev ? `${prev}\n[修正反馈]: ${feedbackText}` : `[修正反馈]: ${feedbackText}`);
-                        setIsFeedbackModalOpen(false);
-                        setFeedbackText('');
-                        handleGenerate();
-                      }
-                    }}
-                    disabled={!feedbackText.trim()}
-                    className="flex-1 py-2.5 rounded-xl font-medium text-white bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-300 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
-                  >
-                    <Sparkles size={16} />
-                    应用反馈并重新生成
-                  </button>
-                </div>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
+      <FeedbackModal
+        isOpen={isFeedbackModalOpen}
+        onClose={() => setIsFeedbackModalOpen(false)}
+        feedbackText={feedbackText}
+        onFeedbackChange={setFeedbackText}
+        onSubmit={handleFeedbackSubmit}
+      />
     </div>
   );
 }

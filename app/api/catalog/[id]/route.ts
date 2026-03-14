@@ -1,10 +1,7 @@
-import { NextResponse } from 'next/server';
 import { getRequestSession } from '@/lib/auth-session';
+import { unauthorized, errorResponse } from '@/lib/server/api-utils';
 import { deleteFurnitureItem, updateFurnitureItem } from '@/lib/server/assets';
-
-function unauthorized() {
-  return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-}
+import { NextResponse } from 'next/server';
 
 export async function PATCH(
   request: Request,
@@ -25,9 +22,7 @@ export async function PATCH(
 
     return NextResponse.json({ item });
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Failed to update furniture item.';
-    const status = message.includes('not found') ? 404 : 400;
-    return NextResponse.json({ error: message }, { status });
+    return errorResponse(error, 'Failed to update furniture item.');
   }
 }
 
@@ -45,8 +40,6 @@ export async function DELETE(
     await deleteFurnitureItem(session.user.id, id);
     return NextResponse.json({ success: true });
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Failed to delete furniture item.';
-    const status = message.includes('not found') ? 404 : 400;
-    return NextResponse.json({ error: message }, { status });
+    return errorResponse(error, 'Failed to delete furniture item.');
   }
 }

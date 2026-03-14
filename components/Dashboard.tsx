@@ -6,6 +6,7 @@ import { LayoutGrid, Loader2, LogOut, Sofa, Sparkles } from 'lucide-react';
 import { Catalog } from './Catalog';
 import { RoomEditor } from './RoomEditor';
 import { fileToBase64 } from '@/lib/client/image-utils';
+import { readJson, type CatalogResponse, type CatalogMutationResponse } from '@/lib/client/api';
 import { FURNITURE_CATEGORIES, type FurnitureItem } from '@/lib/dashboard-types';
 import { GEMINI_CLASSIFIER_MODEL } from '@/lib/gemini-config';
 
@@ -13,26 +14,6 @@ type DashboardProps = {
   companyName: string;
   onLogout: () => void;
 };
-
-type CatalogResponse = {
-  items: FurnitureItem[];
-  error?: string;
-};
-
-type CatalogMutationResponse = {
-  item: FurnitureItem;
-  error?: string;
-};
-
-async function readJson<T>(response: Response): Promise<T> {
-  const payload = (await response.json()) as T & { error?: string };
-
-  if (!response.ok) {
-    throw new Error(payload.error ?? 'Request failed.');
-  }
-
-  return payload;
-}
 
 export function Dashboard({ companyName, onLogout }: DashboardProps) {
   const [activeTab, setActiveTab] = useState<'catalog' | 'editor'>('catalog');
