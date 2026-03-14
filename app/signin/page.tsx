@@ -14,7 +14,7 @@ export default async function SignInPage() {
     <AuthShell
       badge="邮箱登录"
       title="欢迎回来"
-      description="输入邮箱和密码，进入你的家具工作台。接下来我们会在这套账号体系上继续接 Google 登录和支付。"
+      description="输入邮箱和密码，进入你的家具工作台，继续管理图册与空间效果。"
     >
       <SignInForm />
     </AuthShell>

@@ -1,4 +1,3 @@
-import { ApiKeyGuard } from '@/components/ApiKeyGuard';
 import { DashboardShell } from '@/components/DashboardShell';
 import { Login } from '@/components/Login';
 import { getServerSession } from '@/lib/auth';
@@ -18,9 +17,5 @@ export default async function Home() {
     return <Login />;
   }
 
-  return (
-    <ApiKeyGuard>
-      <DashboardShell companyName={getCompanyName(session.user.name, session.user.email)} />
-    </ApiKeyGuard>
-  );
+  return <DashboardShell companyName={getCompanyName(session.user.name, session.user.email)} />;
 }

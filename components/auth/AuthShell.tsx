@@ -46,11 +46,11 @@ export function AuthShell({ badge, title, description, children, footer }: AuthS
             <div className="flex items-center gap-4 text-sm font-medium text-zinc-300">
               <div className="flex items-center gap-2 bg-zinc-900/50 px-4 py-2 rounded-full border border-zinc-800 backdrop-blur-md">
                 <Sparkles size={16} className="text-indigo-400" />
-                <span>真实账号体系</span>
+                <span>空间效果生成</span>
               </div>
               <div className="flex items-center gap-2 bg-zinc-900/50 px-4 py-2 rounded-full border border-zinc-800 backdrop-blur-md">
                 <Sofa size={16} className="text-emerald-400" />
-                <span>AI 家具展示</span>
+                <span>家具图册管理</span>
               </div>
             </div>
           </motion.div>

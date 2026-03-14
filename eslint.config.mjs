@@ -8,7 +8,7 @@ const __dirname = path.dirname(__filename);
 
 export default defineConfig([
     {
-        ignores: [".worktrees/**", "worktrees/**"],
+        ignores: [".next-dev/**", ".worktrees/**", "worktrees/**"],
     },
     {
         extends: [...next],

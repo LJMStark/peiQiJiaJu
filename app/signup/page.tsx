@@ -12,9 +12,9 @@ export default async function SignUpPage() {
 
   return (
     <AuthShell
-      badge="企业注册"
-      title="创建你的企业账号"
-      description="先把邮箱密码注册打通，这一步完成后，后续的 Google 登录、支付和积分系统都能直接挂在同一套用户体系上。"
+      badge="注册账号"
+      title="创建你的账号"
+      description="几秒钟完成注册，开始上传家具、保存空间效果，并管理你的项目。"
     >
       <SignUpForm />
     </AuthShell>

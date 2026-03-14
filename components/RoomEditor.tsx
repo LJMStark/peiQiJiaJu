@@ -282,7 +282,7 @@ export function RoomEditor({ catalog, onUploadFiles }: RoomEditorProps) {
           } catch (err: any) {
             console.error("单个组合生成错误:", err);
             if (err.message && err.message.includes("Requested entity was not found")) {
-              throw err; // 抛出以触发 API 密钥重新选择
+              throw err;
             }
           }
         }
@@ -290,13 +290,10 @@ export function RoomEditor({ catalog, onUploadFiles }: RoomEditorProps) {
 
     } catch (err: any) {
       console.error("批量生成错误:", err);
-      setError(err.message || "生成过程中发生错误。");
-      
       if (err.message && err.message.includes("Requested entity was not found")) {
-        if (window.aistudio && window.aistudio.openSelectKey) {
-          await window.aistudio.openSelectKey();
-          setError("API 密钥已更新。请尝试重新生成。");
-        }
+        setError("当前 AI 服务暂不可用，请联系管理员检查 Gemini API 配置。");
+      } else {
+        setError(err.message || "生成过程中发生错误。");
       }
     } finally {
       setIsGenerating(false);
