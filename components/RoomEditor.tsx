@@ -1,11 +1,12 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Upload, Sparkles, Image as ImageIcon, CheckCircle2, Loader2, Download, History, Clock, X, Layers, MessageSquareText, Maximize2, Lightbulb, Sofa, ThumbsUp, ThumbsDown } from 'lucide-react';
-import { FurnitureItem, FURNITURE_CATEGORIES } from './Dashboard';
 import { GoogleGenAI } from '@google/genai';
 import Image from 'next/image';
 import { motion, AnimatePresence } from 'motion/react';
+import { FURNITURE_CATEGORIES, type FurnitureItem, type HistoryItem, type PlacedFurniture, type RoomImage } from '@/lib/dashboard-types';
+import { imageUrlToBase64, inferAspectRatio } from '@/lib/client/image-utils';
 
 const COMMON_FURNITURE = ['沙发', '床', '餐桌', '茶几', '椅子', '书桌', '衣柜', '电视柜'];
 const RECOMMENDED_INSTRUCTIONS = [
@@ -17,35 +18,46 @@ const RECOMMENDED_INSTRUCTIONS = [
   "提取参考图中的家具，替换房间里的旧家具，并确保新家具的阴影方向与房间光源一致。"
 ];
 
-export interface RoomImage {
-  id: string;
-  data: string;
-  mimeType: string;
-  aspectRatio?: string;
+type RoomEditorProps = {
+  catalog: FurnitureItem[];
+  onUploadFiles: (files: File[]) => Promise<FurnitureItem[]>;
+};
+
+type RoomsResponse = {
+  items: RoomImage[];
+  error?: string;
+};
+
+type RoomMutationResponse = {
+  item: RoomImage;
+  error?: string;
+};
+
+type HistoryResponse = {
+  items: HistoryItem[];
+  error?: string;
+};
+
+type HistoryMutationResponse = {
+  item: HistoryItem;
+  error?: string;
+};
+
+async function readJson<T>(response: Response): Promise<T> {
+  const payload = (await response.json()) as T & { error?: string };
+
+  if (!response.ok) {
+    throw new Error(payload.error ?? 'Request failed.');
+  }
+
+  return payload;
 }
 
-export interface HistoryItem {
-  id: string;
-  roomImage: RoomImage;
-  furniture: FurnitureItem;
-  generatedImage: string;
-  timestamp: number;
-  customInstruction?: string;
-}
-
-export interface PlacedFurniture {
-  instanceId: string;
-  furniture: FurnitureItem;
-  x: number;
-  y: number;
-  scale: number;
-}
-
-export function RoomEditor({ catalog, onUploadFiles }: { catalog: FurnitureItem[], onUploadFiles: (files: File[]) => Promise<FurnitureItem[]> }) {
+export function RoomEditor({ catalog, onUploadFiles }: RoomEditorProps) {
   const [roomImages, setRoomImages] = useState<RoomImage[]>([]);
   const [selectedFurnitures, setSelectedFurnitures] = useState<FurnitureItem[]>([]);
   const [customInstruction, setCustomInstruction] = useState('');
-  const [currentGeneratedImage, setCurrentGeneratedImage] = useState<string | null>(null);
+  const [currentGeneratedImage, setCurrentGeneratedImage] = useState<HistoryItem['generatedImage'] | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [batchProgress, setBatchProgress] = useState<{ current: number, total: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -54,12 +66,37 @@ export function RoomEditor({ catalog, onUploadFiles }: { catalog: FurnitureItem[
   const [placedFurnitures, setPlacedFurnitures] = useState<PlacedFurniture[]>([]);
   const [activeCategory, setActiveCategory] = useState('全部');
   const [isUploadingFurniture, setIsUploadingFurniture] = useState(false);
+  const [isUploadingRooms, setIsUploadingRooms] = useState(false);
+  const [isBootstrapping, setIsBootstrapping] = useState(true);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [isFeedbackModalOpen, setIsFeedbackModalOpen] = useState(false);
   const [feedbackText, setFeedbackText] = useState('');
   
   const fileInputRef = useRef<HTMLInputElement>(null);
   const furnitureInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const loadPersistedAssets = async () => {
+      try {
+        const [roomsResponse, historyResponse] = await Promise.all([
+          fetch('/api/rooms', { cache: 'no-store' }),
+          fetch('/api/history', { cache: 'no-store' }),
+        ]);
+
+        const roomsPayload = await readJson<RoomsResponse>(roomsResponse);
+        const historyPayload = await readJson<HistoryResponse>(historyResponse);
+
+        setRoomImages(roomsPayload.items);
+        setHistory(historyPayload.items);
+      } catch (loadError) {
+        setError(loadError instanceof Error ? loadError.message : 'Failed to load editor assets.');
+      } finally {
+        setIsBootstrapping(false);
+      }
+    };
+
+    void loadPersistedAssets();
+  }, []);
 
   const handleFurnitureUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
@@ -73,55 +110,51 @@ export function RoomEditor({ catalog, onUploadFiles }: { catalog: FurnitureItem[
     }
   };
 
-  const handleRoomUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleRoomUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
-      const files = Array.from(e.target.files);
-      files.forEach(file => {
-        if (!file.type.startsWith('image/')) return;
-        
-        const reader = new FileReader();
-        reader.onload = (event) => {
-          if (event.target?.result) {
-            const base64Data = event.target.result.toString().split(',')[1];
-            
-            const img = new window.Image();
-            img.onload = () => {
-              const ratio = img.width / img.height;
-              const ratios = [
-                { name: "1:1", value: 1 },
-                { name: "4:3", value: 4/3 },
-                { name: "3:4", value: 3/4 },
-                { name: "16:9", value: 16/9 },
-                { name: "9:16", value: 9/16 }
-              ];
-              let closest = ratios[0];
-              let minDiff = Math.abs(ratio - closest.value);
-              for (let i = 1; i < ratios.length; i++) {
-                const diff = Math.abs(ratio - ratios[i].value);
-                if (diff < minDiff) {
-                  minDiff = diff;
-                  closest = ratios[i];
-                }
-              }
-              
-              setRoomImages(prev => [...prev, {
-                id: Math.random().toString(36).substring(2, 9),
-                data: base64Data,
-                mimeType: file.type,
-                aspectRatio: closest.name
-              }]);
-            };
-            img.src = event.target.result as string;
+      setIsUploadingRooms(true);
+
+      try {
+        const files = Array.from(e.target.files);
+        const newRooms: RoomImage[] = [];
+
+        for (const file of files) {
+          if (!file.type.startsWith('image/')) {
+            continue;
           }
-        };
-        reader.readAsDataURL(file);
-      });
-      if (fileInputRef.current) fileInputRef.current.value = '';
+
+          const formData = new FormData();
+          formData.append('file', file);
+          formData.append('name', file.name.replace(/\.[^/.]+$/, ''));
+          formData.append('aspectRatio', await inferAspectRatio(file));
+
+          const response = await fetch('/api/rooms', {
+            method: 'POST',
+            body: formData,
+          });
+          const payload = await readJson<RoomMutationResponse>(response);
+          newRooms.push(payload.item);
+        }
+
+        if (newRooms.length > 0) {
+          setRoomImages((current) => [...newRooms, ...current]);
+        }
+      } finally {
+        if (fileInputRef.current) {
+          fileInputRef.current.value = '';
+        }
+        setIsUploadingRooms(false);
+      }
     }
   };
 
-  const removeRoom = (id: string) => {
-    setRoomImages(prev => prev.filter(r => r.id !== id));
+  const removeRoom = async (id: string) => {
+    const response = await fetch(`/api/rooms/${id}`, {
+      method: 'DELETE',
+    });
+
+    await readJson<{ success: true }>(response);
+    setRoomImages((current) => current.filter((room) => room.id !== id));
   };
 
   const toggleFurniture = (item: FurnitureItem) => {
@@ -138,6 +171,7 @@ export function RoomEditor({ catalog, onUploadFiles }: { catalog: FurnitureItem[
     setIsGenerating(true);
     setError(null);
     setPlacedFurnitures([]);
+    setCurrentGeneratedImage(null);
     
     const total = roomImages.length * selectedFurnitures.length;
     let current = 0;
@@ -182,19 +216,24 @@ export function RoomEditor({ catalog, onUploadFiles }: { catalog: FurnitureItem[
           setBatchProgress({ current, total });
           
           try {
+            const [roomBase64, furnitureBase64] = await Promise.all([
+              imageUrlToBase64(room.imageUrl),
+              imageUrlToBase64(furniture.imageUrl),
+            ]);
+
             const response = await ai.models.generateContent({
               model: 'gemini-3-pro-image-preview',
               contents: {
                 parts: [
                   {
                     inlineData: {
-                      data: room.data,
+                      data: roomBase64,
                       mimeType: room.mimeType,
                     },
                   },
                   {
                     inlineData: {
-                      data: furniture.data,
+                      data: furnitureBase64,
                       mimeType: furniture.mimeType,
                     },
                   },
@@ -215,18 +254,23 @@ export function RoomEditor({ catalog, onUploadFiles }: { catalog: FurnitureItem[
             for (const part of response.candidates?.[0]?.content?.parts || []) {
               if (part.inlineData) {
                 const finalImage = `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;
-                setCurrentGeneratedImage(finalImage);
+                const saveResponse = await fetch('/api/history', {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                  },
+                  body: JSON.stringify({
+                    roomImageId: room.id,
+                    furnitureItemId: furniture.id,
+                    generatedDataUrl: finalImage,
+                    customInstruction: customInstruction.trim() ? customInstruction : null,
+                  }),
+                });
+                const payload = await readJson<HistoryMutationResponse>(saveResponse);
+
+                setCurrentGeneratedImage(payload.item.generatedImage);
                 foundImage = true;
-                
-                const newHistoryItem: HistoryItem = {
-                  id: Math.random().toString(36).substring(2, 9),
-                  roomImage: room,
-                  furniture: furniture,
-                  generatedImage: finalImage,
-                  timestamp: Date.now(),
-                  customInstruction: customInstruction.trim() ? customInstruction : undefined,
-                };
-                setHistory(prev => [newHistoryItem, ...prev]);
+                setHistory((previous) => [payload.item, ...previous]);
                 break;
               }
             }
@@ -303,20 +347,14 @@ export function RoomEditor({ catalog, onUploadFiles }: { catalog: FurnitureItem[
                 <h3 className="font-medium text-zinc-900">上传室内图</h3>
               </div>
               <span className="text-xs font-medium bg-zinc-100 text-zinc-600 px-2 py-1 rounded-md">
-                已选 {roomImages.length} 张
+                {isBootstrapping ? '同步中...' : `已选 ${roomImages.length} 张`}
               </span>
             </div>
             
             <div className="grid grid-cols-2 gap-2 mb-3">
               {roomImages.map(room => (
                 <div key={room.id} className="relative aspect-video rounded-xl overflow-hidden border border-zinc-200 group">
-                  <Image 
-                    src={`data:${room.mimeType};base64,${room.data}`} 
-                    alt="Room" 
-                    fill
-                    className="object-cover"
-                    referrerPolicy="no-referrer"
-                  />
+                  <Image src={room.imageUrl} alt={room.name} fill className="object-cover" unoptimized />
                   <button 
                     onClick={() => removeRoom(room.id)}
                     className="absolute top-1 right-1 bg-white/90 text-red-500 p-1 rounded-md opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity hover:bg-red-50 shadow-sm"
@@ -325,12 +363,26 @@ export function RoomEditor({ catalog, onUploadFiles }: { catalog: FurnitureItem[
                   </button>
                 </div>
               ))}
-              <button 
-                onClick={() => fileInputRef.current?.click()}
-                className="aspect-video border-2 border-dashed border-zinc-200 rounded-xl flex flex-col items-center justify-center text-zinc-500 hover:bg-zinc-50 hover:border-zinc-300 transition-colors"
+              <button
+                onClick={() => !isUploadingRooms && fileInputRef.current?.click()}
+                disabled={isUploadingRooms}
+                className={`aspect-video border-2 border-dashed rounded-xl flex flex-col items-center justify-center transition-colors ${
+                  isUploadingRooms
+                    ? 'border-zinc-200 bg-zinc-50 text-zinc-400 cursor-not-allowed'
+                    : 'border-zinc-200 text-zinc-500 hover:bg-zinc-50 hover:border-zinc-300'
+                }`}
               >
-                <Upload size={20} className="mb-1 text-zinc-400" />
-                <span className="text-xs font-medium">添加图片</span>
+                {isUploadingRooms ? (
+                  <>
+                    <Loader2 size={20} className="mb-1 text-indigo-500 animate-spin" />
+                    <span className="text-xs font-medium text-indigo-500">上传中...</span>
+                  </>
+                ) : (
+                  <>
+                    <Upload size={20} className="mb-1 text-zinc-400" />
+                    <span className="text-xs font-medium">添加图片</span>
+                  </>
+                )}
               </button>
             </div>
             <input 
@@ -374,13 +426,7 @@ export function RoomEditor({ catalog, onUploadFiles }: { catalog: FurnitureItem[
               <div className="flex flex-wrap gap-2">
                 {selectedFurnitures.map((item) => (
                   <div key={item.id} className="relative w-20 h-20 rounded-lg border border-zinc-200 overflow-hidden group">
-                    <Image 
-                      src={`data:${item.mimeType};base64,${item.data}`} 
-                      alt={item.name}
-                      fill
-                      className="object-contain bg-zinc-50 p-1"
-                      referrerPolicy="no-referrer"
-                    />
+                    <Image src={item.imageUrl} alt={item.name} fill className="object-contain bg-zinc-50 p-1" unoptimized />
                     <button
                       onClick={() => toggleFurniture(item)}
                       className="absolute top-1 right-1 bg-white/90 text-red-500 p-1 rounded-md opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-50 shadow-sm"
@@ -493,7 +539,7 @@ export function RoomEditor({ catalog, onUploadFiles }: { catalog: FurnitureItem[
                   💡 提示：您可以将左侧家具直接拖拽到此图片上进行手动摆放
                 </span>
                 <a 
-                  href={currentGeneratedImage} 
+                  href={currentGeneratedImage.imageUrl} 
                   download="furniture-visualization.png"
                   className="text-sm flex items-center gap-1.5 text-indigo-600 hover:text-indigo-700 font-medium bg-indigo-50 px-3 py-1.5 rounded-lg transition-colors"
                 >
@@ -576,13 +622,7 @@ export function RoomEditor({ catalog, onUploadFiles }: { catalog: FurnitureItem[
                   }
                 }}
               >
-                <Image 
-                  src={currentGeneratedImage} 
-                  alt="Generated visualization" 
-                  fill
-                  className="object-contain bg-zinc-100"
-                  referrerPolicy="no-referrer"
-                />
+                <Image src={currentGeneratedImage.imageUrl} alt="Generated visualization" fill className="object-contain bg-zinc-100" unoptimized />
                 
                 {/* Placed Furnitures */}
                 {placedFurnitures.map(pf => (
@@ -617,13 +657,7 @@ export function RoomEditor({ catalog, onUploadFiles }: { catalog: FurnitureItem[
                     }}
                     className="group"
                   >
-                    <Image 
-                      src={`data:${pf.furniture.mimeType};base64,${pf.furniture.data}`} 
-                      alt={pf.furniture.name}
-                      fill
-                      className="object-contain drop-shadow-2xl"
-                      referrerPolicy="no-referrer"
-                    />
+                    <Image src={pf.furniture.imageUrl} alt={pf.furniture.name} fill className="object-contain drop-shadow-2xl" unoptimized />
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
@@ -713,12 +747,12 @@ export function RoomEditor({ catalog, onUploadFiles }: { catalog: FurnitureItem[
               >
                 {/* Main Result Image */}
                 <div className="relative aspect-[4/3] bg-zinc-100 overflow-hidden">
-                  <Image 
-                    src={item.generatedImage} 
-                    alt="History result" 
+                  <Image
+                    src={item.generatedImage.imageUrl}
+                    alt="History result"
                     fill
                     className="object-cover transition-transform duration-500 group-hover:scale-105"
-                    referrerPolicy="no-referrer"
+                    unoptimized
                   />
                   
                   {/* Hover Overlay */}
@@ -731,7 +765,7 @@ export function RoomEditor({ catalog, onUploadFiles }: { catalog: FurnitureItem[
                   {/* Timestamp Badge */}
                   <div className="absolute top-3 right-3 bg-white/90 backdrop-blur-md text-zinc-700 text-xs font-medium px-2.5 py-1.5 rounded-lg shadow-sm flex items-center gap-1.5">
                     <Clock size={12} />
-                    {new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    {new Date(item.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                   </div>
                 </div>
 
@@ -741,13 +775,7 @@ export function RoomEditor({ catalog, onUploadFiles }: { catalog: FurnitureItem[
                     <div className="text-xs font-medium text-zinc-400 uppercase tracking-wider w-12">家具</div>
                     <div className="flex items-center gap-2 bg-zinc-50 px-2 py-1.5 rounded-lg flex-1 border border-zinc-100 overflow-hidden">
                       <div className="relative w-6 h-6 rounded-md overflow-hidden bg-white border border-zinc-200 shrink-0">
-                        <Image 
-                          src={`data:${item.furniture.mimeType};base64,${item.furniture.data}`} 
-                          alt={item.furniture.name}
-                          fill
-                          className="object-contain p-0.5"
-                          referrerPolicy="no-referrer"
-                        />
+                        <Image src={item.furniture.imageUrl} alt={item.furniture.name} fill className="object-contain p-0.5" unoptimized />
                       </div>
                       <span className="text-sm font-medium text-zinc-700 truncate">
                         {item.furniture.name}
@@ -759,13 +787,7 @@ export function RoomEditor({ catalog, onUploadFiles }: { catalog: FurnitureItem[
                     <div className="text-xs font-medium text-zinc-400 uppercase tracking-wider w-12">场景</div>
                     <div className="flex items-center gap-2 bg-zinc-50 px-2 py-1.5 rounded-lg flex-1 border border-zinc-100 overflow-hidden">
                       <div className="relative w-6 h-6 rounded-md overflow-hidden bg-zinc-200 shrink-0">
-                        <Image 
-                          src={`data:${item.roomImage.mimeType};base64,${item.roomImage.data}`} 
-                          alt="Original Room"
-                          fill
-                          className="object-cover"
-                          referrerPolicy="no-referrer"
-                        />
+                        <Image src={item.roomImage.imageUrl} alt={item.roomImage.name} fill className="object-cover" unoptimized />
                       </div>
                       <span className="text-sm text-zinc-600 truncate">
                         原始室内图
@@ -804,13 +826,7 @@ export function RoomEditor({ catalog, onUploadFiles }: { catalog: FurnitureItem[
             >
               <X size={20} />
             </button>
-            <Image 
-              src={`data:${previewFurniture.mimeType};base64,${previewFurniture.data}`} 
-              alt={previewFurniture.name}
-              fill
-              className="object-contain p-4"
-              referrerPolicy="no-referrer"
-            />
+            <Image src={previewFurniture.imageUrl} alt={previewFurniture.name} fill className="object-contain p-4" unoptimized />
             <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/90 via-black/50 to-transparent p-6 pt-12">
               <h3 className="text-white text-xl font-medium">{previewFurniture.name}</h3>
             </div>
@@ -907,13 +923,7 @@ export function RoomEditor({ catalog, onUploadFiles }: { catalog: FurnitureItem[
                             : 'border-zinc-100 hover:border-zinc-300'
                         }`}
                       >
-                        <Image 
-                          src={`data:${item.mimeType};base64,${item.data}`} 
-                          alt={item.name}
-                          fill
-                          className="object-contain bg-zinc-50 p-2"
-                          referrerPolicy="no-referrer"
-                        />
+                        <Image src={item.imageUrl} alt={item.name} fill className="object-contain bg-zinc-50 p-2" unoptimized />
                         {isSelected && (
                           <div className="absolute top-2 right-2 bg-indigo-500 text-white rounded-full p-0.5 z-10 shadow-sm">
                             <CheckCircle2 size={16} />

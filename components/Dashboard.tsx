@@ -1,52 +1,77 @@
 'use client';
 
-import { useState } from 'react';
-import { LogOut, LayoutGrid, Sparkles, Sofa } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { GoogleGenAI } from '@google/genai';
+import { LayoutGrid, Loader2, LogOut, Sofa, Sparkles } from 'lucide-react';
 import { Catalog } from './Catalog';
 import { RoomEditor } from './RoomEditor';
-import { GoogleGenAI } from '@google/genai';
+import { fileToBase64 } from '@/lib/client/image-utils';
+import { FURNITURE_CATEGORIES, type FurnitureItem } from '@/lib/dashboard-types';
 
-export const FURNITURE_CATEGORIES = ['全部', '沙发', '床', '书桌', '餐桌', '茶几', '椅子', '柜子', '灯具', '装饰', '其他'];
+type DashboardProps = {
+  companyName: string;
+  onLogout: () => void;
+};
 
-export interface FurnitureItem {
-  id: string;
-  name: string;
-  data: string; // base64
-  mimeType: string;
-  category?: string;
+type CatalogResponse = {
+  items: FurnitureItem[];
+  error?: string;
+};
+
+type CatalogMutationResponse = {
+  item: FurnitureItem;
+  error?: string;
+};
+
+async function readJson<T>(response: Response): Promise<T> {
+  const payload = (await response.json()) as T & { error?: string };
+
+  if (!response.ok) {
+    throw new Error(payload.error ?? 'Request failed.');
+  }
+
+  return payload;
 }
 
-export function Dashboard({ companyName, onLogout }: { companyName: string, onLogout: () => void }) {
+export function Dashboard({ companyName, onLogout }: DashboardProps) {
   const [activeTab, setActiveTab] = useState<'catalog' | 'editor'>('catalog');
   const [catalog, setCatalog] = useState<FurnitureItem[]>([]);
   const [isUploading, setIsUploading] = useState(false);
+  const [isCatalogLoading, setIsCatalogLoading] = useState(true);
+  const [catalogError, setCatalogError] = useState<string | null>(null);
 
-  const handleAddFurniture = (item: FurnitureItem) => {
-    setCatalog(prev => [...prev, item]);
-  };
+  useEffect(() => {
+    const loadCatalog = async () => {
+      try {
+        const response = await fetch('/api/catalog', { cache: 'no-store' });
+        const payload = await readJson<CatalogResponse>(response);
+        setCatalog(payload.items);
+        setCatalogError(null);
+      } catch (error) {
+        setCatalogError(error instanceof Error ? error.message : 'Failed to load catalog.');
+      } finally {
+        setIsCatalogLoading(false);
+      }
+    };
+
+    void loadCatalog();
+  }, []);
 
   const handleUploadFiles = async (files: File[]): Promise<FurnitureItem[]> => {
     setIsUploading(true);
+    setCatalogError(null);
     const newItems: FurnitureItem[] = [];
     const ai = new GoogleGenAI({ apiKey: process.env.NEXT_PUBLIC_GEMINI_API_KEY });
 
-    for (const file of files) {
-      if (!file.type.startsWith('image/')) continue;
-      
-      const base64Data = await new Promise<string>((resolve) => {
-        const reader = new FileReader();
-        reader.onload = (event) => {
-          if (event.target?.result) {
-            resolve(event.target.result.toString().split(',')[1]);
-          } else {
-            resolve('');
-          }
-        };
-        reader.readAsDataURL(file);
-      });
+    try {
+      for (const file of files) {
+        if (!file.type.startsWith('image/')) {
+          continue;
+        }
 
-      if (base64Data) {
+        const base64Data = await fileToBase64(file);
         let category = '其他';
+
         try {
           const response = await ai.models.generateContent({
             model: 'gemini-3-flash-preview',
@@ -54,50 +79,73 @@ export function Dashboard({ companyName, onLogout }: { companyName: string, onLo
               {
                 inlineData: {
                   data: base64Data,
-                  mimeType: file.type
-                }
+                  mimeType: file.type,
+                },
               },
               {
-                text: "You are a furniture classifier. Classify the given image into EXACTLY ONE of these categories: 沙发, 床, 书桌, 餐桌, 茶几, 椅子, 柜子, 灯具, 装饰, 其他. Return ONLY the category name, nothing else. If it's a sofa, return 沙发. If it's a bed, return 床. If it's a desk, return 书桌. If it's a dining table, return 餐桌. If it's a coffee table, return 茶几. If it's a chair, return 椅子. If it's a cabinet/storage, return 柜子. If it's lighting, return 灯具. If it's decoration, return 装饰. Otherwise return 其他."
-              }
-            ]
+                text: "You are a furniture classifier. Classify the given image into EXACTLY ONE of these categories: 沙发, 床, 书桌, 餐桌, 茶几, 椅子, 柜子, 灯具, 装饰, 其他. Return ONLY the category name, nothing else. If it's a sofa, return 沙发. If it's a bed, return 床. If it's a desk, return 书桌. If it's a dining table, return 餐桌. If it's a coffee table, return 茶几. If it's a chair, return 椅子. If it's a cabinet/storage, return 柜子. If it's lighting, return 灯具. If it's decoration, return 装饰. Otherwise return 其他.",
+              },
+            ],
           });
+
           const result = response.text?.trim();
-          if (result && FURNITURE_CATEGORIES.includes(result)) {
+          if (result && FURNITURE_CATEGORIES.some((value) => value === result)) {
             category = result;
           }
-        } catch (err) {
-          console.error("Classification failed", err);
+        } catch (error) {
+          console.error('Classification failed', error);
         }
 
-        newItems.push({
-          id: Math.random().toString(36).substring(2, 9),
-          name: file.name.replace(/\.[^/.]+$/, ""),
-          data: base64Data,
-          mimeType: file.type,
-          category
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('name', file.name.replace(/\.[^/.]+$/, ''));
+        formData.append('category', category);
+
+        const response = await fetch('/api/catalog', {
+          method: 'POST',
+          body: formData,
         });
+        const payload = await readJson<CatalogMutationResponse>(response);
+        newItems.push(payload.item);
       }
+
+      if (newItems.length > 0) {
+        setCatalog((current) => [...newItems, ...current]);
+      }
+
+      return newItems;
+    } finally {
+      setIsUploading(false);
     }
-    
-    if (newItems.length > 0) {
-      setCatalog(prev => [...prev, ...newItems]);
-    }
-    setIsUploading(false);
-    return newItems;
   };
 
-  const handleUpdateFurniture = (id: string, updates: Partial<FurnitureItem>) => {
-    setCatalog(prev => prev.map(item => item.id === id ? { ...item, ...updates } : item));
+  const handleUpdateFurniture = async (id: string, updates: Partial<FurnitureItem>) => {
+    const response = await fetch(`/api/catalog/${id}`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        name: updates.name,
+        category: updates.category,
+      }),
+    });
+    const payload = await readJson<CatalogMutationResponse>(response);
+
+    setCatalog((current) => current.map((item) => (item.id === id ? payload.item : item)));
   };
 
-  const handleDeleteFurniture = (id: string) => {
-    setCatalog(prev => prev.filter(item => item.id !== id));
+  const handleDeleteFurniture = async (id: string) => {
+    const response = await fetch(`/api/catalog/${id}`, {
+      method: 'DELETE',
+    });
+
+    await readJson<{ success: true }>(response);
+    setCatalog((current) => current.filter((item) => item.id !== id));
   };
 
   return (
     <div className="min-h-screen bg-zinc-50 flex flex-col">
-      {/* Header */}
       <header className="bg-white border-b border-zinc-200 sticky top-0 z-30">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -106,7 +154,7 @@ export function Dashboard({ companyName, onLogout }: { companyName: string, onLo
             </div>
             <span className="font-bold text-zinc-900 tracking-tight">{companyName}</span>
           </div>
-          
+
           <nav className="hidden md:flex items-center gap-1 bg-zinc-100 p-1 rounded-xl">
             <button
               onClick={() => setActiveTab('catalog')}
@@ -127,7 +175,7 @@ export function Dashboard({ companyName, onLogout }: { companyName: string, onLo
               室内编辑器
             </button>
           </nav>
-          
+
           <button
             onClick={onLogout}
             className="text-zinc-500 hover:text-zinc-900 p-2 rounded-lg hover:bg-zinc-100 transition-colors"
@@ -138,7 +186,6 @@ export function Dashboard({ companyName, onLogout }: { companyName: string, onLo
         </div>
       </header>
 
-      {/* Mobile Nav */}
       <div className="md:hidden bg-white border-b border-zinc-200 px-4 py-2 flex gap-2 overflow-x-auto">
         <button
           onClick={() => setActiveTab('catalog')}
@@ -160,16 +207,22 @@ export function Dashboard({ companyName, onLogout }: { companyName: string, onLo
         </button>
       </div>
 
-      {/* Main Content */}
       <main className="flex-1 max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-4 sm:py-8">
         {activeTab === 'catalog' ? (
-          <Catalog 
-            catalog={catalog} 
-            onUploadFiles={handleUploadFiles} 
-            onDelete={handleDeleteFurniture} 
+          <Catalog
+            catalog={catalog}
+            onUploadFiles={handleUploadFiles}
+            onDelete={handleDeleteFurniture}
             onUpdate={handleUpdateFurniture}
             isUploading={isUploading}
+            isLoading={isCatalogLoading}
+            error={catalogError}
           />
+        ) : isCatalogLoading ? (
+          <div className="bg-white border border-zinc-200 rounded-2xl p-10 flex items-center justify-center gap-3 text-zinc-500">
+            <Loader2 size={20} className="animate-spin" />
+            正在载入图册资源...
+          </div>
         ) : (
           <RoomEditor catalog={catalog} onUploadFiles={handleUploadFiles} />
         )}

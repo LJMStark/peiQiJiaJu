@@ -8,11 +8,13 @@
     "start": "cross-env NODE_ENV=production next start",
     "lint": "eslint .",
     "clean": "rm -rf .next",
-    "auth:migrate": "node --env-file=.env scripts/migrate-better-auth.mjs"
+    "auth:migrate": "node --env-file=.env scripts/migrate-better-auth.mjs",
+    "storage:migrate": "node --env-file=.env scripts/migrate-storage-assets.mjs"
   },
   "dependencies": {
     "@google/genai": "^1.17.0",
     "@hookform/resolvers": "^5.2.1",
+    "@supabase/supabase-js": "^2.99.1",
     "autoprefixer": "^10.4.21",
     "better-auth": "^1.5.5",
     "class-variance-authority": "^0.7.1",
