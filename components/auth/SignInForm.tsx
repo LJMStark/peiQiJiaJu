@@ -35,8 +35,8 @@ export function SignInForm() {
 
       if (response.error) {
         const code = response.error.code;
-
-        if (response.error.status === 403 || code === 'EMAIL_NOT_VERIFIED') {
+        // 不再将所有 403 视为未验证，因为跨域 (Invalid Origin) 也可能返回 403
+        if (code === 'EMAIL_NOT_VERIFIED') {
           setNeedsVerification(true);
           setError('您的邮箱尚未验证。请查收验证邮件，或点击下方按钮重新发送。');
           return;

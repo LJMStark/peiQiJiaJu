@@ -72,11 +72,12 @@ function getPool(connectionString: string) {
 export function createAuth(config: AuthConfigOptions = {}) {
   return betterAuth({
     baseURL: getBaseUrl(),
+    trustedOrigins: process.env.NODE_ENV === 'development' ? ['http://localhost:3000', 'http://localhost:3001', 'http://localhost:3002'] : undefined,
     secret: getAuthSecret(),
     database: getPool(getConnectionString(config)),
     emailAndPassword: {
       enabled: true,
-      requireEmailVerification: true,
+      requireEmailVerification: process.env.NODE_ENV === 'production',
     },
     user: {
       additionalFields: {
@@ -124,7 +125,12 @@ export type AppSession = Awaited<ReturnType<typeof auth.api.getSession>>;
 export function isSessionEmailVerified(
   session: AppSession | null | undefined
 ): boolean {
-  return Boolean(session?.user.emailVerified);
+  if (!session) return false;
+  // 在开发环境下，如果没验证过邮箱也放行
+  if (process.env.NODE_ENV !== 'production') {
+    return true;
+  }
+  return Boolean(session.user.emailVerified);
 }
 
 export const getServerSession = cache(async () => {
