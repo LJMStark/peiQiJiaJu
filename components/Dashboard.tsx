@@ -7,6 +7,7 @@ import { Catalog } from './Catalog';
 import { RoomEditor } from './RoomEditor';
 import { fileToBase64 } from '@/lib/client/image-utils';
 import { FURNITURE_CATEGORIES, type FurnitureItem } from '@/lib/dashboard-types';
+import { GEMINI_CLASSIFIER_MODEL } from '@/lib/gemini-config';
 
 type DashboardProps = {
   companyName: string;
@@ -74,7 +75,7 @@ export function Dashboard({ companyName, onLogout }: DashboardProps) {
 
         try {
           const response = await ai.models.generateContent({
-            model: 'gemini-3-flash-preview',
+            model: GEMINI_CLASSIFIER_MODEL,
             contents: [
               {
                 inlineData: {

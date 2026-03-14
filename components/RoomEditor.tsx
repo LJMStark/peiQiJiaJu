@@ -7,6 +7,7 @@ import Image from 'next/image';
 import { motion, AnimatePresence } from 'motion/react';
 import { FURNITURE_CATEGORIES, type FurnitureItem, type HistoryItem, type PlacedFurniture, type RoomImage } from '@/lib/dashboard-types';
 import { imageUrlToBase64, inferAspectRatio } from '@/lib/client/image-utils';
+import { GEMINI_IMAGE_MODEL } from '@/lib/gemini-config';
 
 const COMMON_FURNITURE = ['沙发', '床', '餐桌', '茶几', '椅子', '书桌', '衣柜', '电视柜'];
 const RECOMMENDED_INSTRUCTIONS = [
@@ -222,7 +223,7 @@ export function RoomEditor({ catalog, onUploadFiles }: RoomEditorProps) {
             ]);
 
             const response = await ai.models.generateContent({
-              model: 'gemini-3-pro-image-preview',
+              model: GEMINI_IMAGE_MODEL,
               contents: {
                 parts: [
                   {
