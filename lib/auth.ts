@@ -109,7 +109,7 @@ export type AppSession = Awaited<ReturnType<typeof auth.api.getSession>>;
 
 export function isSessionEmailVerified(
   session: AppSession | null | undefined
-): session is NonNullable<AppSession> {
+): boolean {
   return Boolean(session?.user.emailVerified);
 }
 
