@@ -105,6 +105,13 @@ export function createAuth(config: AuthConfigOptions = {}) {
 }
 
 export const auth = createAuth();
+export type AppSession = Awaited<ReturnType<typeof auth.api.getSession>>;
+
+export function isSessionEmailVerified(
+  session: AppSession | null | undefined
+): session is NonNullable<AppSession> {
+  return Boolean(session?.user.emailVerified);
+}
 
 export const getServerSession = cache(async () => {
   return auth.api.getSession({

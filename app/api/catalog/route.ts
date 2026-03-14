@@ -1,16 +1,16 @@
 import { NextResponse } from 'next/server';
-import { getRequestSession } from '@/lib/auth-session';
-import { unauthorized, badRequest, errorResponse } from '@/lib/server/api-utils';
+import { requireVerifiedRequestSession } from '@/lib/auth-session';
+import { badRequest, errorResponse } from '@/lib/server/api-utils';
 import { createFurnitureItem, listFurnitureItems } from '@/lib/server/assets';
 
 export async function GET(request: Request) {
-  const session = await getRequestSession(request);
-  if (!session) {
-    return unauthorized();
+  const authState = await requireVerifiedRequestSession(request);
+  if (authState.response) {
+    return authState.response;
   }
 
   try {
-    const items = await listFurnitureItems(session.user.id);
+    const items = await listFurnitureItems(authState.session.user.id);
     return NextResponse.json({ items });
   } catch (error) {
     return errorResponse(error, 'Failed to load catalog.', 500);
@@ -18,9 +18,9 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const session = await getRequestSession(request);
-  if (!session) {
-    return unauthorized();
+  const authState = await requireVerifiedRequestSession(request);
+  if (authState.response) {
+    return authState.response;
   }
 
   const formData = await request.formData();
@@ -33,7 +33,7 @@ export async function POST(request: Request) {
   }
 
   try {
-    const item = await createFurnitureItem(session.user.id, {
+    const item = await createFurnitureItem(authState.session.user.id, {
       file,
       name: typeof name === 'string' ? name : null,
       category: typeof category === 'string' ? category : null,

@@ -1,16 +1,16 @@
 import { NextResponse } from 'next/server';
-import { getRequestSession } from '@/lib/auth-session';
-import { unauthorized, errorResponse } from '@/lib/server/api-utils';
+import { requireVerifiedRequestSession } from '@/lib/auth-session';
+import { errorResponse } from '@/lib/server/api-utils';
 import { createHistoryItem, listHistoryItems } from '@/lib/server/assets';
 
 export async function GET(request: Request) {
-  const session = await getRequestSession(request);
-  if (!session) {
-    return unauthorized();
+  const authState = await requireVerifiedRequestSession(request);
+  if (authState.response) {
+    return authState.response;
   }
 
   try {
-    const items = await listHistoryItems(session.user.id);
+    const items = await listHistoryItems(authState.session.user.id);
     return NextResponse.json({ items });
   } catch (error) {
     return errorResponse(error, 'Failed to load generation history.', 500);
@@ -18,14 +18,14 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const session = await getRequestSession(request);
-  if (!session) {
-    return unauthorized();
+  const authState = await requireVerifiedRequestSession(request);
+  if (authState.response) {
+    return authState.response;
   }
 
   try {
     const body = await request.json();
-    const item = await createHistoryItem(session.user.id, {
+    const item = await createHistoryItem(authState.session.user.id, {
       roomImageId: String(body?.roomImageId ?? ''),
       furnitureItemId: String(body?.furnitureItemId ?? ''),
       generatedDataUrl: String(body?.generatedDataUrl ?? ''),

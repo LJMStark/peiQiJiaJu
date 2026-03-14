@@ -1,12 +1,16 @@
 import { redirect } from 'next/navigation';
 import { AuthShell } from '@/components/auth/AuthShell';
 import { SignUpForm } from '@/components/auth/SignUpForm';
-import { getServerSession } from '@/lib/auth';
+import { getServerSession, isSessionEmailVerified } from '@/lib/auth';
 
 export default async function SignUpPage() {
   const session = await getServerSession();
 
   if (session) {
+    if (!isSessionEmailVerified(session)) {
+      redirect(`/verify-email?email=${encodeURIComponent(session.user.email)}`);
+    }
+
     redirect('/');
   }
 

@@ -148,11 +148,15 @@ export function SignUpForm() {
           <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
         ) : (
           <>
-            注册并进入工作台
+            注册并发送验证邮件
             <ArrowRight size={18} className="group-hover:translate-x-1 transition-transform" />
           </>
         )}
       </button>
+
+      <p className="text-sm text-zinc-500 text-center leading-6">
+        注册成功后需要先完成邮箱验证，验证通过后才能进入工作台。
+      </p>
 
       <p className="text-sm text-zinc-500 text-center">
         已有账号？
