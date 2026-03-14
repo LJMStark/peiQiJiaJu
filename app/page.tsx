@@ -1,31 +1,26 @@
-'use client';
-
-import { useState } from 'react';
 import { ApiKeyGuard } from '@/components/ApiKeyGuard';
+import { DashboardShell } from '@/components/DashboardShell';
 import { Login } from '@/components/Login';
-import { Dashboard } from '@/components/Dashboard';
+import { getServerSession } from '@/lib/auth';
 
-export default function Home() {
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [companyName, setCompanyName] = useState('');
+function getCompanyName(name: string | null | undefined, email: string) {
+  if (name?.trim()) {
+    return name.trim();
+  }
 
-  const handleLogin = (name: string) => {
-    setCompanyName(name);
-    setIsLoggedIn(true);
-  };
+  return email.split('@')[0] || '佩奇家具';
+}
 
-  const handleLogout = () => {
-    setIsLoggedIn(false);
-    setCompanyName('');
-  };
+export default async function Home() {
+  const session = await getServerSession();
+
+  if (!session) {
+    return <Login />;
+  }
 
   return (
     <ApiKeyGuard>
-      {isLoggedIn ? (
-        <Dashboard companyName={companyName} onLogout={handleLogout} />
-      ) : (
-        <Login onLogin={handleLogin} />
-      )}
+      <DashboardShell companyName={getCompanyName(session.user.name, session.user.email)} />
     </ApiKeyGuard>
   );
 }

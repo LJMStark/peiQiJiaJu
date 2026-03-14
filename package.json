@@ -7,12 +7,14 @@
     "build": "cross-env NODE_ENV=production next build",
     "start": "cross-env NODE_ENV=production next start",
     "lint": "eslint .",
-    "clean": "rm -rf .next"
+    "clean": "rm -rf .next",
+    "auth:migrate": "node --env-file=.env scripts/migrate-better-auth.mjs"
   },
   "dependencies": {
     "@google/genai": "^1.17.0",
     "@hookform/resolvers": "^5.2.1",
     "autoprefixer": "^10.4.21",
+    "better-auth": "^1.5.5",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "lucide-react": "^0.553.0",
