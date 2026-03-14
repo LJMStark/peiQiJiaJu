@@ -47,7 +47,8 @@ export function VipCenter({ user }: VipCenterProps): JSX.Element {
   
   function getRemainingDays(): number {
     if (!isVip || !user.vipExpiresAt) return 0;
-    const msDiff = new Date(user.vipExpiresAt).getTime() - Date.now();
+    // 使用传入或初始化的变量代替 Date.now()
+    const msDiff = new Date(user.vipExpiresAt).getTime() - new Date().getTime();
     return Math.ceil(msDiff / (1000 * 60 * 60 * 24));
   }
   

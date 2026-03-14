@@ -323,11 +323,11 @@ export function RoomEditor({ catalog, onUploadFiles }: RoomEditorProps) {
         <p className="text-zinc-500">上传多张室内照片，选择多件家具，一次性生成所有组合的可视化效果。</p>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 lg:gap-8">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 lg:gap-8 lg:h-[calc(100vh-180px)]">
         {/* Left Column: Inputs */}
-        <div className="space-y-5 lg:space-y-6 lg:col-span-1">
+        <div className="flex flex-col space-y-5 lg:space-y-6 lg:col-span-1 overflow-y-auto scrollbar-hide pb-2 relative rounded-2xl">
           {/* Step 1: Room Images */}
-          <div className="bg-white p-4 sm:p-5 rounded-2xl border border-zinc-200 shadow-sm">
+          <div className="bg-white p-4 sm:p-5 rounded-2xl border border-zinc-200 shadow-sm hover:shadow-md transition-shadow duration-300">
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-3">
                 <div className="w-8 h-8 rounded-full bg-zinc-100 text-zinc-900 font-bold flex items-center justify-center text-sm">1</div>
@@ -339,17 +339,27 @@ export function RoomEditor({ catalog, onUploadFiles }: RoomEditorProps) {
             </div>
             
             <div className="grid grid-cols-2 gap-2 mb-3">
-              {roomImages.map(room => (
-                <div key={room.id} className="relative aspect-video rounded-xl overflow-hidden border border-zinc-200 group">
-                  <Image src={room.imageUrl} alt={room.name} fill className="object-cover" unoptimized />
-                  <button 
-                    onClick={() => removeRoom(room.id)}
-                    className="absolute top-1 right-1 bg-white/90 text-red-500 p-1 rounded-md opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity hover:bg-red-50 shadow-sm"
+              <AnimatePresence>
+                {roomImages.map(room => (
+                  <motion.div 
+                    layout
+                    initial={{ opacity: 0, scale: 0.9 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.9 }}
+                    transition={{ duration: 0.2 }}
+                    key={room.id} 
+                    className="relative aspect-video rounded-xl overflow-hidden border border-zinc-200 group shadow-sm hover:shadow-md transition-shadow"
                   >
-                    <X size={14} />
-                  </button>
-                </div>
-              ))}
+                    <Image src={room.imageUrl} alt={room.name} fill className="object-cover transition-transform duration-500 group-hover:scale-105" unoptimized />
+                    <button 
+                      onClick={() => removeRoom(room.id)}
+                      className="absolute top-1 right-1 bg-white/90 backdrop-blur-md text-red-500 p-1 rounded-md opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-all hover:bg-red-50 hover:scale-110 shadow-sm"
+                    >
+                      <X size={14} />
+                    </button>
+                  </motion.div>
+                ))}
+              </AnimatePresence>
               <button
                 onClick={() => !isUploadingRooms && fileInputRef.current?.click()}
                 disabled={isUploadingRooms}
@@ -383,7 +393,7 @@ export function RoomEditor({ catalog, onUploadFiles }: RoomEditorProps) {
           </div>
 
           {/* Step 2: Select Furniture */}
-          <div className="bg-white p-4 sm:p-5 rounded-2xl border border-zinc-200 shadow-sm flex flex-col">
+          <div className="bg-white p-4 sm:p-5 rounded-2xl border border-zinc-200 shadow-sm hover:shadow-md transition-shadow duration-300 flex flex-col">
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-3">
                 <div className="w-8 h-8 rounded-full bg-zinc-100 text-zinc-900 font-bold flex items-center justify-center text-sm">2</div>
@@ -411,17 +421,27 @@ export function RoomEditor({ catalog, onUploadFiles }: RoomEditorProps) {
               </div>
             ) : (
               <div className="flex flex-wrap gap-2">
-                {selectedFurnitures.map((item) => (
-                  <div key={item.id} className="relative w-20 h-20 rounded-lg border border-zinc-200 overflow-hidden group">
-                    <Image src={item.imageUrl} alt={item.name} fill className="object-contain bg-zinc-50 p-1" unoptimized />
-                    <button
-                      onClick={() => toggleFurniture(item)}
-                      className="absolute top-1 right-1 bg-white/90 text-red-500 p-1 rounded-md opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-50 shadow-sm"
+                <AnimatePresence>
+                  {selectedFurnitures.map((item) => (
+                    <motion.div 
+                      layout
+                      initial={{ opacity: 0, scale: 0.8 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      exit={{ opacity: 0, scale: 0.8 }}
+                      transition={{ duration: 0.2 }}
+                      key={item.id} 
+                      className="relative w-20 h-20 rounded-lg border border-zinc-200 overflow-hidden group shadow-sm hover:shadow-md transition-shadow"
                     >
-                      <X size={12} />
-                    </button>
-                  </div>
-                ))}
+                      <Image src={item.imageUrl} alt={item.name} fill className="object-contain bg-zinc-50 p-1 transition-transform duration-500 group-hover:scale-110" unoptimized />
+                      <button
+                        onClick={() => toggleFurniture(item)}
+                        className="absolute top-1 right-1 bg-white/90 backdrop-blur-md text-red-500 p-1 rounded-md opacity-0 group-hover:opacity-100 transition-all hover:bg-red-50 hover:scale-110 shadow-sm"
+                      >
+                        <X size={12} />
+                      </button>
+                    </motion.div>
+                  ))}
+                </AnimatePresence>
                 <button
                   onClick={() => setIsDrawerOpen(true)}
                   className="w-20 h-20 border-2 border-dashed border-zinc-200 rounded-lg flex flex-col items-center justify-center text-zinc-500 hover:bg-zinc-50 hover:border-zinc-300 transition-colors"
@@ -442,7 +462,7 @@ export function RoomEditor({ catalog, onUploadFiles }: RoomEditorProps) {
           </div>
 
           {/* Step 3: Custom Instructions */}
-          <div className="bg-white p-4 sm:p-5 rounded-2xl border border-zinc-200 shadow-sm">
+          <div className="bg-white p-4 sm:p-5 rounded-2xl border border-zinc-200 shadow-sm hover:shadow-md transition-shadow duration-300">
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-3">
                 <div className="w-8 h-8 rounded-full bg-zinc-100 text-zinc-900 font-bold flex items-center justify-center text-sm">3</div>
@@ -481,40 +501,51 @@ export function RoomEditor({ catalog, onUploadFiles }: RoomEditorProps) {
             />
           </div>
 
-          {/* Step 4: Generate */}
-          <button
-            onClick={handleGenerate}
-            disabled={totalCombos === 0 || isGenerating}
-            className={`w-full py-4 rounded-2xl font-medium flex items-center justify-center gap-2 transition-all ${
-              totalCombos === 0
-                ? 'bg-zinc-100 text-zinc-400 cursor-not-allowed'
-                : isGenerating
-                ? 'bg-indigo-500 text-white cursor-wait'
-                : 'bg-zinc-900 text-white hover:bg-zinc-800 shadow-md hover:shadow-lg'
-            }`}
-          >
-            {isGenerating ? (
-              <>
-                <Loader2 size={20} className="animate-spin" />
-                正在生成 ({batchProgress?.current}/{batchProgress?.total})...
-              </>
-            ) : (
-              <>
-                {totalCombos > 1 ? <Layers size={20} /> : <Sparkles size={20} />}
-                {totalCombos > 1 ? `批量生成 (${totalCombos} 个组合)` : '在房间中可视化'}
-              </>
-            )}
-          </button>
-          
-          {error && (
-            <div className="p-3 bg-red-50 text-red-600 text-sm rounded-xl border border-red-200">
-              {error}
-            </div>
-          )}
+          {/* Step 4: Generate (Sticky Bottom) */}
+          <div className="sticky bottom-0 pt-4 pb-2 bg-gradient-to-t from-zinc-50 via-zinc-50/90 to-transparent backdrop-blur-[2px] z-20 mt-auto -mx-1 px-1">
+            <button
+              onClick={handleGenerate}
+              disabled={totalCombos === 0 || isGenerating}
+              className={`w-full py-4 rounded-2xl font-medium flex items-center justify-center gap-2 transition-all duration-300 active:scale-[0.98] group ${
+                totalCombos === 0
+                  ? 'bg-zinc-100 text-zinc-400 cursor-not-allowed border border-zinc-200'
+                  : isGenerating
+                  ? 'bg-indigo-500 text-white cursor-wait shadow-lg shadow-indigo-500/20'
+                  : 'bg-zinc-900 text-white hover:bg-zinc-800 shadow-md hover:shadow-xl hover:-translate-y-0.5'
+              }`}
+            >
+              {isGenerating ? (
+                <>
+                  <Loader2 size={20} className="animate-spin" />
+                  正在生成 ({batchProgress?.current}/{batchProgress?.total})...
+                </>
+              ) : (
+                <>
+                  {totalCombos > 1 ? <Layers size={20} className="group-hover:rotate-6 transition-transform" /> : <Sparkles size={20} className="group-hover:rotate-12 transition-transform" />}
+                  <span className="group-hover:tracking-wider transition-all duration-300">
+                    {totalCombos > 1 ? `批量生成 (${totalCombos} 个组合)` : '在房间中可视化'}
+                  </span>
+                </>
+              )}
+            </button>
+            
+            <AnimatePresence>
+              {error && (
+                <motion.div 
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: 10 }}
+                  className="mt-3 p-3 bg-red-50 text-red-600 text-sm rounded-xl border border-red-200 shadow-sm"
+                >
+                  {error}
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
         </div>
 
         {/* Right Column: Result */}
-        <div className="lg:col-span-2 bg-white rounded-2xl border border-zinc-200 shadow-sm overflow-hidden flex flex-col">
+        <div className="lg:col-span-2 bg-white rounded-2xl border border-zinc-200 shadow-md overflow-hidden flex flex-col lg:h-full">
           <div className="p-4 border-b border-zinc-100 flex justify-between items-center bg-zinc-50/50">
             <h3 className="font-medium text-zinc-900 flex items-center gap-2">
               <ImageIcon size={18} className="text-zinc-400" />
@@ -607,22 +638,33 @@ export function RoomEditor({ catalog, onUploadFiles }: RoomEditorProps) {
                   }
                 }}
               >
-                <Image src={currentGeneratedImage.imageUrl} alt="Generated visualization" fill className="object-contain bg-zinc-100" unoptimized />
+                <Image src={currentGeneratedImage.imageUrl} alt="Generated visualization" fill className="object-contain bg-zinc-50" unoptimized />
                 
-                {placedFurnitures.map(pf => (
-                  <div
-                    key={pf.instanceId}
-                    draggable
+                <AnimatePresence>
+                  {placedFurnitures.map(pf => (
+                    <motion.div
+                      layout
+                      initial={{ opacity: 0, scale: 0.5 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      exit={{ opacity: 0, scale: 0.5 }}
+                      transition={{ type: "spring", stiffness: 300, damping: 20 }}
+                      key={pf.instanceId}
+                      draggable
                     onDragStart={(e) => {
                       const rect = (e.target as HTMLElement).getBoundingClientRect();
-                      const offsetX = e.clientX - rect.left;
-                      const offsetY = e.clientY - rect.top;
-                      e.dataTransfer.setData('application/json', JSON.stringify({ 
-                        type: 'MOVE', 
-                        instanceId: pf.instanceId,
-                        offsetX,
-                        offsetY
-                      }));
+                      const eAsAny = e as any;
+                      const clientX = eAsAny.clientX || (eAsAny.touches && eAsAny.touches[0].clientX);
+                      const clientY = eAsAny.clientY || (eAsAny.touches && eAsAny.touches[0].clientY);
+                      const offsetX = clientX - rect.left;
+                      const offsetY = clientY - rect.top;
+                      if (eAsAny.dataTransfer) {
+                        eAsAny.dataTransfer.setData('application/json', JSON.stringify({ 
+                          type: 'MOVE', 
+                          instanceId: pf.instanceId,
+                          offsetX,
+                          offsetY
+                        }));
+                      }
                       setTimeout(() => {
                         (e.target as HTMLElement).style.opacity = '0.5';
                       }, 0);
@@ -672,8 +714,9 @@ export function RoomEditor({ catalog, onUploadFiles }: RoomEditorProps) {
                         +
                       </button>
                     </div>
-                  </div>
+                  </motion.div>
                 ))}
+                </AnimatePresence>
                 
                 <div className="absolute bottom-4 right-4 z-30">
                   <button
@@ -686,15 +729,19 @@ export function RoomEditor({ catalog, onUploadFiles }: RoomEditorProps) {
                 </div>
               </div>
             ) : (
-              <div className="text-center max-w-sm">
-                <div className="w-20 h-20 bg-zinc-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <Layers size={32} className="text-zinc-300" />
+              <motion.div 
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="text-center max-w-sm"
+              >
+                <div className="w-20 h-20 bg-zinc-100 rounded-full flex items-center justify-center mx-auto mb-4 relative before:absolute before:inset-0 before:bg-indigo-100/50 before:rounded-full before:animate-ping before:duration-1000">
+                  <Layers size={32} className="text-zinc-400 relative z-10" />
                 </div>
                 <h4 className="text-lg font-medium text-zinc-900 mb-2">准备批量生成</h4>
                 <p className="text-zinc-500 text-sm">
                   上传多张室内照片并选择多件家具，AI 将为您生成所有组合的可视化效果。
                 </p>
-              </div>
+              </motion.div>
             )}
           </div>
         </div>
@@ -721,69 +768,78 @@ export function RoomEditor({ catalog, onUploadFiles }: RoomEditorProps) {
           </div>
           
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
-            {history.map((item) => (
-              <div 
-                key={item.id}
-                onClick={() => loadHistoryItem(item)}
-                className="bg-white border border-zinc-200 rounded-2xl overflow-hidden shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 cursor-pointer group flex flex-col"
-              >
-                <div className="relative aspect-[4/3] bg-zinc-100 overflow-hidden">
-                  <Image
-                    src={item.generatedImage.imageUrl}
-                    alt="History result"
-                    fill
-                    className="object-cover transition-transform duration-500 group-hover:scale-105"
-                    unoptimized
-                  />
-                  
-                  <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col items-center justify-center gap-3">
-                    <div className="bg-white text-zinc-900 font-medium text-sm px-4 py-2 rounded-full shadow-lg transform translate-y-4 group-hover:translate-y-0 transition-transform duration-300">
-                      点击恢复此状态
+            <AnimatePresence>
+              {history.map((item, index) => (
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: index * 0.05 }}
+                  key={item.id}
+                  onClick={() => loadHistoryItem(item)}
+                  className="bg-white border border-zinc-200 rounded-2xl overflow-hidden shadow-sm hover:shadow-xl hover:-translate-y-1.5 transition-all duration-300 cursor-pointer group flex flex-col"
+                >
+                  <div className="relative aspect-[4/3] bg-zinc-100 overflow-hidden">
+                    <Image
+                      src={item.generatedImage.imageUrl}
+                      alt="History result"
+                      fill
+                      className="object-cover transition-transform duration-700 ease-out group-hover:scale-110"
+                      unoptimized
+                    />
+                    
+                    <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col items-center justify-center gap-3 backdrop-blur-sm">
+                      <motion.div 
+                        initial={{ scale: 0.8 }}
+                        whileInView={{ scale: 1 }}
+                        className="bg-white/90 text-zinc-900 font-medium text-sm px-4 py-2 rounded-full shadow-lg transform translate-y-4 group-hover:translate-y-0 transition-transform duration-300"
+                      >
+                        点击恢复此状态
+                      </motion.div>
+                    </div>
+
+                    <div className="absolute top-3 right-3 bg-white/90 backdrop-blur-md text-zinc-700 text-xs font-medium px-2.5 py-1.5 rounded-lg shadow-sm flex items-center gap-1.5">
+                      <Clock size={12} />
+                      {new Date(item.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     </div>
                   </div>
 
-                  <div className="absolute top-3 right-3 bg-white/90 backdrop-blur-md text-zinc-700 text-xs font-medium px-2.5 py-1.5 rounded-lg shadow-sm flex items-center gap-1.5">
-                    <Clock size={12} />
-                    {new Date(item.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                  </div>
-                </div>
+                  <div className="p-4 bg-white flex-1 flex flex-col justify-between border-t border-zinc-100">
+                    <div className="flex items-center gap-3 mb-3">
+                      <div className="text-xs font-medium text-zinc-400 uppercase tracking-wider w-12">家具</div>
+                      <div className="flex items-center gap-2 bg-zinc-50 px-2 py-1.5 rounded-lg flex-1 border border-zinc-100 overflow-hidden group-hover:bg-zinc-100/50 transition-colors">
+                        <div className="relative w-6 h-6 rounded-md overflow-hidden bg-white border border-zinc-200 shrink-0 shadow-sm">
+                          <Image src={item.furniture.imageUrl} alt={item.furniture.name} fill className="object-contain p-0.5" unoptimized />
+                        </div>
+                        <span className="text-sm font-medium text-zinc-700 truncate">
+                          {item.furniture.name}
+                        </span>
+                      </div>
+                    </div>
+                    
+                    <div className="flex items-center gap-3">
+                      <div className="text-xs font-medium text-zinc-400 uppercase tracking-wider w-12">场景</div>
+                      <div className="flex items-center gap-2 bg-zinc-50 px-2 py-1.5 rounded-lg flex-1 border border-zinc-100 overflow-hidden group-hover:bg-zinc-100/50 transition-colors">
+                        <div className="relative w-6 h-6 rounded-md overflow-hidden bg-zinc-200 shrink-0 shadow-sm">
+                          <Image src={item.roomImage.imageUrl} alt={item.roomImage.name} fill className="object-cover" unoptimized />
+                        </div>
+                        <span className="text-sm text-zinc-600 truncate">
+                          原始室内图
+                        </span>
+                      </div>
+                    </div>
 
-                <div className="p-4 bg-white flex-1 flex flex-col justify-between border-t border-zinc-100">
-                  <div className="flex items-center gap-3 mb-3">
-                    <div className="text-xs font-medium text-zinc-400 uppercase tracking-wider w-12">家具</div>
-                    <div className="flex items-center gap-2 bg-zinc-50 px-2 py-1.5 rounded-lg flex-1 border border-zinc-100 overflow-hidden">
-                      <div className="relative w-6 h-6 rounded-md overflow-hidden bg-white border border-zinc-200 shrink-0">
-                        <Image src={item.furniture.imageUrl} alt={item.furniture.name} fill className="object-contain p-0.5" unoptimized />
+                    {item.customInstruction && (
+                      <div className="flex items-start gap-3 mt-3 pt-3 border-t border-zinc-100">
+                        <div className="text-xs font-medium text-zinc-400 uppercase tracking-wider w-12 mt-0.5">指令</div>
+                        <div className="text-xs text-zinc-600 flex-1 line-clamp-2" title={item.customInstruction}>
+                          {item.customInstruction}
+                        </div>
                       </div>
-                      <span className="text-sm font-medium text-zinc-700 truncate">
-                        {item.furniture.name}
-                      </span>
-                    </div>
+                    )}
                   </div>
-                  
-                  <div className="flex items-center gap-3">
-                    <div className="text-xs font-medium text-zinc-400 uppercase tracking-wider w-12">场景</div>
-                    <div className="flex items-center gap-2 bg-zinc-50 px-2 py-1.5 rounded-lg flex-1 border border-zinc-100 overflow-hidden">
-                      <div className="relative w-6 h-6 rounded-md overflow-hidden bg-zinc-200 shrink-0">
-                        <Image src={item.roomImage.imageUrl} alt={item.roomImage.name} fill className="object-cover" unoptimized />
-                      </div>
-                      <span className="text-sm text-zinc-600 truncate">
-                        原始室内图
-                      </span>
-                    </div>
-                  </div>
-
-                  {item.customInstruction && (
-                    <div className="flex items-start gap-3 mt-3 pt-3 border-t border-zinc-100">
-                      <div className="text-xs font-medium text-zinc-400 uppercase tracking-wider w-12 mt-0.5">指令</div>
-                      <div className="text-xs text-zinc-600 flex-1 line-clamp-2" title={item.customInstruction}>
-                        {item.customInstruction}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-            ))}
+                </motion.div>
+              ))}
+            </AnimatePresence>
           </div>
         </div>
       )}
