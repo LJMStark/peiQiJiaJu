@@ -306,6 +306,20 @@ export async function createHistoryItem(
     furnitureItemId: string;
     generatedDataUrl: string;
     customInstruction?: string | null;
+    roomFallback?: {
+      name: string;
+      storagePath: string;
+      mimeType: string;
+      fileSize: number;
+      aspectRatio?: string | null;
+    };
+    furnitureFallback?: {
+      name: string;
+      storagePath: string;
+      mimeType: string;
+      fileSize: number;
+      category?: string;
+    };
   }
 ) {
   const [roomResult, furnitureResult] = await Promise.all([
@@ -326,15 +340,27 @@ export async function createHistoryItem(
   const room = roomResult.rows[0];
   const furniture = furnitureResult.rows[0];
 
-  if (!room) {
+  const roomSnapshot = room
+    ? { id: room.id, name: room.name, storagePath: room.storage_path, mimeType: room.mime_type, fileSize: room.file_size, aspectRatio: room.aspect_ratio }
+    : input.roomFallback
+      ? { id: null, name: input.roomFallback.name, storagePath: input.roomFallback.storagePath, mimeType: input.roomFallback.mimeType, fileSize: input.roomFallback.fileSize, aspectRatio: input.roomFallback.aspectRatio ?? null }
+      : null;
+
+  const furnitureSnapshot = furniture
+    ? { id: furniture.id, name: furniture.name, storagePath: furniture.storage_path, mimeType: furniture.mime_type, fileSize: furniture.file_size, category: furniture.category }
+    : input.furnitureFallback
+      ? { id: null, name: input.furnitureFallback.name, storagePath: input.furnitureFallback.storagePath, mimeType: input.furnitureFallback.mimeType, fileSize: input.furnitureFallback.fileSize, category: input.furnitureFallback.category ?? '其他' }
+      : null;
+
+  if (!roomSnapshot) {
     throw new Error('Room image not found.');
   }
 
-  if (!furniture) {
+  if (!furnitureSnapshot) {
     throw new Error('Furniture item not found.');
   }
 
-  const generatedName = `${room.name}-${furniture.name}-generated`;
+  const generatedName = `${roomSnapshot.name}-${furnitureSnapshot.name}-generated`;
   const uploaded = await uploadGeneratedImage(userId, input.generatedDataUrl, generatedName);
   const id = randomUUID();
 
@@ -387,18 +413,18 @@ export async function createHistoryItem(
       [
         id,
         userId,
-        room.id,
-        furniture.id,
-        room.name,
-        room.storage_path,
-        room.mime_type,
-        room.file_size,
-        room.aspect_ratio,
-        furniture.name,
-        furniture.storage_path,
-        furniture.mime_type,
-        furniture.file_size,
-        furniture.category,
+        roomSnapshot.id,
+        furnitureSnapshot.id,
+        roomSnapshot.name,
+        roomSnapshot.storagePath,
+        roomSnapshot.mimeType,
+        roomSnapshot.fileSize,
+        roomSnapshot.aspectRatio,
+        furnitureSnapshot.name,
+        furnitureSnapshot.storagePath,
+        furnitureSnapshot.mimeType,
+        furnitureSnapshot.fileSize,
+        furnitureSnapshot.category,
         generatedName,
         uploaded.storagePath,
         uploaded.mimeType,

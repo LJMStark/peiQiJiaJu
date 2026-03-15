@@ -25,6 +25,12 @@ export async function POST(request: Request) {
       roomImageId,
       furnitureItemId,
       customInstruction: typeof body?.customInstruction === 'string' ? body.customInstruction : null,
+      roomFallback: body?.roomFallback?.storagePath && body?.roomFallback?.mimeType
+        ? { storagePath: body.roomFallback.storagePath, mimeType: body.roomFallback.mimeType, name: body.roomFallback.name, aspectRatio: body.roomFallback.aspectRatio }
+        : undefined,
+      furnitureFallback: body?.furnitureFallback?.storagePath && body?.furnitureFallback?.mimeType
+        ? { storagePath: body.furnitureFallback.storagePath, mimeType: body.furnitureFallback.mimeType, name: body.furnitureFallback.name, category: body.furnitureFallback.category }
+        : undefined,
     });
 
     return NextResponse.json({ item }, { status: 201 });

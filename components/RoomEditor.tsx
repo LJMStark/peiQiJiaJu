@@ -194,6 +194,18 @@ export function RoomEditor({ catalog, onUploadFiles }: RoomEditorProps) {
                 roomImageId: room.id,
                 furnitureItemId: furniture.id,
                 customInstruction: effectiveInstruction.trim() ? effectiveInstruction : null,
+                roomFallback: {
+                  storagePath: room.storagePath,
+                  mimeType: room.mimeType,
+                  name: room.name,
+                  aspectRatio: room.aspectRatio,
+                },
+                furnitureFallback: {
+                  storagePath: furniture.storagePath,
+                  mimeType: furniture.mimeType,
+                  name: furniture.name,
+                  category: furniture.category,
+                },
               }),
             });
             const payload = await readJson<HistoryMutationResponse>(response);

@@ -11,6 +11,7 @@ import { getSupabaseAdmin } from '@/lib/supabase-admin';
 type FurnitureSourceRow = {
   id: string;
   name: string;
+  category: string;
   storage_path: string;
   mime_type: string;
 };
@@ -131,12 +132,22 @@ export async function classifyFurnitureFile(
   }
 }
 
+type AssetFallback = {
+  storagePath: string;
+  mimeType: string;
+  name?: string;
+  aspectRatio?: string | null;
+  category?: string;
+};
+
 export async function generateRoomVisualization(
   userId: string,
   input: {
     roomImageId: string;
     furnitureItemId: string;
     customInstruction?: string | null;
+    roomFallback?: AssetFallback;
+    furnitureFallback?: AssetFallback;
   }
 ) {
   const [roomResult, furnitureResult] = await Promise.all([
@@ -147,15 +158,27 @@ export async function generateRoomVisualization(
       [input.roomImageId, userId]
     ),
     query<FurnitureSourceRow>(
-      `select id, name, storage_path, mime_type
+      `select id, name, category, storage_path, mime_type
        from furniture_items
        where id = $1 and user_id = $2`,
       [input.furnitureItemId, userId]
     ),
   ]);
 
-  const room = roomResult.rows[0];
-  const furniture = furnitureResult.rows[0];
+  const roomRow = roomResult.rows[0];
+  const furnitureRow = furnitureResult.rows[0];
+
+  const room = roomRow
+    ? { id: roomRow.id, name: roomRow.name, storagePath: roomRow.storage_path, mimeType: roomRow.mime_type, aspectRatio: roomRow.aspect_ratio }
+    : input.roomFallback
+      ? { id: input.roomImageId, name: input.roomFallback.name ?? 'room', storagePath: input.roomFallback.storagePath, mimeType: input.roomFallback.mimeType, aspectRatio: input.roomFallback.aspectRatio ?? null }
+      : null;
+
+  const furniture = furnitureRow
+    ? { id: furnitureRow.id, name: furnitureRow.name, storagePath: furnitureRow.storage_path, mimeType: furnitureRow.mime_type, category: furnitureRow.category ?? '其他' }
+    : input.furnitureFallback
+      ? { id: input.furnitureItemId, name: input.furnitureFallback.name ?? 'furniture', storagePath: input.furnitureFallback.storagePath, mimeType: input.furnitureFallback.mimeType, category: input.furnitureFallback.category ?? '其他' }
+      : null;
 
   if (!room) {
     throw new Error('Room image not found.');
@@ -166,8 +189,8 @@ export async function generateRoomVisualization(
   }
 
   const [roomBase64, furnitureBase64] = await Promise.all([
-    downloadStorageAssetBase64(getStorageBucket('room'), room.storage_path),
-    downloadStorageAssetBase64(getStorageBucket('furniture'), furniture.storage_path),
+    downloadStorageAssetBase64(getStorageBucket('room'), room.storagePath),
+    downloadStorageAssetBase64(getStorageBucket('furniture'), furniture.storagePath),
   ]);
 
   const response = await getGeminiClient().models.generateContent({
@@ -177,13 +200,13 @@ export async function generateRoomVisualization(
         {
           inlineData: {
             data: roomBase64,
-            mimeType: room.mime_type,
+            mimeType: room.mimeType,
           },
         },
         {
           inlineData: {
             data: furnitureBase64,
-            mimeType: furniture.mime_type,
+            mimeType: furniture.mimeType,
           },
         },
         {
@@ -193,7 +216,7 @@ export async function generateRoomVisualization(
     },
     config: {
       imageConfig: {
-        aspectRatio: room.aspect_ratio ?? '1:1',
+        aspectRatio: room.aspectRatio ?? '1:1',
         imageSize: '2K',
       },
     },
@@ -212,5 +235,19 @@ export async function generateRoomVisualization(
     furnitureItemId: furniture.id,
     generatedDataUrl: `data:${imagePart.inlineData.mimeType};base64,${imagePart.inlineData.data}`,
     customInstruction: input.customInstruction ?? null,
+    roomFallback: roomRow ? undefined : {
+      name: room.name,
+      storagePath: room.storagePath,
+      mimeType: room.mimeType,
+      fileSize: 0,
+      aspectRatio: room.aspectRatio,
+    },
+    furnitureFallback: furnitureRow ? undefined : {
+      name: furniture.name,
+      storagePath: furniture.storagePath,
+      mimeType: furniture.mimeType,
+      fileSize: 0,
+      category: furniture.category,
+    },
   });
 }
