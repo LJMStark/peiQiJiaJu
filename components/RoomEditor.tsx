@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { Upload, Sparkles, Image as ImageIcon, Loader2, Download, History, Clock, X, Layers, MessageSquareText, Lightbulb, Sofa, Maximize2 } from 'lucide-react';
+import { Upload, Sparkles, Image as ImageIcon, Loader2, Download, History, Clock, X, Layers, MessageSquareText, Lightbulb, Sofa } from 'lucide-react';
 import Image from 'next/image';
 import { motion, AnimatePresence } from 'motion/react';
 import { readJson, type RoomsResponse, type RoomMutationResponse, type HistoryResponse, type HistoryMutationResponse } from '@/lib/client/api';
@@ -608,7 +608,7 @@ export function RoomEditor({ catalog, onUploadFiles }: RoomEditorProps) {
                   }
                 }}
               >
-                <Image src={currentGeneratedImage.imageUrl} alt="Generated visualization" fill className="object-contain bg-zinc-50" sizes="(max-width: 1024px) 100vw, 66vw" priority />
+                <Image src={currentGeneratedImage.imageUrl} alt="Generated visualization" fill className="object-contain bg-zinc-50 cursor-pointer" sizes="(max-width: 1024px) 100vw, 66vw" priority onClick={() => setLightboxImageUrl(currentGeneratedImage.imageUrl)} />
                 
                 <AnimatePresence>
                   {placedFurnitures.map(pf => (
@@ -689,13 +689,6 @@ export function RoomEditor({ catalog, onUploadFiles }: RoomEditorProps) {
                 </AnimatePresence>
                 
                 <div className="absolute bottom-4 right-4 z-30 flex items-center gap-2">
-                  <button
-                    onClick={() => setLightboxImageUrl(currentGeneratedImage.imageUrl)}
-                    className="bg-white/90 backdrop-blur-md text-zinc-700 hover:text-indigo-600 p-3 rounded-full shadow-lg border border-zinc-200 transition-colors"
-                    title="全屏查看"
-                  >
-                    <Maximize2 size={16} />
-                  </button>
                   <button
                     onClick={() => setIsFeedbackModalOpen(true)}
                     className="bg-white/90 backdrop-blur-md text-zinc-700 hover:text-indigo-600 p-3 sm:px-4 sm:py-2 rounded-full shadow-lg border border-zinc-200 flex items-center gap-2 text-sm font-medium transition-colors"
