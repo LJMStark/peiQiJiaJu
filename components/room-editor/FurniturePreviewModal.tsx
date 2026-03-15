@@ -25,7 +25,7 @@ export function FurniturePreviewModal({ furniture, onClose }: FurniturePreviewMo
         >
           <X size={20} />
         </button>
-        <Image src={furniture.imageUrl} alt={furniture.name} fill className="object-contain p-4" unoptimized />
+        <Image src={furniture.imageUrl} alt={furniture.name} fill className="object-contain p-4" sizes="(max-width: 768px) 100vw, 768px" />
         <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/90 via-black/50 to-transparent p-6 pt-12">
           <h3 className="text-white text-xl font-medium">{furniture.name}</h3>
         </div>

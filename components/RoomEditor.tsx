@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { Upload, Sparkles, Image as ImageIcon, Loader2, Download, History, Clock, X, Layers, MessageSquareText, Lightbulb, Sofa } from 'lucide-react';
+import { Upload, Sparkles, Image as ImageIcon, Loader2, Download, History, Clock, X, Layers, MessageSquareText, Lightbulb, Sofa, Maximize2 } from 'lucide-react';
 import Image from 'next/image';
 import { motion, AnimatePresence } from 'motion/react';
 import { readJson, type RoomsResponse, type RoomMutationResponse, type HistoryResponse, type HistoryMutationResponse } from '@/lib/client/api';
@@ -10,6 +10,7 @@ import { inferAspectRatio } from '@/lib/client/image-utils';
 import { FurniturePreviewModal } from './room-editor/FurniturePreviewModal';
 import { FurnitureDrawer } from './room-editor/FurnitureDrawer';
 import { FeedbackModal } from './room-editor/FeedbackModal';
+import { ImageLightbox } from './room-editor/ImageLightbox';
 
 const COMMON_FURNITURE = ['沙发', '床', '餐桌', '茶几', '椅子', '书桌', '衣柜', '电视柜'];
 const RECOMMENDED_INSTRUCTIONS = [
@@ -51,7 +52,10 @@ export function RoomEditor({ catalog, onUploadFiles }: RoomEditorProps) {
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [isFeedbackModalOpen, setIsFeedbackModalOpen] = useState(false);
   const [feedbackText, setFeedbackText] = useState('');
-  
+  const [lightboxImageUrl, setLightboxImageUrl] = useState<string | null>(null);
+  const [errorDetails, setErrorDetails] = useState<string[]>([]);
+  const [historyDisplayCount, setHistoryDisplayCount] = useState(12);
+
   const fileInputRef = useRef<HTMLInputElement>(null);
   const furnitureInputRef = useRef<HTMLInputElement>(null);
 
@@ -153,24 +157,33 @@ export function RoomEditor({ catalog, onUploadFiles }: RoomEditorProps) {
     );
   };
 
-  const handleGenerate = async () => {
+  const handleGenerate = async (feedbackOverride?: string) => {
     if (roomImages.length === 0 || selectedFurnitures.length === 0) return;
-    
+
     setIsGenerating(true);
     setError(null);
+    setErrorDetails([]);
     setPlacedFurnitures([]);
     setCurrentGeneratedImage(null);
-    
+
     const total = roomImages.length * selectedFurnitures.length;
     let current = 0;
     setBatchProgress({ current, total });
-    
+
+    let effectiveInstruction = customInstruction;
+    if (feedbackOverride) {
+      const feedbackLine = `[修正反馈]: ${feedbackOverride}`;
+      effectiveInstruction = customInstruction.trim() ? `${customInstruction}\n${feedbackLine}` : feedbackLine;
+    }
+
+    const errors: string[] = [];
+
     try {
       for (const room of roomImages) {
         for (const furniture of selectedFurnitures) {
           current++;
           setBatchProgress({ current, total });
-          
+
           try {
             const response = await fetch('/api/generate', {
               method: 'POST',
@@ -180,7 +193,7 @@ export function RoomEditor({ catalog, onUploadFiles }: RoomEditorProps) {
               body: JSON.stringify({
                 roomImageId: room.id,
                 furnitureItemId: furniture.id,
-                customInstruction: customInstruction.trim() ? customInstruction : null,
+                customInstruction: effectiveInstruction.trim() ? effectiveInstruction : null,
               }),
             });
             const payload = await readJson<HistoryMutationResponse>(response);
@@ -193,10 +206,25 @@ export function RoomEditor({ catalog, onUploadFiles }: RoomEditorProps) {
             if (msg.includes("Requested entity was not found")) {
               throw err;
             }
+            if (msg.includes("429") || msg.toLowerCase().includes("rate limit") || msg.toLowerCase().includes("quota")) {
+              errors.push("AI 服务请求过于频繁，请稍后再试");
+            } else if (msg.includes("500") || msg.includes("503")) {
+              errors.push("AI 服务暂时不可用");
+            } else {
+              errors.push(msg);
+            }
           }
         }
       }
 
+      if (errors.length > 0) {
+        if (errors.length === total) {
+          setError("所有组合均生成失败，请检查网络或稍后再试。");
+        } else {
+          setError(`${total} 个组合中有 ${errors.length} 个生成失败。`);
+        }
+        setErrorDetails([...new Set(errors)]);
+      }
     } catch (err: unknown) {
       console.error("批量生成错误:", err);
       const msg = getErrorMessage(err);
@@ -233,12 +261,11 @@ export function RoomEditor({ catalog, onUploadFiles }: RoomEditorProps) {
   };
 
   const handleFeedbackSubmit = () => {
-    if (feedbackText.trim()) {
-      setCustomInstruction(prev => prev ? `${prev}\n[修正反馈]: ${feedbackText}` : `[修正反馈]: ${feedbackText}`);
-      setIsFeedbackModalOpen(false);
-      setFeedbackText('');
-      handleGenerate();
-    }
+    if (!feedbackText.trim()) return;
+    const feedback = feedbackText;
+    setIsFeedbackModalOpen(false);
+    setFeedbackText('');
+    void handleGenerate(feedback);
   };
 
   const totalCombos = roomImages.length * selectedFurnitures.length;
@@ -277,7 +304,7 @@ export function RoomEditor({ catalog, onUploadFiles }: RoomEditorProps) {
                     key={room.id} 
                     className="relative aspect-video rounded-xl overflow-hidden border border-zinc-200 group shadow-sm hover:shadow-md transition-shadow"
                   >
-                    <Image src={room.imageUrl} alt={room.name} fill className="object-cover transition-transform duration-500 group-hover:scale-105" unoptimized />
+                    <Image src={room.imageUrl} alt={room.name} fill className="object-cover transition-transform duration-500 group-hover:scale-105" sizes="(max-width: 640px) 45vw, 200px" />
                     <button 
                       onClick={() => removeRoom(room.id)}
                       className="absolute top-1 right-1 bg-white/90 backdrop-blur-md text-red-500 p-1 rounded-md opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-all hover:bg-red-50 hover:scale-110 shadow-sm"
@@ -359,7 +386,7 @@ export function RoomEditor({ catalog, onUploadFiles }: RoomEditorProps) {
                       key={item.id} 
                       className="relative w-20 h-20 rounded-lg border border-zinc-200 overflow-hidden group shadow-sm hover:shadow-md transition-shadow"
                     >
-                      <Image src={item.imageUrl} alt={item.name} fill className="object-contain bg-zinc-50 p-1 transition-transform duration-500 group-hover:scale-110" unoptimized />
+                      <Image src={item.imageUrl} alt={item.name} fill className="object-contain bg-zinc-50 p-1 transition-transform duration-500 group-hover:scale-110" sizes="80px" />
                       <button
                         onClick={() => toggleFurniture(item)}
                         className="absolute top-1 right-1 bg-white/90 backdrop-blur-md text-red-500 p-1 rounded-md opacity-0 group-hover:opacity-100 transition-all hover:bg-red-50 hover:scale-110 shadow-sm"
@@ -431,7 +458,7 @@ export function RoomEditor({ catalog, onUploadFiles }: RoomEditorProps) {
           {/* Step 4: Generate (Sticky Bottom) */}
           <div className="sticky bottom-0 pt-4 pb-2 bg-gradient-to-t from-zinc-50 via-zinc-50/90 to-transparent backdrop-blur-[2px] z-20 mt-auto -mx-1 px-1">
             <button
-              onClick={handleGenerate}
+              onClick={() => handleGenerate()}
               disabled={totalCombos === 0 || isGenerating}
               className={`w-full py-4 rounded-2xl font-medium flex items-center justify-center gap-2 transition-all duration-300 active:scale-[0.98] group ${
                 totalCombos === 0
@@ -458,13 +485,28 @@ export function RoomEditor({ catalog, onUploadFiles }: RoomEditorProps) {
             
             <AnimatePresence>
               {error && (
-                <motion.div 
+                <motion.div
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: 10 }}
                   className="mt-3 p-3 bg-red-50 text-red-600 text-sm rounded-xl border border-red-200 shadow-sm"
                 >
-                  {error}
+                  <p>{error}</p>
+                  {errorDetails.length > 0 && (
+                    <details className="mt-2">
+                      <summary className="cursor-pointer text-xs text-red-500 hover:text-red-700">
+                        查看详细错误 ({errorDetails.length})
+                      </summary>
+                      <ul className="mt-2 max-h-32 overflow-y-auto space-y-1 text-xs text-red-500">
+                        {errorDetails.map((detail, i) => (
+                          <li key={i} className="flex items-start gap-1">
+                            <span className="shrink-0">#{i + 1}</span>
+                            <span>{detail}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </details>
+                  )}
                 </motion.div>
               )}
             </AnimatePresence>
@@ -483,14 +525,15 @@ export function RoomEditor({ catalog, onUploadFiles }: RoomEditorProps) {
                 <span className="text-xs text-zinc-500 bg-zinc-100 px-2 py-1 rounded-md hidden sm:inline-block">
                   提示：您可以将左侧家具直接拖拽到此图片上进行手动摆放
                 </span>
-                <a 
-                  href={currentGeneratedImage.imageUrl} 
+                <a
+                  href={currentGeneratedImage.imageUrl}
                   download="furniture-visualization.png"
                   className="text-sm flex items-center gap-1.5 text-indigo-600 hover:text-indigo-700 font-medium bg-indigo-50 px-3 py-1.5 rounded-lg transition-colors"
                 >
                   <Download size={16} />
                   下载当前
                 </a>
+                <span className="text-xs text-amber-600 bg-amber-50 px-2 py-1 rounded-md hidden sm:inline-block">30 天后过期</span>
               </div>
             )}
           </div>
@@ -565,7 +608,7 @@ export function RoomEditor({ catalog, onUploadFiles }: RoomEditorProps) {
                   }
                 }}
               >
-                <Image src={currentGeneratedImage.imageUrl} alt="Generated visualization" fill className="object-contain bg-zinc-50" unoptimized />
+                <Image src={currentGeneratedImage.imageUrl} alt="Generated visualization" fill className="object-contain bg-zinc-50" sizes="(max-width: 1024px) 100vw, 66vw" priority />
                 
                 <AnimatePresence>
                   {placedFurnitures.map(pf => (
@@ -645,13 +688,20 @@ export function RoomEditor({ catalog, onUploadFiles }: RoomEditorProps) {
                 ))}
                 </AnimatePresence>
                 
-                <div className="absolute bottom-4 right-4 z-30">
+                <div className="absolute bottom-4 right-4 z-30 flex items-center gap-2">
+                  <button
+                    onClick={() => setLightboxImageUrl(currentGeneratedImage.imageUrl)}
+                    className="bg-white/90 backdrop-blur-md text-zinc-700 hover:text-indigo-600 p-3 rounded-full shadow-lg border border-zinc-200 transition-colors"
+                    title="全屏查看"
+                  >
+                    <Maximize2 size={16} />
+                  </button>
                   <button
                     onClick={() => setIsFeedbackModalOpen(true)}
-                    className="bg-white/90 backdrop-blur-md text-zinc-700 hover:text-indigo-600 px-4 py-2 rounded-full shadow-lg border border-zinc-200 flex items-center gap-2 text-sm font-medium transition-colors"
+                    className="bg-white/90 backdrop-blur-md text-zinc-700 hover:text-indigo-600 p-3 sm:px-4 sm:py-2 rounded-full shadow-lg border border-zinc-200 flex items-center gap-2 text-sm font-medium transition-colors"
                   >
                     <MessageSquareText size={16} />
-                    不满意？提供反馈
+                    <span className="hidden sm:inline">不满意？提供反馈</span>
                   </button>
                 </div>
               </div>
@@ -690,13 +740,14 @@ export function RoomEditor({ catalog, onUploadFiles }: RoomEditorProps) {
                   </span>
                 </h3>
                 <p className="text-sm text-zinc-500 mt-1">点击任意卡片即可恢复之前的编辑状态</p>
+                <p className="text-xs text-amber-600 mt-1">生成结果保留 30 天，请及时下载保存。</p>
               </div>
             </div>
           </div>
           
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
             <AnimatePresence>
-              {history.map((item, index) => (
+              {history.slice(0, historyDisplayCount).map((item, index) => (
                 <motion.div
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
@@ -711,7 +762,7 @@ export function RoomEditor({ catalog, onUploadFiles }: RoomEditorProps) {
                       alt="History result"
                       fill
                       className="object-cover transition-transform duration-700 ease-out group-hover:scale-110"
-                      unoptimized
+                      sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
                     />
                     
                     <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col items-center justify-center gap-3 backdrop-blur-sm">
@@ -735,7 +786,7 @@ export function RoomEditor({ catalog, onUploadFiles }: RoomEditorProps) {
                       <div className="text-xs font-medium text-zinc-400 uppercase tracking-wider w-12">家具</div>
                       <div className="flex items-center gap-2 bg-zinc-50 px-2 py-1.5 rounded-lg flex-1 border border-zinc-100 overflow-hidden group-hover:bg-zinc-100/50 transition-colors">
                         <div className="relative w-6 h-6 rounded-md overflow-hidden bg-white border border-zinc-200 shrink-0 shadow-sm">
-                          <Image src={item.furniture.imageUrl} alt={item.furniture.name} fill className="object-contain p-0.5" unoptimized />
+                          <Image src={item.furniture.imageUrl} alt={item.furniture.name} fill className="object-contain p-0.5" sizes="24px" />
                         </div>
                         <span className="text-sm font-medium text-zinc-700 truncate">
                           {item.furniture.name}
@@ -747,7 +798,7 @@ export function RoomEditor({ catalog, onUploadFiles }: RoomEditorProps) {
                       <div className="text-xs font-medium text-zinc-400 uppercase tracking-wider w-12">场景</div>
                       <div className="flex items-center gap-2 bg-zinc-50 px-2 py-1.5 rounded-lg flex-1 border border-zinc-100 overflow-hidden group-hover:bg-zinc-100/50 transition-colors">
                         <div className="relative w-6 h-6 rounded-md overflow-hidden bg-zinc-200 shrink-0 shadow-sm">
-                          <Image src={item.roomImage.imageUrl} alt={item.roomImage.name} fill className="object-cover" unoptimized />
+                          <Image src={item.roomImage.imageUrl} alt={item.roomImage.name} fill className="object-cover" sizes="24px" />
                         </div>
                         <span className="text-sm text-zinc-600 truncate">
                           原始室内图
@@ -768,6 +819,17 @@ export function RoomEditor({ catalog, onUploadFiles }: RoomEditorProps) {
               ))}
             </AnimatePresence>
           </div>
+
+          {history.length > historyDisplayCount && (
+            <div className="flex justify-center mt-6">
+              <button
+                onClick={() => setHistoryDisplayCount(prev => prev + 12)}
+                className="px-6 py-2 bg-white border border-zinc-200 rounded-xl text-sm font-medium text-zinc-700 hover:bg-zinc-50 hover:border-zinc-300 transition-colors shadow-sm"
+              >
+                加载更多 ({Math.max(0, history.length - historyDisplayCount)} 条剩余)
+              </button>
+            </div>
+          )}
         </div>
       )}
 
@@ -799,6 +861,13 @@ export function RoomEditor({ catalog, onUploadFiles }: RoomEditorProps) {
         onFeedbackChange={setFeedbackText}
         onSubmit={handleFeedbackSubmit}
       />
+
+      {lightboxImageUrl && (
+        <ImageLightbox
+          imageUrl={lightboxImageUrl}
+          onClose={() => setLightboxImageUrl(null)}
+        />
+      )}
     </div>
   );
 }

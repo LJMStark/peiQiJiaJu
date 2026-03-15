@@ -27,6 +27,8 @@ export function Catalog({
 }: CatalogProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isDragging, setIsDragging] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingName, setEditingName] = useState('');
 
   const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     if (event.target.files && event.target.files.length > 0) {
@@ -127,7 +129,7 @@ export function Catalog({
               className="group relative bg-white border border-zinc-200 rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-all flex flex-col"
             >
               <div className="aspect-square relative bg-zinc-100 flex items-center justify-center overflow-hidden">
-                <Image src={item.imageUrl} alt={item.name} fill className="object-contain p-4" unoptimized />
+                <Image src={item.imageUrl} alt={item.name} fill className="object-contain p-4" sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 20vw" />
                 <button
                   onClick={() => void onDelete(item.id)}
                   className="absolute top-2 right-2 w-8 h-8 bg-white/90 backdrop-blur-sm text-red-500 rounded-lg flex items-center justify-center opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity hover:bg-red-50 shadow-sm"
@@ -137,9 +139,41 @@ export function Catalog({
                 </button>
               </div>
               <div className="p-3 border-t border-zinc-100 flex-1 flex flex-col justify-between gap-2">
-                <p className="text-sm font-medium text-zinc-900 truncate" title={item.name}>
-                  {item.name}
-                </p>
+                {editingId === item.id ? (
+                  <input
+                    type="text"
+                    value={editingName}
+                    onChange={(e) => setEditingName(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.currentTarget.blur();
+                      } else if (e.key === 'Escape') {
+                        setEditingId(null);
+                      }
+                    }}
+                    onBlur={() => {
+                      if (editingId === item.id && editingName.trim() && editingName.trim() !== item.name) {
+                        void onUpdate(item.id, { name: editingName.trim() });
+                      }
+                      setEditingId(null);
+                    }}
+                    autoFocus
+                    className="text-sm font-medium text-zinc-900 w-full px-1 py-0.5 border border-indigo-300 rounded focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                    onClick={(e) => e.stopPropagation()}
+                  />
+                ) : (
+                  <p
+                    className="text-sm font-medium text-zinc-900 truncate cursor-pointer hover:text-indigo-600 transition-colors"
+                    title={`${item.name} (点击编辑)`}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setEditingId(item.id);
+                      setEditingName(item.name);
+                    }}
+                  >
+                    {item.name}
+                  </p>
+                )}
                 <select
                   value={item.category || '其他'}
                   onChange={(event) => void onUpdate(item.id, { category: event.target.value })}

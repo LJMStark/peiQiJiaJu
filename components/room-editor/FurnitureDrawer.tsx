@@ -122,7 +122,7 @@ export function FurnitureDrawer({
                           : 'border-zinc-100 hover:border-zinc-300'
                       }`}
                     >
-                      <Image src={item.imageUrl} alt={item.name} fill className="object-contain bg-zinc-50 p-2" unoptimized />
+                      <Image src={item.imageUrl} alt={item.name} fill className="object-contain bg-zinc-50 p-2" sizes="(max-width: 640px) 40vw, 120px" />
                       {isSelected && (
                         <div className="absolute top-2 right-2 bg-indigo-500 text-white rounded-full p-0.5 z-10 shadow-sm">
                           <CheckCircle2 size={16} />
