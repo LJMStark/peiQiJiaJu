@@ -525,14 +525,28 @@ export function RoomEditor({ catalog, onUploadFiles }: RoomEditorProps) {
                 <span className="text-xs text-zinc-500 bg-zinc-100 px-2 py-1 rounded-md hidden sm:inline-block">
                   提示：您可以将左侧家具直接拖拽到此图片上进行手动摆放
                 </span>
-                <a
-                  href={currentGeneratedImage.imageUrl}
-                  download="furniture-visualization.png"
+                <button
+                  onClick={async () => {
+                    try {
+                      const res = await fetch(currentGeneratedImage.imageUrl);
+                      const blob = await res.blob();
+                      const url = URL.createObjectURL(blob);
+                      const a = document.createElement('a');
+                      a.href = url;
+                      a.download = 'furniture-visualization.png';
+                      document.body.appendChild(a);
+                      a.click();
+                      document.body.removeChild(a);
+                      URL.revokeObjectURL(url);
+                    } catch (err) {
+                      console.error('Download failed:', err);
+                    }
+                  }}
                   className="text-sm flex items-center gap-1.5 text-indigo-600 hover:text-indigo-700 font-medium bg-indigo-50 px-3 py-1.5 rounded-lg transition-colors"
                 >
                   <Download size={16} />
                   下载当前
-                </a>
+                </button>
                 <span className="text-xs text-amber-600 bg-amber-50 px-2 py-1 rounded-md hidden sm:inline-block">30 天后过期</span>
               </div>
             )}
@@ -688,13 +702,13 @@ export function RoomEditor({ catalog, onUploadFiles }: RoomEditorProps) {
                 ))}
                 </AnimatePresence>
                 
-                <div className="absolute bottom-4 right-4 z-30 flex items-center gap-2">
+                <div className="absolute bottom-4 left-1/2 -translate-x-1/2 sm:left-auto sm:translate-x-0 sm:right-4 z-30 flex items-center gap-2">
                   <button
                     onClick={() => setIsFeedbackModalOpen(true)}
-                    className="bg-white/90 backdrop-blur-md text-zinc-700 hover:text-indigo-600 p-3 sm:px-4 sm:py-2 rounded-full shadow-lg border border-zinc-200 flex items-center gap-2 text-sm font-medium transition-colors"
+                    className="bg-white/90 backdrop-blur-md text-zinc-700 hover:text-indigo-600 px-4 py-2 rounded-full shadow-lg border border-zinc-200 flex items-center gap-2 text-sm font-medium transition-colors"
                   >
                     <MessageSquareText size={16} />
-                    <span className="hidden sm:inline">不满意？提供反馈</span>
+                    不满意？提供反馈
                   </button>
                 </div>
               </div>

@@ -43,15 +43,29 @@ export function ImageLightbox({ imageUrl, onClose }: ImageLightboxProps) {
         </button>
         <Image src={imageUrl} alt="Generated visualization" fill className="object-contain p-2" sizes="(max-width: 1280px) 100vw, 1280px" />
         <div className="absolute bottom-4 right-4 z-10">
-          <a
-            href={imageUrl}
-            download="furniture-visualization.png"
+          <button
             className="bg-white/90 backdrop-blur-md text-zinc-700 hover:text-indigo-600 px-4 py-2 rounded-full shadow-lg border border-zinc-200 flex items-center gap-2 text-sm font-medium transition-colors"
-            onClick={(e) => e.stopPropagation()}
+            onClick={async (e) => {
+              e.stopPropagation();
+              try {
+                const res = await fetch(imageUrl);
+                const blob = await res.blob();
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'furniture-visualization.png';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+              } catch (err) {
+                console.error('Download failed:', err);
+              }
+            }}
           >
             <Download size={16} />
             下载图片
-          </a>
+          </button>
         </div>
       </div>
     </div>
