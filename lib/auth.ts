@@ -69,12 +69,20 @@ function getPool(connectionString: string) {
   return pool;
 }
 
+/**
+ * 每个用户允许的最大并发登录设备数。
+ * 超出限制时，最旧的 session 会被自动踢掉。
+ */
+const MAX_CONCURRENT_SESSIONS = 2;
+
 export function createAuth(config: AuthConfigOptions = {}) {
+  const pool = getPool(getConnectionString(config));
+
   return betterAuth({
     baseURL: getBaseUrl(),
     trustedOrigins: process.env.NODE_ENV === 'development' ? ['http://localhost:3000', 'http://localhost:3001', 'http://localhost:3002'] : undefined,
     secret: getAuthSecret(),
-    database: getPool(getConnectionString(config)),
+    database: pool,
     emailAndPassword: {
       enabled: true,
       requireEmailVerification: process.env.NODE_ENV === 'production',
@@ -90,6 +98,38 @@ export function createAuth(config: AuthConfigOptions = {}) {
           type: 'date',
           required: false,
           input: false,
+        },
+      },
+    },
+    databaseHooks: {
+      session: {
+        create: {
+          before: async (session) => {
+            try {
+              const { rows } = await pool.query(
+                `SELECT id FROM "session" WHERE "userId" = $1 ORDER BY "createdAt" ASC`,
+                [session.userId]
+              );
+
+              if (rows.length >= MAX_CONCURRENT_SESSIONS) {
+                // 删除最旧的 session，为新 session 腾位置
+                const excessCount = rows.length - MAX_CONCURRENT_SESSIONS + 1;
+                const idsToDelete = rows.slice(0, excessCount).map((r: { id: string }) => r.id);
+                await pool.query(
+                  `DELETE FROM "session" WHERE id = ANY($1)`,
+                  [idsToDelete]
+                );
+                console.log(
+                  `[auth] 用户 ${session.userId} 超出并发限制(${MAX_CONCURRENT_SESSIONS})，已踢掉 ${idsToDelete.length} 个旧会话`
+                );
+              }
+            } catch (err) {
+              // 钩子失败不应阻止登录
+              console.error('[auth] 并发会话检查失败:', err);
+            }
+
+            return { data: session };
+          },
         },
       },
     },
