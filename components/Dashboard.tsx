@@ -5,6 +5,7 @@ import { LayoutGrid, Loader2, LogOut, Sofa, Sparkles, Crown, ShieldAlert } from 
 import { Catalog } from './Catalog';
 import { RoomEditor } from './RoomEditor';
 import { VipCenter } from './VipCenter';
+import { ContactQrCode } from './ContactQrCode';
 import { readJson, type CatalogResponse, type CatalogMutationResponse } from '@/lib/client/api';
 import type { FurnitureItem } from '@/lib/dashboard-types';
 
@@ -211,9 +212,11 @@ export function Dashboard({ companyName, user, onLogout }: DashboardProps) {
         ) : activeTab === 'vip' ? (
           <VipCenter user={user} />
         ) : (
-          <RoomEditor catalog={catalog} onUploadFiles={handleUploadFiles} />
+          <RoomEditor catalog={catalog} onUploadFiles={handleUploadFiles} user={user} />
         )}
       </main>
+
+      <ContactQrCode />
     </div>
   );
 }

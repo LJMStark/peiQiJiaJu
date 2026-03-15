@@ -11,6 +11,7 @@ import { FurniturePreviewModal } from './room-editor/FurniturePreviewModal';
 import { FurnitureDrawer } from './room-editor/FurnitureDrawer';
 import { FeedbackModal } from './room-editor/FeedbackModal';
 import { ImageLightbox } from './room-editor/ImageLightbox';
+import { UsageLimitModal } from './UsageLimitModal';
 
 const COMMON_FURNITURE = ['沙发', '床', '餐桌', '茶几', '椅子', '书桌', '衣柜', '电视柜'];
 const RECOMMENDED_INSTRUCTIONS = [
@@ -25,6 +26,10 @@ const RECOMMENDED_INSTRUCTIONS = [
 type RoomEditorProps = {
   catalog: FurnitureItem[];
   onUploadFiles: (files: File[]) => Promise<FurnitureItem[]>;
+  user: {
+    id: string;
+    vipExpiresAt?: Date | null;
+  };
 };
 
 function getErrorMessage(error: unknown): string {
@@ -34,7 +39,7 @@ function getErrorMessage(error: unknown): string {
   return String(error);
 }
 
-export function RoomEditor({ catalog, onUploadFiles }: RoomEditorProps) {
+export function RoomEditor({ catalog, onUploadFiles, user }: RoomEditorProps) {
   const [roomImages, setRoomImages] = useState<RoomImage[]>([]);
   const [selectedFurnitures, setSelectedFurnitures] = useState<FurnitureItem[]>([]);
   const [customInstruction, setCustomInstruction] = useState('');
@@ -57,6 +62,7 @@ export function RoomEditor({ catalog, onUploadFiles }: RoomEditorProps) {
   const [lightboxImageUrl, setLightboxImageUrl] = useState<string | null>(null);
   const [errorDetails, setErrorDetails] = useState<string[]>([]);
   const [historyDisplayCount, setHistoryDisplayCount] = useState(12);
+  const [limitModalType, setLimitModalType] = useState<'free_limit' | 'vip_expired' | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const furnitureInputRef = useRef<HTMLInputElement>(null);
@@ -168,6 +174,14 @@ export function RoomEditor({ catalog, onUploadFiles }: RoomEditorProps) {
   const handleGenerate = async (feedbackOverride?: string) => {
     if (roomImages.length === 0 || selectedFurnitures.length === 0) return;
 
+    // Pre-check: VIP expired users should be blocked immediately on client side
+    const isVip = Boolean(user.vipExpiresAt && new Date(user.vipExpiresAt) > new Date());
+    const vipExpired = Boolean(user.vipExpiresAt && new Date(user.vipExpiresAt) <= new Date());
+    if (!isVip && vipExpired) {
+      setLimitModalType('vip_expired');
+      return;
+    }
+
     setIsGenerating(true);
     setError(null);
     setErrorDetails([]);
@@ -228,6 +242,19 @@ export function RoomEditor({ catalog, onUploadFiles }: RoomEditorProps) {
           } catch (err: unknown) {
             console.error("单个组合生成错误:", err);
             const msg = getErrorMessage(err);
+            // Handle usage limit errors from backend
+            if (msg.includes('免费用户生图额度已用完') || msg.includes('FREE_LIMIT_REACHED')) {
+              setLimitModalType('free_limit');
+              setIsGenerating(false);
+              setBatchProgress(null);
+              return;
+            }
+            if (msg.includes('会员套餐已到期') || msg.includes('VIP_EXPIRED')) {
+              setLimitModalType('vip_expired');
+              setIsGenerating(false);
+              setBatchProgress(null);
+              return;
+            }
             if (msg.includes("Requested entity was not found")) {
               throw err;
             }
@@ -949,6 +976,12 @@ export function RoomEditor({ catalog, onUploadFiles }: RoomEditorProps) {
           onClose={() => setLightboxImageUrl(null)}
         />
       )}
+
+      <UsageLimitModal
+        type={limitModalType ?? 'free_limit'}
+        isOpen={limitModalType !== null}
+        onClose={() => setLimitModalType(null)}
+      />
     </div>
   );
 }
