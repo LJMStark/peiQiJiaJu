@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { Upload, Sparkles, Image as ImageIcon, Loader2, Download, History, Clock, X, Layers, MessageSquareText, Lightbulb, Sofa } from 'lucide-react';
+import { Upload, Sparkles, Image as ImageIcon, Loader2, Download, History, Clock, X, Layers, MessageSquareText, Lightbulb, Sofa, ChevronLeft, ChevronRight } from 'lucide-react';
 import Image from 'next/image';
 import { motion, AnimatePresence } from 'motion/react';
 import { readJson, type RoomsResponse, type RoomMutationResponse, type HistoryResponse, type HistoryMutationResponse } from '@/lib/client/api';
@@ -39,6 +39,8 @@ export function RoomEditor({ catalog, onUploadFiles }: RoomEditorProps) {
   const [selectedFurnitures, setSelectedFurnitures] = useState<FurnitureItem[]>([]);
   const [customInstruction, setCustomInstruction] = useState('');
   const [currentGeneratedImage, setCurrentGeneratedImage] = useState<HistoryItem['generatedImage'] | null>(null);
+  const [generationSessionId, setGenerationSessionId] = useState<string | null>(null);
+  const [currentResultIndex, setCurrentResultIndex] = useState(0);
   const [isGenerating, setIsGenerating] = useState(false);
   const [batchProgress, setBatchProgress] = useState<{ current: number, total: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -87,7 +89,13 @@ export function RoomEditor({ catalog, onUploadFiles }: RoomEditorProps) {
       setError(null);
       setIsUploadingFurniture(true);
       try {
-        const uploadedItems = await onUploadFiles(Array.from(e.target.files));
+        const MAX_FURNITURE_UPLOAD = 4;
+        const allFiles = Array.from(e.target.files);
+        const filesToUpload = allFiles.slice(0, MAX_FURNITURE_UPLOAD);
+        if (allFiles.length > MAX_FURNITURE_UPLOAD) {
+          setError(`每次最多上传 ${MAX_FURNITURE_UPLOAD} 张家具图，已自动选取前 ${MAX_FURNITURE_UPLOAD} 张。`);
+        }
+        const uploadedItems = await onUploadFiles(filesToUpload);
         if (uploadedItems && uploadedItems.length > 0) {
           setSelectedFurnitures(prev => [...prev, ...uploadedItems]);
         }
@@ -166,6 +174,10 @@ export function RoomEditor({ catalog, onUploadFiles }: RoomEditorProps) {
     setPlacedFurnitures([]);
     setCurrentGeneratedImage(null);
 
+    const sessionId = `session_${Date.now()}`;
+    setGenerationSessionId(sessionId);
+    setCurrentResultIndex(0);
+
     const total = roomImages.length * selectedFurnitures.length;
     let current = 0;
     setBatchProgress({ current, total });
@@ -209,9 +221,10 @@ export function RoomEditor({ catalog, onUploadFiles }: RoomEditorProps) {
               }),
             });
             const payload = await readJson<HistoryMutationResponse>(response);
+            const itemWithSession = { ...payload.item, sessionId };
 
-            setCurrentGeneratedImage(payload.item.generatedImage);
-            setHistory((previous) => [payload.item, ...previous]);
+            setCurrentGeneratedImage(itemWithSession.generatedImage);
+            setHistory((previous) => [itemWithSession, ...previous]);
           } catch (err: unknown) {
             console.error("单个组合生成错误:", err);
             const msg = getErrorMessage(err);
@@ -282,6 +295,25 @@ export function RoomEditor({ catalog, onUploadFiles }: RoomEditorProps) {
 
   const totalCombos = roomImages.length * selectedFurnitures.length;
 
+  // Compute current session results for carousel navigation
+  const currentSessionResults = generationSessionId
+    ? history.filter((item) => (item as HistoryItem & { sessionId?: string }).sessionId === generationSessionId)
+    : [];
+
+  const handleResultPrev = () => {
+    if (currentSessionResults.length <= 1) return;
+    const newIndex = (currentResultIndex - 1 + currentSessionResults.length) % currentSessionResults.length;
+    setCurrentResultIndex(newIndex);
+    setCurrentGeneratedImage(currentSessionResults[newIndex].generatedImage);
+  };
+
+  const handleResultNext = () => {
+    if (currentSessionResults.length <= 1) return;
+    const newIndex = (currentResultIndex + 1) % currentSessionResults.length;
+    setCurrentResultIndex(newIndex);
+    setCurrentGeneratedImage(currentSessionResults[newIndex].generatedImage);
+  };
+
   return (
     <div className="space-y-8">
       <div>
@@ -316,10 +348,17 @@ export function RoomEditor({ catalog, onUploadFiles }: RoomEditorProps) {
                     key={room.id} 
                     className="relative aspect-video rounded-xl overflow-hidden border border-zinc-200 group shadow-sm hover:shadow-md transition-shadow"
                   >
-                    <Image src={room.imageUrl} alt={room.name} fill className="object-cover transition-transform duration-500 group-hover:scale-105" sizes="(max-width: 640px) 45vw, 200px" />
+                    <Image
+                      src={room.imageUrl}
+                      alt={room.name}
+                      fill
+                      className="object-cover transition-transform duration-500 group-hover:scale-105 cursor-pointer"
+                      sizes="(max-width: 640px) 45vw, 200px"
+                      onClick={() => setLightboxImageUrl(room.imageUrl)}
+                    />
                     <button 
-                      onClick={() => removeRoom(room.id)}
-                      className="absolute top-1 right-1 bg-white/90 backdrop-blur-md text-red-500 p-1 rounded-md opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-all hover:bg-red-50 hover:scale-110 shadow-sm"
+                      onClick={(e) => { e.stopPropagation(); removeRoom(room.id); }}
+                      className="absolute top-1 right-1 bg-white/90 backdrop-blur-md text-red-500 p-1 rounded-md opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-all hover:bg-red-50 hover:scale-110 shadow-sm z-10"
                     >
                       <X size={14} />
                     </button>
@@ -354,7 +393,6 @@ export function RoomEditor({ catalog, onUploadFiles }: RoomEditorProps) {
               onChange={handleRoomUpload} 
               className="hidden" 
               accept="image/*"
-              multiple
             />
           </div>
 
@@ -396,12 +434,13 @@ export function RoomEditor({ catalog, onUploadFiles }: RoomEditorProps) {
                       exit={{ opacity: 0, scale: 0.8 }}
                       transition={{ duration: 0.2 }}
                       key={item.id} 
-                      className="relative w-20 h-20 rounded-lg border border-zinc-200 overflow-hidden group shadow-sm hover:shadow-md transition-shadow"
+                      className="relative w-20 h-20 rounded-lg border border-zinc-200 overflow-hidden group shadow-sm hover:shadow-md transition-shadow cursor-pointer"
+                      onClick={() => setLightboxImageUrl(item.imageUrl)}
                     >
                       <Image src={item.imageUrl} alt={item.name} fill className="object-contain bg-zinc-50 p-1 transition-transform duration-500 group-hover:scale-110" sizes="80px" />
                       <button
-                        onClick={() => toggleFurniture(item)}
-                        className="absolute top-1 right-1 bg-white/90 backdrop-blur-md text-red-500 p-1 rounded-md opacity-0 group-hover:opacity-100 transition-all hover:bg-red-50 hover:scale-110 shadow-sm"
+                        onClick={(e) => { e.stopPropagation(); toggleFurniture(item); }}
+                        className="absolute top-1 right-1 bg-white/90 backdrop-blur-md text-red-500 p-1 rounded-md opacity-0 group-hover:opacity-100 transition-all hover:bg-red-50 hover:scale-110 shadow-sm z-10"
                       >
                         <X size={12} />
                       </button>
@@ -635,6 +674,29 @@ export function RoomEditor({ catalog, onUploadFiles }: RoomEditorProps) {
                 }}
               >
                 <Image src={currentGeneratedImage.imageUrl} alt="Generated visualization" fill className="object-contain bg-zinc-50 cursor-pointer" sizes="(max-width: 1024px) 100vw, 66vw" priority onClick={() => setLightboxImageUrl(currentGeneratedImage.imageUrl)} />
+
+                {/* Carousel navigation arrows */}
+                {currentSessionResults.length > 1 && (
+                  <>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); handleResultPrev(); }}
+                      className="absolute left-3 top-1/2 -translate-y-1/2 z-30 bg-white/90 backdrop-blur-md text-zinc-700 hover:text-zinc-900 p-2 rounded-full shadow-lg border border-zinc-200 transition-all hover:scale-110 hover:bg-white"
+                      aria-label="上一张结果"
+                    >
+                      <ChevronLeft size={22} />
+                    </button>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); handleResultNext(); }}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 z-30 bg-white/90 backdrop-blur-md text-zinc-700 hover:text-zinc-900 p-2 rounded-full shadow-lg border border-zinc-200 transition-all hover:scale-110 hover:bg-white"
+                      aria-label="下一张结果"
+                    >
+                      <ChevronRight size={22} />
+                    </button>
+                    <div className="absolute top-3 left-3 z-30 bg-black/60 backdrop-blur-md text-white text-xs font-medium px-3 py-1.5 rounded-full shadow-sm">
+                      {currentResultIndex + 1} / {currentSessionResults.length}
+                    </div>
+                  </>
+                )}
                 
                 <AnimatePresence>
                   {placedFurnitures.map(pf => (
