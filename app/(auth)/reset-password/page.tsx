@@ -2,7 +2,7 @@
 
 import { AuthShell } from '@/components/auth/AuthShell';
 import { useState, useTransition, Suspense, useEffect } from 'react';
-import { Lock, ArrowRight, ArrowLeft } from 'lucide-react';
+import { Lock, ArrowRight, ArrowLeft, Eye, EyeOff } from 'lucide-react';
 import { authClient } from '@/lib/auth-client';
 import { getAuthErrorMessage } from '@/lib/auth-errors';
 import Link from 'next/link';
@@ -18,6 +18,8 @@ function ResetPasswordForm() {
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState(queryError === 'INVALID_TOKEN' ? '该重置链接无效或已过期，请重新请求。' : '');
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -79,14 +81,22 @@ function ResetPasswordForm() {
           </div>
           <input
             id="newPassword"
-            type="password"
+            type={showPassword ? 'text' : 'password'}
             value={newPassword}
             onChange={(event) => setNewPassword(event.target.value)}
             placeholder="至少 8 位"
-            className="w-full pl-11 pr-4 py-3.5 rounded-xl border border-zinc-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all bg-white"
+            className="w-full pl-11 pr-11 py-3.5 rounded-xl border border-zinc-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all bg-white"
             required
             minLength={8}
           />
+          <button
+            type="button"
+            tabIndex={-1}
+            onClick={() => setShowPassword((prev) => !prev)}
+            className="absolute inset-y-0 right-0 pr-4 flex items-center text-zinc-400 hover:text-zinc-600 transition-colors"
+          >
+            {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+          </button>
         </div>
       </div>
 
@@ -100,14 +110,22 @@ function ResetPasswordForm() {
           </div>
           <input
             id="confirmPassword"
-            type="password"
+            type={showConfirmPassword ? 'text' : 'password'}
             value={confirmPassword}
             onChange={(event) => setConfirmPassword(event.target.value)}
             placeholder="请再次填写新密码"
-            className="w-full pl-11 pr-4 py-3.5 rounded-xl border border-zinc-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all bg-white"
+            className="w-full pl-11 pr-11 py-3.5 rounded-xl border border-zinc-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all bg-white"
             required
             minLength={8}
           />
+          <button
+            type="button"
+            tabIndex={-1}
+            onClick={() => setShowConfirmPassword((prev) => !prev)}
+            className="absolute inset-y-0 right-0 pr-4 flex items-center text-zinc-400 hover:text-zinc-600 transition-colors"
+          >
+            {showConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+          </button>
         </div>
       </div>
 
