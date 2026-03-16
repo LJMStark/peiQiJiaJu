@@ -96,9 +96,14 @@ export function SignInForm() {
       </div>
 
       <div>
-        <label htmlFor="password" className="block text-sm font-medium text-zinc-700 mb-2">
-          密码
-        </label>
+        <div className="flex items-center justify-between mb-2">
+          <label htmlFor="password" className="block text-sm font-medium text-zinc-700">
+            密码
+          </label>
+          <Link href="/forgot-password" tabIndex={-1} className="text-sm font-medium text-indigo-600 hover:text-indigo-500 transition-colors">
+            忘记密码？
+          </Link>
+        </div>
         <div className="relative">
           <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
             <Lock size={18} className="text-zinc-400" />

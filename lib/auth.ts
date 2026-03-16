@@ -86,6 +86,23 @@ export function createAuth(config: AuthConfigOptions = {}) {
     emailAndPassword: {
       enabled: true,
       requireEmailVerification: process.env.NODE_ENV === 'production',
+      sendResetPassword: async ({ user, url }) => {
+        void sendEmail({
+          to: user.email,
+          subject: '佩奇家具 - 重置您的密码',
+          html: [
+            `<div style="font-family: sans-serif; max-width: 480px; margin: 0 auto; padding: 32px;">`,
+            `<h2 style="color: #18181b; margin-bottom: 16px;">重置您的密码</h2>`,
+            `<p style="color: #52525b; line-height: 1.6;">您好${user.name ? ` ${user.name}` : ''}，</p>`,
+            `<p style="color: #52525b; line-height: 1.6;">您请求重置佩奇家具的登录密码。请点击下方按钮设置新密码：</p>`,
+            `<a href="${url}" style="display: inline-block; margin: 24px 0; padding: 12px 24px; background-color: #18181b; color: #ffffff; text-decoration: none; border-radius: 8px; font-weight: 500;">重置密码</a>`,
+            `<p style="color: #a1a1aa; font-size: 14px; line-height: 1.6;">此链接 1 小时内有效。如果您并未请求重置密码，请原样忽略此邮件。</p>`,
+            `<hr style="border: none; border-top: 1px solid #e4e4e7; margin: 24px 0;" />`,
+            `<p style="color: #a1a1aa; font-size: 12px;">如果按钮无法点击，请复制以下链接到浏览器：<br />${url}</p>`,
+            `</div>`,
+          ].join('\n'),
+        });
+      },
     },
     user: {
       additionalFields: {

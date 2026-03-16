@@ -1,0 +1,161 @@
+'use client';
+
+import { AuthShell } from '@/components/auth/AuthShell';
+import { useState, useTransition, Suspense, useEffect } from 'react';
+import { Lock, ArrowRight, ArrowLeft } from 'lucide-react';
+import { authClient } from '@/lib/auth-client';
+import { getAuthErrorMessage } from '@/lib/auth-errors';
+import Link from 'next/link';
+import { useRouter, useSearchParams } from 'next/navigation';
+
+function ResetPasswordForm() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const token = searchParams.get('token');
+  const queryError = searchParams.get('error');
+  
+  const [isPending, startTransition] = useTransition();
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [error, setError] = useState(queryError === 'INVALID_TOKEN' ? '该重置链接无效或已过期，请重新请求。' : '');
+
+  const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setError('');
+
+    if (!newPassword || !confirmPassword) {
+      setError('请输入新密码并确认。');
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      setError('两次填写的密码不一致。');
+      return;
+    }
+
+    if (newPassword.length < 8) {
+      setError('密码至少需要 8 个字符。');
+      return;
+    }
+
+    if (!token) {
+      setError('缺少必要的重置令牌，请通过邮件中的链接访问此页面。');
+      return;
+    }
+
+    startTransition(async () => {
+      const response = await (authClient as any).resetPassword({
+        newPassword,
+        token,
+      });
+
+      if (response.error) {
+        setError(getAuthErrorMessage(response.error.code, '重置密码失败，请稍后重试或重新发送重置链接。'));
+        return;
+      }
+
+      // 密码重置成功，跳转至登录页
+      router.push('/signin?reset_success=true');
+    });
+  };
+
+  if (!token && !queryError) {
+    return (
+      <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 mt-4">
+        请通过密码重置邮件中的专属链接访问此页面。
+      </div>
+    );
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-5">
+      <div>
+        <label htmlFor="newPassword" className="block text-sm font-medium text-zinc-700 mb-2">
+          新密码
+        </label>
+        <div className="relative">
+          <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+            <Lock size={18} className="text-zinc-400" />
+          </div>
+          <input
+            id="newPassword"
+            type="password"
+            value={newPassword}
+            onChange={(event) => setNewPassword(event.target.value)}
+            placeholder="至少 8 位"
+            className="w-full pl-11 pr-4 py-3.5 rounded-xl border border-zinc-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all bg-white"
+            required
+            minLength={8}
+          />
+        </div>
+      </div>
+
+      <div>
+        <label htmlFor="confirmPassword" className="block text-sm font-medium text-zinc-700 mb-2">
+          确认新密码
+        </label>
+        <div className="relative">
+          <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+            <Lock size={18} className="text-zinc-400" />
+          </div>
+          <input
+            id="confirmPassword"
+            type="password"
+            value={confirmPassword}
+            onChange={(event) => setConfirmPassword(event.target.value)}
+            placeholder="请再次填写新密码"
+            className="w-full pl-11 pr-4 py-3.5 rounded-xl border border-zinc-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all bg-white"
+            required
+            minLength={8}
+          />
+        </div>
+      </div>
+
+      {error ? (
+        <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+          {error}
+        </div>
+      ) : null}
+
+      <button
+        type="submit"
+        disabled={isPending || (!token && queryError !== null)}
+        className="w-full bg-zinc-900 text-white font-medium py-3.5 px-4 rounded-xl hover:bg-zinc-800 active:scale-[0.98] transition-all flex items-center justify-center gap-2 group disabled:opacity-70 disabled:cursor-not-allowed"
+      >
+        {isPending ? (
+          <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+        ) : (
+          <>
+            确认重置
+            <ArrowRight size={18} className="group-hover:translate-x-1 transition-transform" />
+          </>
+        )}
+      </button>
+
+      <p className="text-sm text-zinc-500 text-center flex items-center justify-center gap-1">
+        <ArrowLeft size={16} />
+        <Link href="/signin" className="font-semibold text-indigo-600 hover:text-indigo-500 transition-colors">
+          返回登录界面
+        </Link>
+      </p>
+    </form>
+  );
+}
+
+export default function ResetPasswordPage() {
+  return (
+    <AuthShell
+      badge="安全设置"
+      title="设置新密码"
+      description="请为你账号设置一个新的登录密码。尽量使用包含字母、数字甚至特殊符号的安全组合。"
+    >
+      <Suspense fallback={
+        <div className="flex justify-center p-8">
+          <div className="w-6 h-6 border-2 border-indigo-200 border-t-indigo-600 rounded-full animate-spin" />
+        </div>
+      }>
+        <ResetPasswordForm />
+      </Suspense>
+    </AuthShell>
+  );
+}

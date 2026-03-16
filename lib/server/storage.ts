@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { randomUUID } from 'node:crypto';
+import { preprocessImage } from '@/lib/server/image-preprocess';
 import { getSupabaseAdmin } from '@/lib/supabase-admin';
 import {
   ALLOWED_IMAGE_MIME_TYPES,
@@ -31,6 +32,10 @@ function getExtension(fileName: string, mimeType: string) {
       return '.png';
     case 'image/webp':
       return '.webp';
+    case 'image/heic':
+      return '.heic';
+    case 'image/heif':
+      return '.heif';
     default:
       return '';
   }
@@ -67,13 +72,15 @@ export async function uploadImageFile(
 ) {
   assertImageFile(file);
 
+  const rawBuffer = Buffer.from(await file.arrayBuffer());
+  const processed = await preprocessImage(rawBuffer);
+
   const bucket = getStorageBucket(kind);
-  const storagePath = buildStoragePath(userId, kind, fileName, file.type);
-  const buffer = Buffer.from(await file.arrayBuffer());
+  const storagePath = buildStoragePath(userId, kind, fileName, processed.mimeType);
   const supabase = getSupabaseAdmin();
-  const { error } = await supabase.storage.from(bucket).upload(storagePath, buffer, {
+  const { error } = await supabase.storage.from(bucket).upload(storagePath, processed.buffer, {
     cacheControl: '3600',
-    contentType: file.type,
+    contentType: processed.mimeType,
     upsert: false,
   });
 
@@ -84,8 +91,8 @@ export async function uploadImageFile(
   return {
     bucket,
     storagePath,
-    mimeType: file.type,
-    fileSize: file.size,
+    mimeType: processed.mimeType,
+    fileSize: processed.fileSize,
   };
 }
 

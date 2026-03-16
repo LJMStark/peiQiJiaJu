@@ -3,7 +3,7 @@ import type { AssetUploadKind } from '@/lib/dashboard-types';
 export const MAX_IMAGE_UPLOAD_SIZE_BYTES = 10 * 1024 * 1024;
 export const SIGNED_URL_TTL_SECONDS = 60 * 60 * 24;
 
-export const ALLOWED_IMAGE_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp'] as const;
+export const ALLOWED_IMAGE_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif'] as const;
 
 export const STORAGE_BUCKETS: Record<AssetUploadKind, string> = {
   furniture: 'furniture-assets',

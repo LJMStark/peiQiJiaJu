@@ -81,7 +81,7 @@ export function RoomEditor({ catalog, onUploadFiles, user }: RoomEditorProps) {
         setRoomImages(roomsPayload.items);
         setHistory(historyPayload.items);
       } catch (loadError) {
-        setError(loadError instanceof Error ? loadError.message : 'Failed to load editor assets.');
+        setError(loadError instanceof Error ? loadError.message : '加载编辑器资源失败，请刷新页面重试。');
       } finally {
         setIsBootstrapping(false);
       }
@@ -106,7 +106,7 @@ export function RoomEditor({ catalog, onUploadFiles, user }: RoomEditorProps) {
           setSelectedFurnitures(prev => [...prev, ...uploadedItems]);
         }
       } catch (uploadError) {
-        setError(uploadError instanceof Error ? uploadError.message : 'Failed to upload furniture.');
+        setError(uploadError instanceof Error ? uploadError.message : '上传家具图片失败，请稍后重试。');
       } finally {
         if (furnitureInputRef.current) {
           furnitureInputRef.current.value = '';
