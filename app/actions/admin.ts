@@ -2,6 +2,7 @@
 
 import { db, query } from '@/lib/db';
 import { getServerSession } from '@/lib/auth';
+import { getShanghaiDayRange } from '@/app/admin/admin-shared';
 
 /**
  * 校验管理员权限
@@ -96,6 +97,7 @@ export async function generateCodes(count: number, days: number): Promise<Array<
  */
 export async function getDashboardStats() {
   await checkAdmin();
+  const { start: todayStart, end: todayEnd } = getShanghaiDayRange();
 
   // 总用户数
   const totalUsersResult = await query('SELECT COUNT(*) FROM "user"');
@@ -104,8 +106,8 @@ export async function getDashboardStats() {
   // 今日新增用户
   const newUsersResult = await query(`
     SELECT COUNT(*) FROM "user" 
-    WHERE "createdAt" >= NOW() - INTERVAL '24 hours'
-  `);
+    WHERE "createdAt" >= $1 AND "createdAt" < $2
+  `, [todayStart, todayEnd]);
   const newUsers = parseInt(newUsersResult.rows[0].count, 10);
 
   // 日活 (DAU) - 过去 24 小时内有 session 活动的用户数
