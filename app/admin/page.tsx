@@ -1,5 +1,6 @@
 import { getDashboardStats, getUsersList } from '@/app/actions/admin';
 import { Users, Activity, UserPlus, Image as ImageIcon } from 'lucide-react';
+import { ResetGuideButton } from './ResetGuideButton';
 import { format } from 'date-fns';
 import { zhCN } from 'date-fns/locale';
 
@@ -130,6 +131,14 @@ export default async function AdminDashboardPage() {
               )}
             </tbody>
           </table>
+        </div>
+      </div>
+
+      {/* Admin Tools */}
+      <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
+        <h2 className="text-lg font-semibold text-gray-900 mb-4">开发与测试工具</h2>
+        <div className="flex gap-4">
+          <ResetGuideButton />
         </div>
       </div>
     </div>

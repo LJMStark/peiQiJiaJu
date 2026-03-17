@@ -6,6 +6,7 @@ import { Catalog } from './Catalog';
 import { RoomEditor } from './RoomEditor';
 import { VipCenter } from './VipCenter';
 import { ContactQrCode } from './ContactQrCode';
+import { WelcomeGuideModal } from './WelcomeGuideModal';
 import { readJson, type CatalogResponse, type CatalogMutationResponse } from '@/lib/client/api';
 import type { FurnitureItem } from '@/lib/dashboard-types';
 
@@ -25,6 +26,21 @@ export function Dashboard({ companyName, user, onLogout }: DashboardProps) {
   const [isUploading, setIsUploading] = useState(false);
   const [isCatalogLoading, setIsCatalogLoading] = useState(true);
   const [catalogError, setCatalogError] = useState<string | null>(null);
+  const [showWelcomeGuide, setShowWelcomeGuide] = useState(false);
+
+  useEffect(() => {
+    // 检查是否需要显示新用户引导
+    const guideKey = `has_seen_onboarding_${user.id}`;
+    if (!localStorage.getItem(guideKey)) {
+      setShowWelcomeGuide(true);
+    }
+  }, [user.id]);
+
+  const handleCloseWelcomeGuide = () => {
+    const guideKey = `has_seen_onboarding_${user.id}`;
+    localStorage.setItem(guideKey, 'true');
+    setShowWelcomeGuide(false);
+  };
 
   useEffect(() => {
     const loadCatalog = async () => {
@@ -217,6 +233,12 @@ export function Dashboard({ companyName, user, onLogout }: DashboardProps) {
       </main>
 
       <ContactQrCode />
+      
+      <WelcomeGuideModal 
+        isOpen={showWelcomeGuide} 
+        onClose={handleCloseWelcomeGuide}
+        userName={companyName !== '佩奇家具' ? companyName : undefined}
+      />
     </div>
   );
 }
