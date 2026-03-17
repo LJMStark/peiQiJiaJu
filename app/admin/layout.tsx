@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation';
 import { getServerSession } from '@/lib/auth';
 import Link from 'next/link';
+import { ResetGuideButton } from './ResetGuideButton';
 
 export default async function AdminLayout({
   children,
@@ -20,13 +21,25 @@ export default async function AdminLayout({
         <h2 className="text-xl font-bold text-gray-800 tracking-tight">管理后台</h2>
         <nav className="flex flex-col gap-2 flex-grow mt-6">
           <Link
-            href="/admin/codes"
+            href="/admin"
             className="px-4 py-2 rounded-lg bg-indigo-50 text-indigo-700 font-medium hover:bg-indigo-100 transition-colors"
+          >
+            数据看板
+          </Link>
+          <Link
+            href="/admin/codes"
+            className="px-4 py-2 rounded-lg text-gray-700 font-medium hover:bg-gray-100 transition-colors"
           >
             兑换码管理
           </Link>
           {/* 其他管理菜单可在此扩展 */}
         </nav>
+        <div className="mt-8 border-t border-gray-100 pt-6">
+          <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">开发与测试工具</h3>
+          <div className="flex flex-col gap-2">
+            <ResetGuideButton />
+          </div>
+        </div>
         <Link
           href="/"
           className="text-sm text-gray-500 hover:text-gray-900 transition-colors mt-auto"
