@@ -90,3 +90,72 @@ export async function generateCodes(count: number, days: number): Promise<Array<
     client.release();
   }
 }
+
+/**
+ * 获取仪表盘统计数据
+ */
+export async function getDashboardStats() {
+  await checkAdmin();
+
+  // 总用户数
+  const totalUsersResult = await query('SELECT COUNT(*) FROM "user"');
+  const totalUsers = parseInt(totalUsersResult.rows[0].count, 10);
+
+  // 今日新增用户
+  const newUsersResult = await query(`
+    SELECT COUNT(*) FROM "user" 
+    WHERE "createdAt" >= NOW() - INTERVAL '24 hours'
+  `);
+  const newUsers = parseInt(newUsersResult.rows[0].count, 10);
+
+  // 日活 (DAU) - 过去 24 小时内有 session 活动的用户数
+  const dauResult = await query(`
+    SELECT COUNT(DISTINCT "userId") FROM "session" 
+    WHERE "updatedAt" >= NOW() - INTERVAL '24 hours'
+  `);
+  const dau = parseInt(dauResult.rows[0].count, 10);
+
+  // 总生成数
+  const totalGenerationsResult = await query('SELECT COUNT(*) FROM "generation_history"');
+  const totalGenerations = parseInt(totalGenerationsResult.rows[0].count, 10);
+
+  return {
+    totalUsers,
+    newUsers,
+    dau,
+    totalGenerations,
+  };
+}
+
+/**
+ * 获取用户列表
+ */
+export async function getUsersList(limit = 50, offset = 0) {
+  await checkAdmin();
+
+  const { rows } = await query(`
+    SELECT 
+      u.id, 
+      u.name, 
+      u.email, 
+      u.role, 
+      u."createdAt", 
+      u."vipExpiresAt",
+      (SELECT COUNT(*) FROM "generation_history" g WHERE g.user_id = u.id) as generation_count,
+      (SELECT MAX("updatedAt") FROM "session" s WHERE s."userId" = u.id) as last_login
+    FROM "user" u
+    ORDER BY u."createdAt" DESC
+    LIMIT $1 OFFSET $2
+  `, [limit, offset]);
+
+  return rows.map(row => ({
+    id: row.id,
+    name: row.name,
+    email: row.email,
+    role: row.role,
+    createdAt: row.createdAt,
+    vipExpiresAt: row.vipExpiresAt,
+    generationCount: parseInt(row.generation_count || '0', 10),
+    lastLogin: row.last_login,
+  }));
+}
