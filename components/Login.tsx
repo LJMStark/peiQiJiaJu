@@ -10,7 +10,7 @@ export function Login() {
     <AuthShell
       badge="欢迎来到佩奇家具"
       title="登录或注册，开始设计你的空间"
-      description="创建账号后即可管理家具图册、上传房间照片，并用 AI 快速查看家具进入真实空间后的效果。"
+      description="注册即可免费生成 10 张 AI 效果图，上传房间照片，快速查看家具进入真实空间后的效果。"
     >
       <div className="space-y-4">
         <motion.div
@@ -50,9 +50,9 @@ export function Login() {
               <UserPlus size={18} />
             </div>
             <div className="flex-1">
-              <h3 className="text-lg font-semibold text-zinc-900">注册账号</h3>
+              <h3 className="text-lg font-semibold text-zinc-900">注册免费体验</h3>
               <p className="mt-1 text-sm leading-6 text-zinc-600">
-                新用户几秒钟即可完成注册，开始上传家具、保存效果图，并持续管理你的项目。
+                新用户注册即可免费生成 10 张 AI 家具效果图，几秒钟完成注册，立即开始体验。
               </p>
               <Link
                 href="/signup"
