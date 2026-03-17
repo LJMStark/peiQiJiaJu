@@ -1,8 +1,9 @@
 'use client';
 
 import type { ReactNode } from 'react';
-import { Sofa, Sparkles } from 'lucide-react';
+import { Sofa, Sparkles, MessageCircle } from 'lucide-react';
 import { motion } from 'motion/react';
+import Image from 'next/image';
 
 type AuthShellProps = {
   badge: string;
@@ -55,6 +56,34 @@ export function AuthShell({ badge, title, description, children, footer }: AuthS
             </div>
           </motion.div>
         </div>
+
+        
+        {/* Contact QR Code - Hidden on Mobile */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.8, delay: 0.4 }}
+          className="relative z-10 hidden md:flex items-center gap-4 mt-auto pt-16"
+        >
+          <div className="w-24 h-24 relative rounded-xl overflow-hidden border border-zinc-800 bg-zinc-900/50 backdrop-blur-sm p-1.5 shadow-xl flex-shrink-0">
+            <Image
+              src="/customer-service-qr.png"
+              alt="客服微信二维码"
+              fill
+              className="object-contain p-1 rounded-lg"
+              sizes="96px"
+            />
+          </div>
+          <div className="flex flex-col">
+            <div className="flex items-center gap-1.5 text-zinc-300 font-medium mb-1">
+              <MessageCircle size={16} />
+              <h4>联系客服微信</h4>
+            </div>
+            <p className="text-zinc-500 text-sm leading-relaxed max-w-[200px]">
+              扫码添加专属客服，获取使用指导与技术支持。
+            </p>
+          </div>
+        </motion.div>
 
         <div className="absolute top-0 right-0 w-[800px] h-[800px] bg-indigo-500/10 rounded-full blur-[120px] translate-x-1/3 -translate-y-1/3 pointer-events-none" />
         <div className="absolute bottom-0 left-0 w-[600px] h-[600px] bg-emerald-500/10 rounded-full blur-[100px] -translate-x-1/3 translate-y-1/3 pointer-events-none" />
