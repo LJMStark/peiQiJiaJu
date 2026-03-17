@@ -28,22 +28,22 @@ export function WelcomeGuideModal({ isOpen, onClose, userName }: WelcomeGuideMod
   const steps = [
     {
       icon: Sofa,
-      title: '上传家具图册',
-      description: '首先，在「家具图册」模块上传您的产品图片。系统支持拖拽上传，并自动为您的小部件命名。',
+      title: '管理家具图册',
+      description: '首先，在「家具图册」模块上传您的产品图片。系统会自动识别并提取您的家具主体。',
       color: 'text-indigo-600',
       bgColor: 'bg-indigo-100',
     },
     {
       icon: ImageIcon,
-      title: '选择背景房间',
-      description: '进入「室内编辑器」，您可以上传客户的毛坯房/真实房间照片，或者使用系统提供的预设样板间。',
+      title: '上传室内照片',
+      description: '进入「室内编辑器」，上传客户的毛坯房或真实空间的现场照片，支持多张图批量操作。',
       color: 'text-emerald-600',
       bgColor: 'bg-emerald-100',
     },
     {
       icon: Sparkles,
-      title: 'AI 极速生图',
-      description: '将家具拖入房间，调整视角和光影，点击生成。AI 将在短短10秒内为您合成高逼真度的空间效果图！',
+      title: 'AI 智能融合',
+      description: '选中家具与房间，可附加“替换原有沙发”等文字指令。点击生成，AI 将自动分析透视和光影，为您合成高逼真度的空间效果图！',
       color: 'text-amber-600',
       bgColor: 'bg-amber-100',
     },
