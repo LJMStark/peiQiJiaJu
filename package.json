@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "cross-env NODE_ENV=development next dev",
     "build": "cross-env NODE_ENV=production next build",
-    "start": "cross-env NODE_ENV=production next start",
+    "start": "cross-env NODE_ENV=production next start -p ${PORT:-3000}",
     "lint": "eslint .",
     "clean": "rm -rf .next",
     "auth:migrate": "node --env-file=.env scripts/migrate-better-auth.mjs",
