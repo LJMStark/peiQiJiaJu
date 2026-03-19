@@ -11,6 +11,7 @@ import { FurniturePreviewModal } from './room-editor/FurniturePreviewModal';
 import { FurnitureDrawer } from './room-editor/FurnitureDrawer';
 import { FeedbackModal } from './room-editor/FeedbackModal';
 import { ImageLightbox } from './room-editor/ImageLightbox';
+import { SwipeableRoomCard } from './room-editor/SwipeableRoomCard';
 import { UsageLimitModal } from './UsageLimitModal';
 
 const COMMON_FURNITURE = ['沙发', '床', '餐桌', '茶几', '椅子', '书桌', '衣柜', '电视柜'];
@@ -366,29 +367,20 @@ export function RoomEditor({ catalog, onUploadFiles, user }: RoomEditorProps) {
             <div className="grid grid-cols-2 gap-2 mb-3">
               <AnimatePresence>
                 {roomImages.map(room => (
-                  <motion.div 
+                  <motion.div
                     layout
                     initial={{ opacity: 0, scale: 0.9 }}
                     animate={{ opacity: 1, scale: 1 }}
                     exit={{ opacity: 0, scale: 0.9 }}
                     transition={{ duration: 0.2 }}
-                    key={room.id} 
-                    className="relative aspect-video rounded-xl overflow-hidden border border-zinc-200 group shadow-sm hover:shadow-md transition-shadow"
+                    key={room.id}
+                    className="group"
                   >
-                    <Image
-                      src={room.imageUrl}
-                      alt={room.name}
-                      fill
-                      className="object-cover transition-transform duration-500 group-hover:scale-105 cursor-pointer"
-                      sizes="(max-width: 640px) 45vw, 200px"
-                      onClick={() => setLightboxImageUrl(room.imageUrl)}
+                    <SwipeableRoomCard
+                      room={room}
+                      onDelete={(id) => removeRoom(id)}
+                      onPreview={(url) => setLightboxImageUrl(url)}
                     />
-                    <button 
-                      onClick={(e) => { e.stopPropagation(); removeRoom(room.id); }}
-                      className="absolute top-1 right-1 bg-white/90 backdrop-blur-md text-red-500 p-1 rounded-md opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-all hover:bg-red-50 hover:scale-110 shadow-sm z-10"
-                    >
-                      <X size={14} />
-                    </button>
                   </motion.div>
                 ))}
               </AnimatePresence>
@@ -604,21 +596,16 @@ export function RoomEditor({ catalog, onUploadFiles, user }: RoomEditorProps) {
                   提示：您可以将左侧家具直接拖拽到此图片上进行手动摆放
                 </span>
                 <button
-                  onClick={async () => {
-                    try {
-                      const res = await fetch(currentGeneratedImage.imageUrl);
-                      const blob = await res.blob();
-                      const url = URL.createObjectURL(blob);
-                      const a = document.createElement('a');
-                      a.href = url;
-                      a.download = 'furniture-visualization.png';
-                      document.body.appendChild(a);
-                      a.click();
-                      document.body.removeChild(a);
-                      URL.revokeObjectURL(url);
-                    } catch (err) {
-                      console.error('Download failed:', err);
-                    }
+                  onClick={() => {
+                    const fileName = `furniture-visualization-${Date.now()}.png`;
+                    const separator = currentGeneratedImage.imageUrl.includes('?') ? '&' : '?';
+                    const downloadUrl = `${currentGeneratedImage.imageUrl}${separator}download=${encodeURIComponent(fileName)}`;
+                    const a = document.createElement('a');
+                    a.href = downloadUrl;
+                    a.download = fileName;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
                   }}
                   className="text-sm flex items-center gap-1.5 text-indigo-600 hover:text-indigo-700 font-medium bg-indigo-50 px-3 py-1.5 rounded-lg transition-colors"
                 >
