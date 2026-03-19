@@ -63,7 +63,7 @@ function ResetPasswordForm() {
 
   if (!token && !queryError) {
     return (
-      <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 mt-4">
+      <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-pretty text-amber-900 mt-4">
         请通过密码重置邮件中的专属链接访问此页面。
       </div>
     );
@@ -92,6 +92,7 @@ function ResetPasswordForm() {
           <button
             type="button"
             tabIndex={-1}
+            aria-label={showPassword ? '隐藏密码' : '显示密码'}
             onClick={() => setShowPassword((prev) => !prev)}
             className="absolute inset-y-0 right-0 pr-4 flex items-center text-zinc-400 hover:text-zinc-600 transition-colors"
           >
@@ -121,6 +122,7 @@ function ResetPasswordForm() {
           <button
             type="button"
             tabIndex={-1}
+            aria-label={showConfirmPassword ? '隐藏确认密码' : '显示确认密码'}
             onClick={() => setShowConfirmPassword((prev) => !prev)}
             className="absolute inset-y-0 right-0 pr-4 flex items-center text-zinc-400 hover:text-zinc-600 transition-colors"
           >
@@ -130,7 +132,7 @@ function ResetPasswordForm() {
       </div>
 
       {error ? (
-        <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+        <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-pretty text-rose-700">
           {error}
         </div>
       ) : null}
@@ -141,7 +143,7 @@ function ResetPasswordForm() {
         className="w-full bg-zinc-900 text-white font-medium py-3.5 px-4 rounded-xl hover:bg-zinc-800 active:scale-[0.98] transition-all flex items-center justify-center gap-2 group disabled:opacity-70 disabled:cursor-not-allowed"
       >
         {isPending ? (
-          <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+          <div className="size-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
         ) : (
           <>
             确认重置
@@ -150,7 +152,7 @@ function ResetPasswordForm() {
         )}
       </button>
 
-      <p className="text-sm text-zinc-500 text-center flex items-center justify-center gap-1">
+      <p className="text-sm text-pretty text-zinc-500 text-center flex items-center justify-center gap-1">
         <ArrowLeft size={16} />
         <Link href="/signin" className="font-semibold text-indigo-600 hover:text-indigo-500 transition-colors">
           返回登录界面
@@ -169,7 +171,7 @@ export default function ResetPasswordPage() {
     >
       <Suspense fallback={
         <div className="flex justify-center p-8">
-          <div className="w-6 h-6 border-2 border-indigo-200 border-t-indigo-600 rounded-full animate-spin" />
+          <div className="size-6 border-2 border-indigo-200 border-t-indigo-600 rounded-full animate-spin" />
         </div>
       }>
         <ResetPasswordForm />

@@ -2,6 +2,7 @@ import 'server-only';
 
 import { randomUUID } from 'node:crypto';
 import { preprocessImage } from '@/lib/server/image-preprocess';
+import { unstable_cache } from 'next/cache';
 import { getSupabaseAdmin } from '@/lib/supabase-admin';
 import {
   ALLOWED_IMAGE_MIME_TYPES,
@@ -141,18 +142,28 @@ export async function uploadGeneratedImage(userId: string, dataUrl: string, file
   };
 }
 
-export async function createSignedImageUrl(kind: AssetUploadKind, storagePath: string) {
-  const supabase = getSupabaseAdmin();
-  const bucket = getStorageBucket(kind);
-  const { data, error } = await supabase.storage
-    .from(bucket)
-    .createSignedUrl(storagePath, SIGNED_URL_TTL_SECONDS);
+const getCachedSignedUrl = unstable_cache(
+  async (bucket: string, storagePath: string) => {
+    const supabase = getSupabaseAdmin();
+    const { data, error } = await supabase.storage
+      .from(bucket)
+      .createSignedUrl(storagePath, SIGNED_URL_TTL_SECONDS);
 
-  if (error || !data?.signedUrl) {
-    throw new Error(`Failed to create signed URL: ${error?.message ?? 'Unknown error'}`);
+    if (error || !data?.signedUrl) {
+      throw new Error(`Failed to create signed URL: ${error?.message ?? 'Unknown error'}`);
+    }
+
+    return data.signedUrl;
+  },
+  ['supabase-signed-urls'],
+  {
+    revalidate: Math.floor(SIGNED_URL_TTL_SECONDS / 2),
   }
+);
 
-  return data.signedUrl;
+export async function createSignedImageUrl(kind: AssetUploadKind, storagePath: string) {
+  const bucket = getStorageBucket(kind);
+  return getCachedSignedUrl(bucket, storagePath);
 }
 
 export async function removeImage(kind: AssetUploadKind, storagePath: string) {
