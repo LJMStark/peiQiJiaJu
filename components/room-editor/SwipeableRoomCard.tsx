@@ -1,10 +1,12 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useEffect, useRef, useState, type MouseEvent } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import Image from 'next/image';
 import { Trash2 } from 'lucide-react';
 import type { RoomImage } from '@/lib/dashboard-types';
+
+const CONFIRMATION_TIMEOUT_MS = 3000;
 
 type SwipeableRoomCardProps = {
   room: RoomImage;
@@ -14,37 +16,51 @@ type SwipeableRoomCardProps = {
 
 export function SwipeableRoomCard({ room, onDelete, onPreview }: SwipeableRoomCardProps) {
   const [isConfirming, setIsConfirming] = useState(false);
-  const timeoutRef = useRef<NodeJS.Timeout>(null);
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // 清理倒计时
+  function clearConfirmationTimeout(): void {
+    if (!timeoutRef.current) {
+      return;
+    }
+
+    clearTimeout(timeoutRef.current);
+    timeoutRef.current = null;
+  }
+
+  function resetConfirmation(): void {
+    clearConfirmationTimeout();
+    setIsConfirming(false);
+  }
+
   useEffect(() => {
     return () => {
-      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+      clearConfirmationTimeout();
     };
   }, []);
 
-  const handleDeleteClick = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (isConfirming) {
-      if (timeoutRef.current) clearTimeout(timeoutRef.current);
-      onDelete(room.id);
-    } else {
-      setIsConfirming(true);
-      timeoutRef.current = setTimeout(() => {
-        setIsConfirming(false);
-      }, 3000);
-    }
-  };
+  const deleteButtonLabel = isConfirming ? `确认删除${room.name}` : `删除${room.name}`;
 
-  const handlePreviewClick = () => {
+  function handleDeleteClick(e: MouseEvent<HTMLButtonElement>): void {
+    e.stopPropagation();
+
     if (isConfirming) {
-      // 如果正处于确认状态，点击图片区域则取消确认
-      setIsConfirming(false);
-      if (timeoutRef.current) clearTimeout(timeoutRef.current);
-    } else {
-      onPreview(room.imageUrl);
+      clearConfirmationTimeout();
+      onDelete(room.id);
+      return;
     }
-  };
+
+    setIsConfirming(true);
+    timeoutRef.current = setTimeout(resetConfirmation, CONFIRMATION_TIMEOUT_MS);
+  }
+
+  function handlePreviewClick(): void {
+    if (isConfirming) {
+      resetConfirmation();
+      return;
+    }
+
+    onPreview(room.imageUrl);
+  }
 
   return (
     <motion.div
@@ -77,7 +93,9 @@ export function SwipeableRoomCard({ room, onDelete, onPreview }: SwipeableRoomCa
       <div className="absolute top-0 right-0 p-2 z-10 flex justify-end">
         <motion.button
           layout
+          type="button"
           onClick={handleDeleteClick}
+          aria-label={deleteButtonLabel}
           className={`flex items-center justify-center overflow-hidden shadow-sm backdrop-blur-md transition-colors ${
             isConfirming
               ? 'bg-red-500/95 text-white h-8 px-3.5 rounded-full gap-1.5'
