@@ -4,6 +4,7 @@ import test from 'node:test';
 import {
   getShanghaiDayRange,
   isAdminNavActive,
+  isAdminRole,
 } from '../app/admin/admin-shared.ts';
 
 test('getShanghaiDayRange returns the full natural day in Asia/Shanghai', () => {
@@ -22,4 +23,10 @@ test('isAdminNavActive only highlights the dashboard on the dashboard route', ()
 test('isAdminNavActive keeps nested admin sections highlighted', () => {
   assert.equal(isAdminNavActive('/admin/codes', '/admin/codes'), true);
   assert.equal(isAdminNavActive('/admin/codes/detail', '/admin/codes'), true);
+});
+
+test('isAdminRole only allows the admin role', () => {
+  assert.equal(isAdminRole('admin'), true);
+  assert.equal(isAdminRole('user'), false);
+  assert.equal(isAdminRole(undefined), false);
 });

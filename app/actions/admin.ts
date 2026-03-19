@@ -2,14 +2,14 @@
 
 import { db, query } from '@/lib/db';
 import { getServerSession } from '@/lib/auth';
-import { getShanghaiDayRange } from '@/app/admin/admin-shared';
+import { getShanghaiDayRange, isAdminRole } from '@/app/admin/admin-shared';
 
 /**
  * 校验管理员权限
  */
 async function checkAdmin(): Promise<void> {
   const session = await getServerSession();
-  if (!session || session.user.role !== 'admin') {
+  if (!session || !isAdminRole(session.user.role)) {
     throw new Error('Unauthorized');
   }
 }

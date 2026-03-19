@@ -3,6 +3,7 @@ import { getServerSession } from '@/lib/auth';
 import Link from 'next/link';
 import { ResetGuideButton } from './ResetGuideButton';
 import { AdminNavLinks } from './AdminNavLinks';
+import { isAdminRole } from './admin-shared';
 
 export default async function AdminLayout({
   children,
@@ -12,7 +13,7 @@ export default async function AdminLayout({
   const session = await getServerSession();
 
   // 只能由管理员访问
-  if (!session || session.user.role !== 'admin') {
+  if (!session || !isAdminRole(session.user.role)) {
     redirect('/');
   }
 

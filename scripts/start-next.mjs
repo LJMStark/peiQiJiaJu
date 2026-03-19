@@ -1,12 +1,19 @@
 import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { syncStandaloneAssets } from './start-next-assets.mjs';
 
 const port = process.env.PORT?.trim() || '3000';
+const projectRoot = fileURLToPath(new URL('../', import.meta.url));
 const standaloneServerPath = fileURLToPath(new URL('../.next/standalone/server.js', import.meta.url));
 const nextBinPath = fileURLToPath(new URL('../node_modules/next/dist/bin/next', import.meta.url));
+const hasStandaloneBuild = existsSync(standaloneServerPath);
 
-const commandArgs = existsSync(standaloneServerPath)
+if (hasStandaloneBuild) {
+  await syncStandaloneAssets(projectRoot);
+}
+
+const commandArgs = hasStandaloneBuild
   ? [standaloneServerPath]
   : [nextBinPath, 'start', '-p', port];
 

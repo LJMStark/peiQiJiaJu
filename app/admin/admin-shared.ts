@@ -12,6 +12,10 @@ export const ADMIN_NAV_ITEMS = [
   },
 ] as const;
 
+export function isAdminRole(role: string | null | undefined) {
+  return role === 'admin';
+}
+
 export function getShanghaiDayRange(now: Date = new Date()) {
   const shanghaiNow = new Date(now.getTime() + SHANGHAI_OFFSET_MS);
   const dayStartMs =
