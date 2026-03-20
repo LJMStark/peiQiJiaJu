@@ -10,6 +10,18 @@ export async function readJson<T>(response: Response): Promise<T> {
   return payload;
 }
 
+export async function postJson<TResponse>(url: string, body?: unknown): Promise<TResponse> {
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+
+  return readJson<TResponse>(response);
+}
+
 export type CatalogResponse = {
   items: FurnitureItem[];
   error?: string;

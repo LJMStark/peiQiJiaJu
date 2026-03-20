@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import Image from 'next/image';
 import { CheckCircle2, Trash2 } from 'lucide-react';
 import type { RoomImage } from '@/lib/dashboard-types';
+import { shouldBypassImageOptimization } from '@/lib/remote-images';
 
 const CONFIRMATION_TIMEOUT_MS = 3000;
 
@@ -102,6 +103,7 @@ export function SwipeableRoomCard({
         fill
         className={`object-cover cursor-pointer transition-all duration-500 ${isConfirming ? 'scale-[1.02]' : 'group-hover:scale-105'}`}
         sizes="(max-width: 640px) 45vw, 200px"
+        unoptimized={shouldBypassImageOptimization(room.imageUrl)}
         onClick={handlePreviewClick}
       />
 

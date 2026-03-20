@@ -2,9 +2,8 @@
 
 import type { JSX } from 'react';
 import { useState, useTransition } from 'react';
-import { generateCodes } from '@/app/actions/admin';
-import { RefreshCcw, Plus, CalendarDays, Hash, User, Clock, Loader2 } from 'lucide-react';
-import { useRouter } from 'next/navigation';
+import { Plus, Loader2 } from 'lucide-react';
+import { postJson } from '@/lib/client/api';
 import { formatRedemptionCode } from '@/lib/redemption-codes';
 
 export default function AdminCodesPage(): JSX.Element {
@@ -42,11 +41,14 @@ function CodesManager(): JSX.Element {
     setError('');
     startTransition(async () => {
       try {
-        const codes = await generateCodes(generateCount, generateDays);
-        setJustGenerated(codes as GeneratedCode[]);
+        const payload = await postJson<{ codes: GeneratedCode[] }>('/api/admin/codes/generate', {
+          count: generateCount,
+          days: generateDays,
+        });
+        setJustGenerated(payload.codes);
         setIsModalOpen(false);
-      } catch (err: any) {
-        setError(err.message || '生成兑换码失败');
+      } catch (err) {
+        setError(err instanceof Error ? err.message : '生成兑换码失败');
       }
     });
   };

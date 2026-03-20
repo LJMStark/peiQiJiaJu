@@ -4,8 +4,8 @@ import type { JSX } from 'react';
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { Crown, CheckCircle2, AlertCircle, Loader2, Calendar } from 'lucide-react';
-import { redeemCode } from '@/app/actions/user';
 import { formatBeijingDate } from '@/lib/beijing-time';
+import { postJson } from '@/lib/client/api';
 import { formatRedemptionCode } from '@/lib/redemption-codes';
 
 type VipCenterProps = {
@@ -30,7 +30,7 @@ export function VipCenter({ user }: VipCenterProps): JSX.Element {
     setStatus('idle');
     startTransition(async () => {
       try {
-        const result = await redeemCode(code);
+        const result = await postJson<{ success: boolean; message: string }>('/api/vip/redeem', { code });
         if (result.success) {
           setStatus('success');
           setMessage(result.message);

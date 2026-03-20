@@ -2,6 +2,14 @@ import 'server-only';
 
 import { NextResponse } from 'next/server';
 
+export async function readJsonBody<T>(request: Request): Promise<T | null> {
+  try {
+    return (await request.json()) as T;
+  } catch {
+    return null;
+  }
+}
+
 export function unauthorized() {
   return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 }

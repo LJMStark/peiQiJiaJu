@@ -3,6 +3,7 @@
 import { useEffect } from 'react';
 import Image from 'next/image';
 import { Download, X } from 'lucide-react';
+import { shouldBypassImageOptimization } from '@/lib/remote-images';
 
 type ImageLightboxProps = {
   imageUrl: string;
@@ -41,7 +42,14 @@ export function ImageLightbox({ imageUrl, onClose }: ImageLightboxProps) {
         >
           <X size={20} />
         </button>
-        <Image src={imageUrl} alt="Generated visualization" fill className="object-contain p-2" sizes="(max-width: 1280px) 100vw, 1280px" />
+        <Image
+          src={imageUrl}
+          alt="Generated visualization"
+          fill
+          className="object-contain p-2"
+          sizes="(max-width: 1280px) 100vw, 1280px"
+          unoptimized={shouldBypassImageOptimization(imageUrl)}
+        />
         <div className="absolute bottom-4 right-4 z-10">
           <button
             className="bg-white/90 backdrop-blur-md text-zinc-700 hover:text-indigo-600 px-4 py-2 rounded-full shadow-lg border border-zinc-200 flex items-center gap-2 text-sm font-medium transition-colors"

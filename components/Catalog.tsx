@@ -5,6 +5,7 @@ import Image from 'next/image';
 import { motion } from 'motion/react';
 import { Image as ImageIcon, Loader2, Trash2, Upload } from 'lucide-react';
 import { FURNITURE_CATEGORIES, type FurnitureItem } from '@/lib/dashboard-types';
+import { shouldBypassImageOptimization } from '@/lib/remote-images';
 
 type CatalogProps = {
   catalog: FurnitureItem[];
@@ -129,7 +130,14 @@ export function Catalog({
               className="group relative bg-white border border-zinc-200 rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-all flex flex-col"
             >
               <div className="aspect-square relative bg-zinc-100 flex items-center justify-center overflow-hidden">
-                <Image src={item.imageUrl} alt={item.name} fill className="object-contain p-4" sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 20vw" />
+                <Image
+                  src={item.imageUrl}
+                  alt={item.name}
+                  fill
+                  className="object-contain p-4"
+                  sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 20vw"
+                  unoptimized={shouldBypassImageOptimization(item.imageUrl)}
+                />
                 <button
                   onClick={() => void onDelete(item.id)}
                   className="absolute top-2 right-2 w-8 h-8 bg-white/90 backdrop-blur-sm text-red-500 rounded-lg flex items-center justify-center opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity hover:bg-red-50 shadow-sm"

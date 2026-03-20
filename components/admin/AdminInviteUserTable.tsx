@@ -4,7 +4,7 @@ import type { JSX } from 'react';
 import { useDeferredValue, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { Loader2, RefreshCcw, Search } from 'lucide-react';
-import { forceResetInviteLinkForUser } from '@/app/actions/admin';
+import { postJson } from '@/lib/client/api';
 
 type AdminInviteUser = {
   id: string;
@@ -65,7 +65,9 @@ export function AdminInviteUserTable({ users }: { users: AdminInviteUser[] }): J
 
     startTransition(async () => {
       try {
-        const inviteLink = await forceResetInviteLinkForUser(user.id);
+        const inviteLink = await postJson<{ code: string }>('/api/admin/invitations/reset', {
+          targetUserId: user.id,
+        });
         const displayName = user.name?.trim() || user.email;
 
         setNotice(`${displayName} 的邀请链接已重置，新邀请码为 ${inviteLink.code}。`);

@@ -7,6 +7,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { readJson, type RoomsResponse, type RoomMutationResponse, type HistoryResponse, type HistoryMutationResponse } from '@/lib/client/api';
 import { formatBeijingTime } from '@/lib/beijing-time';
 import { type FurnitureItem, type HistoryItem, type PlacedFurniture, type RoomImage } from '@/lib/dashboard-types';
+import { shouldBypassImageOptimization } from '@/lib/remote-images';
 import { inferAspectRatio } from '@/lib/client/image-utils';
 import { findDuplicateFurnitureGroups } from '@/lib/room-visualization';
 import { FurniturePreviewModal } from './room-editor/FurniturePreviewModal';
@@ -469,7 +470,14 @@ export function RoomEditor({ catalog, onUploadFiles, user }: RoomEditorProps) {
                       className="relative w-20 h-20 rounded-lg border border-zinc-200 overflow-hidden group shadow-sm hover:shadow-md transition-shadow cursor-pointer"
                       onClick={() => setLightboxImageUrl(item.imageUrl)}
                     >
-                      <Image src={item.imageUrl} alt={item.name} fill className="object-contain bg-zinc-50 p-1 transition-transform duration-500 group-hover:scale-110" sizes="80px" />
+                      <Image
+                        src={item.imageUrl}
+                        alt={item.name}
+                        fill
+                        className="object-contain bg-zinc-50 p-1 transition-transform duration-500 group-hover:scale-110"
+                        sizes="80px"
+                        unoptimized={shouldBypassImageOptimization(item.imageUrl)}
+                      />
                       <button
                         onClick={(e) => { e.stopPropagation(); toggleFurniture(item); }}
                         className="absolute top-1 right-1 bg-white/90 backdrop-blur-md text-red-500 p-1 rounded-md opacity-0 group-hover:opacity-100 transition-all hover:bg-red-50 hover:scale-110 shadow-sm z-10"
@@ -710,7 +718,16 @@ export function RoomEditor({ catalog, onUploadFiles, user }: RoomEditorProps) {
                   }
                 }}
               >
-                <Image src={currentGeneratedImage.imageUrl} alt="Generated visualization" fill className="object-contain bg-zinc-50 cursor-pointer" sizes="(max-width: 1024px) 100vw, 66vw" priority onClick={() => setLightboxImageUrl(currentGeneratedImage.imageUrl)} />
+                <Image
+                  src={currentGeneratedImage.imageUrl}
+                  alt="Generated visualization"
+                  fill
+                  className="object-contain bg-zinc-50 cursor-pointer"
+                  sizes="(max-width: 1024px) 100vw, 66vw"
+                  priority
+                  unoptimized={shouldBypassImageOptimization(currentGeneratedImage.imageUrl)}
+                  onClick={() => setLightboxImageUrl(currentGeneratedImage.imageUrl)}
+                />
 
                 {/* Carousel navigation arrows */}
                 {currentSessionResults.length > 1 && (
@@ -884,6 +901,7 @@ export function RoomEditor({ catalog, onUploadFiles, user }: RoomEditorProps) {
                         fill
                         className="object-cover transition-transform duration-700 ease-out group-hover:scale-110"
                         sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
+                        unoptimized={shouldBypassImageOptimization(item.generatedImage.imageUrl)}
                       />
                       
                       <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col items-center justify-center gap-3 backdrop-blur-sm">
@@ -912,7 +930,14 @@ export function RoomEditor({ catalog, onUploadFiles, user }: RoomEditorProps) {
                                 key={`${item.id}-${furniture.id}`}
                                 className="relative w-6 h-6 rounded-md overflow-hidden bg-white border border-zinc-200 shadow-sm"
                               >
-                                <Image src={furniture.imageUrl} alt={furniture.name} fill className="object-contain p-0.5" sizes="24px" />
+                                <Image
+                                  src={furniture.imageUrl}
+                                  alt={furniture.name}
+                                  fill
+                                  className="object-contain p-0.5"
+                                  sizes="24px"
+                                  unoptimized={shouldBypassImageOptimization(furniture.imageUrl)}
+                                />
                               </div>
                             ))}
                           </div>
@@ -928,7 +953,14 @@ export function RoomEditor({ catalog, onUploadFiles, user }: RoomEditorProps) {
                         <div className="text-xs font-medium text-zinc-400 uppercase tracking-wider w-12">场景</div>
                         <div className="flex items-center gap-2 bg-zinc-50 px-2 py-1.5 rounded-lg flex-1 border border-zinc-100 overflow-hidden group-hover:bg-zinc-100/50 transition-colors">
                           <div className="relative w-6 h-6 rounded-md overflow-hidden bg-zinc-200 shrink-0 shadow-sm">
-                            <Image src={item.roomImage.imageUrl} alt={item.roomImage.name} fill className="object-cover" sizes="24px" />
+                            <Image
+                              src={item.roomImage.imageUrl}
+                              alt={item.roomImage.name}
+                              fill
+                              className="object-cover"
+                              sizes="24px"
+                              unoptimized={shouldBypassImageOptimization(item.roomImage.imageUrl)}
+                            />
                           </div>
                           <span className="text-sm text-zinc-600 truncate">
                             原始室内图

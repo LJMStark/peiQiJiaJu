@@ -4,6 +4,7 @@ import Image from 'next/image';
 import { AnimatePresence, motion } from 'motion/react';
 import { CheckCircle2, Layers, Loader2, Maximize2, Upload, X } from 'lucide-react';
 import { FURNITURE_CATEGORIES, type FurnitureItem } from '@/lib/dashboard-types';
+import { shouldBypassImageOptimization } from '@/lib/remote-images';
 
 type FurnitureDrawerProps = {
   isOpen: boolean;
@@ -132,7 +133,14 @@ export function FurnitureDrawer({
                           : 'border-zinc-100 hover:border-zinc-300'
                       }`}
                     >
-                      <Image src={item.imageUrl} alt={item.name} fill className="object-contain bg-zinc-50 p-2" sizes="(max-width: 640px) 40vw, 120px" />
+                      <Image
+                        src={item.imageUrl}
+                        alt={item.name}
+                        fill
+                        className="object-contain bg-zinc-50 p-2"
+                        sizes="(max-width: 640px) 40vw, 120px"
+                        unoptimized={shouldBypassImageOptimization(item.imageUrl)}
+                      />
                       {isSelected && (
                         <div className="absolute top-2 right-2 bg-indigo-500 text-white rounded-full p-0.5 z-10 shadow-sm">
                           <CheckCircle2 size={16} />
