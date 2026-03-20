@@ -1,16 +1,15 @@
 import { getDashboardStats, getUsersList } from '@/app/actions/admin';
 import { Users, Activity, UserPlus, Image as ImageIcon } from 'lucide-react';
-import { format } from 'date-fns';
-import { zhCN } from 'date-fns/locale';
 import { redirect } from 'next/navigation';
 import { getServerSession } from '@/lib/auth';
+import { formatBeijingDateTime } from '@/lib/beijing-time';
 import { isAdminRole } from './admin-shared';
 
 export const dynamic = 'force-dynamic';
 
 function formatDate(date: string | Date | null | undefined) {
   if (!date) return '-';
-  return format(new Date(date), 'yyyy-MM-dd HH:mm', { locale: zhCN });
+  return formatBeijingDateTime(date);
 }
 
 export default async function AdminDashboardPage() {

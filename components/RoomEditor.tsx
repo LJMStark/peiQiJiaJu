@@ -5,6 +5,7 @@ import { Upload, Sparkles, Image as ImageIcon, Loader2, Download, History, Clock
 import Image from 'next/image';
 import { motion, AnimatePresence } from 'motion/react';
 import { readJson, type RoomsResponse, type RoomMutationResponse, type HistoryResponse, type HistoryMutationResponse } from '@/lib/client/api';
+import { formatBeijingTime } from '@/lib/beijing-time';
 import { type FurnitureItem, type HistoryItem, type PlacedFurniture, type RoomImage } from '@/lib/dashboard-types';
 import { inferAspectRatio } from '@/lib/client/image-utils';
 import { FurniturePreviewModal } from './room-editor/FurniturePreviewModal';
@@ -872,7 +873,7 @@ export function RoomEditor({ catalog, onUploadFiles, user }: RoomEditorProps) {
 
                     <div className="absolute top-3 right-3 bg-white/90 backdrop-blur-md text-zinc-700 text-xs font-medium px-2.5 py-1.5 rounded-lg shadow-sm flex items-center gap-1.5">
                       <Clock size={12} />
-                      {new Date(item.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      {formatBeijingTime(item.createdAt)}
                     </div>
                   </div>
 

@@ -5,6 +5,7 @@ import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { Crown, CheckCircle2, AlertCircle, Loader2, Calendar } from 'lucide-react';
 import { redeemCode } from '@/app/actions/user';
+import { formatBeijingDate } from '@/lib/beijing-time';
 import { formatRedemptionCode } from '@/lib/redemption-codes';
 
 type VipCenterProps = {
@@ -90,7 +91,7 @@ export function VipCenter({ user }: VipCenterProps): JSX.Element {
                   </div>
                   <div className="flex items-center gap-2 text-xs text-zinc-400 mt-4">
                     <Calendar size={14} />
-                    <span>到期时间：{new Date(user.vipExpiresAt!).toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' })}</span>
+                    <span>到期时间：{formatBeijingDate(user.vipExpiresAt!)}</span>
                   </div>
                 </div>
               ) : (

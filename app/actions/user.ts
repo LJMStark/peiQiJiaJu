@@ -2,6 +2,7 @@
 
 import { db } from '@/lib/db';
 import { getServerSession } from '@/lib/auth';
+import { formatBeijingDate } from '@/lib/beijing-time';
 import { normalizeRedemptionCodeInput } from '@/lib/redemption-codes';
 
 /**
@@ -66,7 +67,7 @@ export async function redeemCode(code: string): Promise<{ success: boolean; mess
 
     await client.query('COMMIT');
     
-    return { success: true, message: `成功兑换 ${daysToAdd} 天，新的到期时间为 ${newExpiresAt.toLocaleDateString()}` };
+    return { success: true, message: `成功兑换 ${daysToAdd} 天，新的到期时间为 ${formatBeijingDate(newExpiresAt)}` };
   } catch (err: any) {
     await client.query('ROLLBACK');
     throw new Error(err.message || '兑换失败，请稍后重试');
