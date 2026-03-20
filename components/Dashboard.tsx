@@ -1,13 +1,21 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { LayoutGrid, Loader2, LogOut, Sofa, Sparkles, Crown, ShieldAlert } from 'lucide-react';
+import { useEffect, useState, useTransition } from 'react';
+import { useRouter } from 'next/navigation';
+import { LayoutGrid, Loader2, LogOut, Sofa, Sparkles, Crown, ShieldAlert, PencilLine, Check, X } from 'lucide-react';
 import { Catalog } from './Catalog';
 import { RoomEditor } from './RoomEditor';
 import { VipCenter } from './VipCenter';
 import { ContactQrCode } from './ContactQrCode';
 import { WelcomeGuideModal } from './WelcomeGuideModal';
 import { readJson, type CatalogResponse, type CatalogMutationResponse } from '@/lib/client/api';
+import {
+  DEFAULT_COMPANY_NAME,
+  getCompanyNameValidationError,
+  MAX_COMPANY_NAME_LENGTH,
+  normalizeCompanyNameInput,
+} from '@/lib/company-name';
+import { updateUser } from '@/lib/auth-client';
 import type { FurnitureItem } from '@/lib/dashboard-types';
 
 type DashboardProps = {
@@ -21,12 +29,18 @@ type DashboardProps = {
 };
 
 export function Dashboard({ companyName, user, onLogout }: DashboardProps) {
+  const router = useRouter();
   const [activeTab, setActiveTab] = useState<'catalog' | 'editor' | 'vip'>('catalog');
   const [catalog, setCatalog] = useState<FurnitureItem[]>([]);
   const [isUploading, setIsUploading] = useState(false);
   const [isCatalogLoading, setIsCatalogLoading] = useState(true);
   const [catalogError, setCatalogError] = useState<string | null>(null);
   const [showWelcomeGuide, setShowWelcomeGuide] = useState(false);
+  const [displayCompanyName, setDisplayCompanyName] = useState(companyName);
+  const [companyNameDraft, setCompanyNameDraft] = useState(companyName);
+  const [isEditingCompanyName, setIsEditingCompanyName] = useState(false);
+  const [companyNameError, setCompanyNameError] = useState('');
+  const [isSavingCompanyName, startSavingCompanyName] = useTransition();
 
   useEffect(() => {
     // 检查是否需要显示新用户引导
@@ -35,6 +49,11 @@ export function Dashboard({ companyName, user, onLogout }: DashboardProps) {
       setShowWelcomeGuide(true);
     }
   }, [user.id]);
+
+  useEffect(() => {
+    setDisplayCompanyName(companyName);
+    setCompanyNameDraft(companyName);
+  }, [companyName]);
 
   const handleCloseWelcomeGuide = () => {
     const guideKey = `has_seen_onboarding_${user.id}`;
@@ -117,15 +136,119 @@ export function Dashboard({ companyName, user, onLogout }: DashboardProps) {
     setCatalog((current) => current.filter((item) => item.id !== id));
   };
 
+  const handleStartEditingCompanyName = () => {
+    setCompanyNameDraft(displayCompanyName);
+    setCompanyNameError('');
+    setIsEditingCompanyName(true);
+  };
+
+  const handleCancelEditingCompanyName = () => {
+    setCompanyNameDraft(displayCompanyName);
+    setCompanyNameError('');
+    setIsEditingCompanyName(false);
+  };
+
+  const handleSaveCompanyName = () => {
+    const validationError = getCompanyNameValidationError(companyNameDraft);
+    if (validationError) {
+      setCompanyNameError(validationError);
+      return;
+    }
+
+    const normalizedCompanyName = normalizeCompanyNameInput(companyNameDraft);
+
+    if (normalizedCompanyName === displayCompanyName) {
+      setCompanyNameError('');
+      setIsEditingCompanyName(false);
+      return;
+    }
+
+    setCompanyNameError('');
+    startSavingCompanyName(async () => {
+      const result = await updateUser({
+        name: normalizedCompanyName,
+      });
+
+      if (result?.error) {
+        setCompanyNameError(result.error.message || '公司名称修改失败，请稍后重试。');
+        return;
+      }
+
+      setDisplayCompanyName(normalizedCompanyName);
+      setCompanyNameDraft(normalizedCompanyName);
+      setIsEditingCompanyName(false);
+      router.refresh();
+    });
+  };
+
   return (
     <div className="min-h-screen bg-zinc-50 flex flex-col">
       <header className="bg-white border-b border-zinc-200 sticky top-0 z-30">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 min-w-0">
             <div className="w-8 h-8 bg-zinc-900 text-white rounded-lg flex items-center justify-center">
               <Sofa size={18} />
             </div>
-            <span className="font-bold text-zinc-900 tracking-tight">{companyName}</span>
+            <div className="min-w-0">
+              {isEditingCompanyName ? (
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={companyNameDraft}
+                    onChange={(event) => setCompanyNameDraft(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter') {
+                        event.preventDefault();
+                        handleSaveCompanyName();
+                      }
+
+                      if (event.key === 'Escape') {
+                        event.preventDefault();
+                        handleCancelEditingCompanyName();
+                      }
+                    }}
+                    maxLength={MAX_COMPANY_NAME_LENGTH}
+                    className="w-56 max-w-[48vw] rounded-lg border border-zinc-300 px-3 py-1.5 text-sm font-medium text-zinc-900 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
+                    placeholder="请输入公司名称"
+                    autoFocus
+                    disabled={isSavingCompanyName}
+                  />
+                  <button
+                    type="button"
+                    onClick={handleSaveCompanyName}
+                    disabled={isSavingCompanyName}
+                    className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-zinc-900 text-white transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-50"
+                    title="保存公司名称"
+                  >
+                    {isSavingCompanyName ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleCancelEditingCompanyName}
+                    disabled={isSavingCompanyName}
+                    className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-zinc-200 text-zinc-500 transition hover:bg-zinc-100 hover:text-zinc-900 disabled:cursor-not-allowed disabled:opacity-50"
+                    title="取消修改"
+                  >
+                    <X size={16} />
+                  </button>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <span className="truncate font-bold text-zinc-900 tracking-tight">{displayCompanyName}</span>
+                  <button
+                    type="button"
+                    onClick={handleStartEditingCompanyName}
+                    className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium text-zinc-500 transition hover:bg-zinc-100 hover:text-zinc-900"
+                  >
+                    <PencilLine size={14} />
+                    修改
+                  </button>
+                </div>
+              )}
+              {companyNameError ? (
+                <p className="mt-1 text-xs text-red-500">{companyNameError}</p>
+              ) : null}
+            </div>
           </div>
 
           <nav className="hidden md:flex items-center gap-1 bg-zinc-100 p-1 rounded-xl">
@@ -237,7 +360,7 @@ export function Dashboard({ companyName, user, onLogout }: DashboardProps) {
       <WelcomeGuideModal 
         isOpen={showWelcomeGuide} 
         onClose={handleCloseWelcomeGuide}
-        userName={companyName !== '佩奇家具' ? companyName : undefined}
+        userName={displayCompanyName !== DEFAULT_COMPANY_NAME ? displayCompanyName : undefined}
       />
     </div>
   );

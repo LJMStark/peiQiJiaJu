@@ -6,6 +6,11 @@ import { useState, useTransition } from 'react';
 import { ArrowRight, Building2, Eye, EyeOff, Lock, Mail } from 'lucide-react';
 import { signUp } from '@/lib/auth-client';
 import { getAuthErrorMessage } from '@/lib/auth-errors';
+import {
+  getCompanyNameValidationError,
+  MAX_COMPANY_NAME_LENGTH,
+  normalizeCompanyNameInput,
+} from '@/lib/company-name';
 
 export function SignUpForm() {
   const router = useRouter();
@@ -22,10 +27,13 @@ export function SignUpForm() {
     event.preventDefault();
     setError('');
 
-    if (!companyName.trim()) {
-      setError('请输入公司名称。');
+    const companyNameError = getCompanyNameValidationError(companyName);
+    if (companyNameError) {
+      setError(companyNameError);
       return;
     }
+
+    const normalizedCompanyName = normalizeCompanyNameInput(companyName);
 
     if (password.length < 8) {
       setError('密码至少需要 8 位。');
@@ -39,7 +47,7 @@ export function SignUpForm() {
 
     startTransition(async () => {
       const response = await signUp.email({
-        name: companyName.trim(),
+        name: normalizedCompanyName,
         email: email.trim().toLowerCase(),
         password,
       });
@@ -68,6 +76,7 @@ export function SignUpForm() {
             type="text"
             value={companyName}
             onChange={(event) => setCompanyName(event.target.value)}
+            maxLength={MAX_COMPANY_NAME_LENGTH}
             placeholder="例如：某某家具有限公司"
             className="w-full pl-11 pr-4 py-3.5 rounded-xl border border-zinc-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all bg-white"
             required
