@@ -13,6 +13,8 @@ export const authClient = createAuthClient({
   plugins: [nextCookies()],
 });
 
+const typedAuthClient = authClient as any;
+
 export const {
   signIn,
   signUp,
@@ -21,6 +23,8 @@ export const {
   useSession,
   getSession,
   sendVerificationEmail,
-  forgetPassword,
   resetPassword,
-} = authClient as any;
+} = typedAuthClient;
+
+export const requestPasswordReset = typedAuthClient.requestPasswordReset;
+export const forgetPassword = typedAuthClient.requestPasswordReset;

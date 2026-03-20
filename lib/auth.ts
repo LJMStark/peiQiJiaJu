@@ -87,7 +87,7 @@ export function createAuth(config: AuthConfigOptions = {}) {
       enabled: true,
       requireEmailVerification: process.env.NODE_ENV === 'production',
       sendResetPassword: async ({ user, url }) => {
-        void sendEmail({
+        await sendEmail({
           to: user.email,
           subject: '佩奇家具 - 重置您的密码',
           html: [
@@ -152,7 +152,7 @@ export function createAuth(config: AuthConfigOptions = {}) {
     },
     emailVerification: {
       sendVerificationEmail: async ({ user, url }) => {
-        void sendEmail({
+        await sendEmail({
           to: user.email,
           subject: '佩奇家具 - 验证您的邮箱',
           html: [

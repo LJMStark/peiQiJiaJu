@@ -3,7 +3,7 @@
 import { AuthShell } from '@/components/auth/AuthShell';
 import { useState, useTransition } from 'react';
 import { Mail, ArrowRight, ArrowLeft } from 'lucide-react';
-import { authClient } from '@/lib/auth-client';
+import { requestPasswordReset } from '@/lib/auth-client';
 import { getAuthErrorMessage } from '@/lib/auth-errors';
 import Link from 'next/link';
 
@@ -23,8 +23,7 @@ export default function ForgotPasswordPage() {
     }
 
     startTransition(async () => {
-      // Typecasting below because of limitation in better-auth client types
-      const response = await (authClient as any).forgetPassword({
+      const response = await requestPasswordReset({
         email: email.trim().toLowerCase(),
         redirectTo: `${window.location.origin}/reset-password`,
       });
