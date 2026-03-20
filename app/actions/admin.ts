@@ -3,6 +3,7 @@
 import { db, query } from '@/lib/db';
 import { getServerSession } from '@/lib/auth';
 import { getShanghaiDayRange, isAdminRole } from '@/app/admin/admin-shared';
+import { generateRedemptionCode } from '@/lib/redemption-codes';
 
 /**
  * 校验管理员权限
@@ -12,14 +13,6 @@ async function checkAdmin(): Promise<void> {
   if (!session || !isAdminRole(session.user.role)) {
     throw new Error('Unauthorized');
   }
-}
-
-/**
- * 内部辅助函数：生成随机兑换码
- */
-function generateRandomCode(): string {
-  return Math.random().toString(36).substring(2, 10).toUpperCase() + 
-         Math.random().toString(36).substring(2, 10).toUpperCase();
 }
 
 /**
@@ -66,14 +59,31 @@ export async function generateCodes(count: number, days: number): Promise<Array<
 
     const codes = [];
     for (let i = 0; i < count; i++) {
-      let code = generateRandomCode();
-      const insertQuery = `
-        INSERT INTO redemption_codes (code, days)
-        VALUES ($1, $2)
-        RETURNING *
-      `;
-      const res = await client.query(insertQuery, [code, days]);
-      codes.push(res.rows[0]);
+      let createdCode = false;
+
+      for (let attempt = 0; attempt < 5; attempt += 1) {
+        const code = generateRedemptionCode();
+
+        try {
+          const insertQuery = `
+            INSERT INTO redemption_codes (code, days)
+            VALUES ($1, $2)
+            RETURNING *
+          `;
+          const res = await client.query(insertQuery, [code, days]);
+          codes.push(res.rows[0]);
+          createdCode = true;
+          break;
+        } catch (err: any) {
+          if (err?.code !== '23505') {
+            throw err;
+          }
+        }
+      }
+
+      if (!createdCode) {
+        throw new Error('Failed to generate a unique redemption code');
+      }
     }
 
     await client.query('COMMIT');

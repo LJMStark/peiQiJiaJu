@@ -5,6 +5,7 @@ import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { Crown, CheckCircle2, AlertCircle, Loader2, Calendar } from 'lucide-react';
 import { redeemCode } from '@/app/actions/user';
+import { formatRedemptionCode } from '@/lib/redemption-codes';
 
 type VipCenterProps = {
   user: {
@@ -28,7 +29,7 @@ export function VipCenter({ user }: VipCenterProps): JSX.Element {
     setStatus('idle');
     startTransition(async () => {
       try {
-        const result = await redeemCode(code.trim().toUpperCase());
+        const result = await redeemCode(code);
         if (result.success) {
           setStatus('success');
           setMessage(result.message);
@@ -116,9 +117,11 @@ export function VipCenter({ user }: VipCenterProps): JSX.Element {
                     id="code"
                     placeholder="XXXX-XXXX-XXXX-XXXX"
                     value={code}
-                    onChange={(e) => setCode(e.target.value.toUpperCase())}
+                    onChange={(e) => setCode(formatRedemptionCode(e.target.value))}
+                    maxLength={19}
                     className="w-full border border-zinc-300 rounded-xl px-4 py-3 text-zinc-900 font-mono focus:ring-2 focus:ring-amber-500 focus:border-amber-500 outline-none transition uppercase tracking-wider bg-zinc-50 focus:bg-white"
                   />
+                  <p className="mt-1.5 text-xs text-zinc-500">支持直接粘贴带连字符或空格的兑换码。</p>
                 </div>
 
                 {status === 'error' && (

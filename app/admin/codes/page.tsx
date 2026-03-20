@@ -5,6 +5,7 @@ import { useState, useTransition } from 'react';
 import { generateCodes } from '@/app/actions/admin';
 import { RefreshCcw, Plus, CalendarDays, Hash, User, Clock, Loader2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import { formatRedemptionCode } from '@/lib/redemption-codes';
 
 export default function AdminCodesPage(): JSX.Element {
   return (
@@ -68,7 +69,7 @@ function CodesManager(): JSX.Element {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
             {justGenerated.map((code) => (
               <div key={code.id} className="bg-white px-3 py-2 rounded border border-green-100 font-mono text-sm shadow-sm flex justify-between items-center">
-                <span className="text-gray-800">{code.code}</span>
+                <span className="text-gray-800">{formatRedemptionCode(code.code)}</span>
                 <span className="text-green-600 text-xs px-2 py-0.5 bg-green-100 rounded-full">{code.days}天</span>
               </div>
             ))}

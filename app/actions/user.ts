@@ -2,6 +2,7 @@
 
 import { db } from '@/lib/db';
 import { getServerSession } from '@/lib/auth';
+import { normalizeRedemptionCodeInput } from '@/lib/redemption-codes';
 
 /**
  * 兑换 VIP 卡密
@@ -13,6 +14,7 @@ export async function redeemCode(code: string): Promise<{ success: boolean; mess
   }
 
   const userId = session.user.id;
+  const normalizedCode = normalizeRedemptionCodeInput(code);
   const client = await db.connect();
 
   try {
@@ -21,7 +23,7 @@ export async function redeemCode(code: string): Promise<{ success: boolean; mess
     // 1. 获取兑换码信息并锁定对应的行
     const codeQuery = await client.query(
       `SELECT * FROM redemption_codes WHERE code = $1 AND status = 'active' FOR UPDATE`,
-      [code]
+      [normalizedCode]
     );
 
     if (codeQuery.rows.length === 0) {
