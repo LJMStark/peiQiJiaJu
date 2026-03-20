@@ -9,7 +9,8 @@
     "lint": "eslint .",
     "clean": "rm -rf .next",
     "auth:migrate": "node --env-file=.env scripts/migrate-better-auth.mjs",
-    "storage:migrate": "node --env-file=.env scripts/migrate-storage-assets.mjs"
+    "storage:migrate": "node --env-file=.env scripts/migrate-storage-assets.mjs",
+    "invite:migrate": "node --env-file=.env scripts/migrate-invite-system.mjs"
   },
   "dependencies": {
     "@google/genai": "^1.17.0",

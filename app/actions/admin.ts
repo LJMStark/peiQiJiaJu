@@ -4,6 +4,9 @@ import { db, query } from '@/lib/db';
 import { getServerSession } from '@/lib/auth';
 import { getShanghaiDayRange, isAdminRole } from '@/app/admin/admin-shared';
 import { generateRedemptionCode } from '@/lib/redemption-codes';
+import { generateInviteCode } from '@/lib/invitations';
+import { getAdminInvitationSummary as getAdminInvitationSummaryFromStore, withInvitationTransaction } from '@/lib/server/invitation-store';
+import { rotateInviteLinkForUser } from '@/lib/server/invitation-service';
 
 /**
  * 校验管理员权限
@@ -139,6 +142,34 @@ export async function getDashboardStats() {
   };
 }
 
+export async function getAdminInvitationSummary() {
+  await checkAdmin();
+  return getAdminInvitationSummaryFromStore();
+}
+
+export async function forceResetInviteLinkForUser(targetUserId: string) {
+  await checkAdmin();
+  const session = await getServerSession();
+
+  if (!session) {
+    throw new Error('Unauthorized');
+  }
+
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? process.env.APP_URL ?? 'http://localhost:3000';
+
+  return withInvitationTransaction(async (repo) => {
+    return rotateInviteLinkForUser({
+      repo,
+      targetUserId,
+      rotatedByUserId: session.user.id,
+      rotationReason: 'admin_reset',
+      baseUrl,
+      now: new Date(),
+      codeGenerator: generateInviteCode,
+    });
+  });
+}
+
 /**
  * 获取用户列表
  */
@@ -150,6 +181,7 @@ export async function getUsersList(limit = 50, offset = 0) {
       u.id, 
       u.name, 
       u.email, 
+      u."emailVerified",
       u.role, 
       u."createdAt", 
       u."vipExpiresAt",
@@ -164,6 +196,7 @@ export async function getUsersList(limit = 50, offset = 0) {
     id: row.id,
     name: row.name,
     email: row.email,
+    emailVerified: row.emailVerified,
     role: row.role,
     createdAt: row.createdAt,
     vipExpiresAt: row.vipExpiresAt,

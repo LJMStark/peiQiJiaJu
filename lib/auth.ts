@@ -5,6 +5,9 @@ import { headers } from 'next/headers';
 import { cache } from 'react';
 import { Pool } from 'pg';
 import { sendEmail } from './send-email';
+import { readInviteCodeFromCookieHeader } from './invitations';
+import { withInvitationTransaction } from './server/invitation-store';
+import { finalizeInviteAfterVerification } from './server/invitation-service';
 
 type AuthConfigOptions = {
   preferDirect?: boolean;
@@ -172,6 +175,23 @@ export function createAuth(config: AuthConfigOptions = {}) {
       sendOnSignIn: true,
       autoSignInAfterVerification: true,
       expiresIn: 3600,
+      afterEmailVerification: async (user, request) => {
+        const fallbackInviteCode = readInviteCodeFromCookieHeader(request?.headers.get('cookie'));
+
+        try {
+          await withInvitationTransaction(async (repo) => {
+            await finalizeInviteAfterVerification({
+              repo,
+              inviteeUserId: user.id,
+              fallbackInviteCode,
+              now: new Date(),
+            });
+          });
+        } catch (error) {
+          const message = error instanceof Error ? error.message : 'Failed to finalize invitation attribution.';
+          console.error('[invitation] failed to finalize verification attribution:', message);
+        }
+      },
     },
   });
 }

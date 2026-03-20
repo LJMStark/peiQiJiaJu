@@ -2,16 +2,24 @@ import { redirect } from 'next/navigation';
 import { AuthShell } from '@/components/auth/AuthShell';
 import { SignUpForm } from '@/components/auth/SignUpForm';
 import { getServerSession, isSessionEmailVerified } from '@/lib/auth';
+import { INVITE_DASHBOARD_PATH } from '@/lib/invitations';
 
-export default async function SignUpPage() {
+export default async function SignUpPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ invited?: string }>;
+}) {
   const session = await getServerSession();
+  const resolvedSearchParams = await searchParams;
+  const isInvitedSignup = resolvedSearchParams.invited === '1';
 
   if (session) {
     if (!isSessionEmailVerified(session)) {
-      redirect(`/verify-email?email=${encodeURIComponent(session.user.email)}`);
+      const callbackQuery = isInvitedSignup ? `&callbackURL=${encodeURIComponent(INVITE_DASHBOARD_PATH)}` : '';
+      redirect(`/verify-email?email=${encodeURIComponent(session.user.email)}${callbackQuery}`);
     }
 
-    redirect('/');
+    redirect(isInvitedSignup ? INVITE_DASHBOARD_PATH : '/');
   }
 
   return (

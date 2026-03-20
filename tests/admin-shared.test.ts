@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {
+  ADMIN_NAV_ITEMS,
   getShanghaiDayRange,
   isAdminNavActive,
   isAdminRole,
@@ -23,6 +24,11 @@ test('isAdminNavActive only highlights the dashboard on the dashboard route', ()
 test('isAdminNavActive keeps nested admin sections highlighted', () => {
   assert.equal(isAdminNavActive('/admin/codes', '/admin/codes'), true);
   assert.equal(isAdminNavActive('/admin/codes/detail', '/admin/codes'), true);
+  assert.equal(isAdminNavActive('/admin/invitations', '/admin/invitations'), true);
+});
+
+test('admin nav includes the invitation management section', () => {
+  assert.equal(ADMIN_NAV_ITEMS.some((item) => item.href === '/admin/invitations'), true);
 });
 
 test('isAdminRole only allows the admin role', () => {

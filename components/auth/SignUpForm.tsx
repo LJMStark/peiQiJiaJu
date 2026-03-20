@@ -1,19 +1,20 @@
 'use client';
 
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useState, useTransition } from 'react';
 import { ArrowRight, Building2, Eye, EyeOff, Lock, Mail } from 'lucide-react';
-import { signUp } from '@/lib/auth-client';
 import { getAuthErrorMessage } from '@/lib/auth-errors';
 import {
   getCompanyNameValidationError,
   MAX_COMPANY_NAME_LENGTH,
   normalizeCompanyNameInput,
 } from '@/lib/company-name';
+import { INVITE_DASHBOARD_PATH } from '@/lib/invitations';
 
 export function SignUpForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [isPending, startTransition] = useTransition();
   const [companyName, setCompanyName] = useState('');
   const [email, setEmail] = useState('');
@@ -22,6 +23,7 @@ export function SignUpForm() {
   const [error, setError] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const isInvitedSignup = searchParams.get('invited') === '1';
 
   const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -46,23 +48,40 @@ export function SignUpForm() {
     }
 
     startTransition(async () => {
-      const response = await signUp.email({
-        name: normalizedCompanyName,
-        email: email.trim().toLowerCase(),
-        password,
+      const normalizedEmail = email.trim().toLowerCase();
+      const response = await fetch('/api/invitations/signup', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          name: normalizedCompanyName,
+          email: normalizedEmail,
+          password,
+          confirmPassword,
+        }),
       });
 
-      if (response.error) {
-        setError(getAuthErrorMessage(response.error.code, response.error.message));
+      const payload = (await response.json().catch(() => null)) as { code?: string; message?: string } | null;
+
+      if (!response.ok) {
+        setError(getAuthErrorMessage(payload?.code, payload?.message));
         return;
       }
 
-      router.push(`/verify-email?email=${encodeURIComponent(email.trim().toLowerCase())}`);
+      const callbackQuery = isInvitedSignup ? `&callbackURL=${encodeURIComponent(INVITE_DASHBOARD_PATH)}` : '';
+      router.push(`/verify-email?email=${encodeURIComponent(normalizedEmail)}${callbackQuery}`);
     });
   };
 
   return (
     <form onSubmit={handleSubmit} className="space-y-5">
+      {isInvitedSignup ? (
+        <div className="rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-3 text-sm text-indigo-700">
+          这是一个邀请注册入口。完成邮箱验证后，会自动回到邀请中心并完成归因。
+        </div>
+      ) : null}
+
       <div>
         <label htmlFor="companyName" className="block text-sm font-medium text-zinc-700 mb-2">
           公司名称

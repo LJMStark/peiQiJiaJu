@@ -10,6 +10,10 @@ export const ADMIN_NAV_ITEMS = [
     href: '/admin/codes',
     label: '兑换码管理',
   },
+  {
+    href: '/admin/invitations',
+    label: '邀请管理',
+  },
 ] as const;
 
 export function isAdminRole(role: string | null | undefined) {

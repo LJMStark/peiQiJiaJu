@@ -7,12 +7,15 @@ import { Mail, RefreshCw, ArrowLeft, CheckCircle } from 'lucide-react';
 import Link from 'next/link';
 import { sendVerificationEmail } from '@/lib/auth-client';
 import { getAuthErrorMessage } from '@/lib/auth-errors';
+import { INVITE_DASHBOARD_PATH } from '@/lib/invitations';
 
 type PageStatus = 'idle' | 'resending' | 'sent';
 
 function VerifyEmailContent() {
   const searchParams = useSearchParams();
   const emailFromQuery = searchParams.get('email') ?? '';
+  const callbackURL = searchParams.get('callbackURL') ?? '/';
+  const cameFromInvite = callbackURL === INVITE_DASHBOARD_PATH;
 
   const [email, setEmail] = useState(emailFromQuery);
   const [status, setStatus] = useState<PageStatus>('idle');
@@ -29,7 +32,7 @@ function VerifyEmailContent() {
 
     const response = await sendVerificationEmail({
       email: email.trim().toLowerCase(),
-      callbackURL: '/',
+      callbackURL,
     });
 
     if (response.error) {
@@ -54,6 +57,9 @@ function VerifyEmailContent() {
             <br />
             请点击邮件中的链接完成验证。
           </p>
+          {cameFromInvite ? (
+            <p className="mt-3 text-sm text-indigo-600">验证完成后会自动跳回邀请中心。</p>
+          ) : null}
         </div>
 
         <div className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm space-y-5">
@@ -119,7 +125,7 @@ function VerifyEmailContent() {
             返回登录
           </Link>
           <Link
-            href="/signup"
+            href={cameFromInvite ? '/signup?invited=1' : '/signup'}
             className="text-indigo-600 hover:text-indigo-500 font-medium transition-colors"
           >
             重新注册

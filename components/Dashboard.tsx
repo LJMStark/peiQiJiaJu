@@ -1,11 +1,12 @@
 'use client';
 
 import { useEffect, useState, useTransition } from 'react';
-import { useRouter } from 'next/navigation';
-import { LayoutGrid, Loader2, LogOut, Sofa, Sparkles, Crown, ShieldAlert, PencilLine, Check, X } from 'lucide-react';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { LayoutGrid, Loader2, LogOut, Sofa, Sparkles, Crown, ShieldAlert, PencilLine, Check, X, UserPlus } from 'lucide-react';
 import { Catalog } from './Catalog';
 import { RoomEditor } from './RoomEditor';
 import { VipCenter } from './VipCenter';
+import { InviteCenter } from './InviteCenter';
 import { ContactQrCode } from './ContactQrCode';
 import { WelcomeGuideModal } from './WelcomeGuideModal';
 import { readJson, type CatalogResponse, type CatalogMutationResponse } from '@/lib/client/api';
@@ -17,6 +18,7 @@ import {
 } from '@/lib/company-name';
 import { updateUser } from '@/lib/auth-client';
 import type { FurnitureItem } from '@/lib/dashboard-types';
+import { INVITE_DASHBOARD_TAB } from '@/lib/invitations';
 
 type DashboardProps = {
   companyName: string;
@@ -28,9 +30,22 @@ type DashboardProps = {
   onLogout: () => void;
 };
 
+type DashboardTab = 'catalog' | 'editor' | 'vip' | typeof INVITE_DASHBOARD_TAB;
+
+function normalizeDashboardTab(tab: string | null): DashboardTab {
+  if (tab === 'editor' || tab === 'vip' || tab === INVITE_DASHBOARD_TAB) {
+    return tab;
+  }
+
+  return 'catalog';
+}
+
 export function Dashboard({ companyName, user, onLogout }: DashboardProps) {
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState<'catalog' | 'editor' | 'vip'>('catalog');
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const requestedTab = normalizeDashboardTab(searchParams.get('tab'));
+  const [activeTab, setActiveTab] = useState<DashboardTab>(requestedTab);
   const [catalog, setCatalog] = useState<FurnitureItem[]>([]);
   const [isUploading, setIsUploading] = useState(false);
   const [isCatalogLoading, setIsCatalogLoading] = useState(true);
@@ -41,6 +56,10 @@ export function Dashboard({ companyName, user, onLogout }: DashboardProps) {
   const [isEditingCompanyName, setIsEditingCompanyName] = useState(false);
   const [companyNameError, setCompanyNameError] = useState('');
   const [isSavingCompanyName, startSavingCompanyName] = useTransition();
+
+  useEffect(() => {
+    setActiveTab(requestedTab);
+  }, [requestedTab]);
 
   useEffect(() => {
     // 检查是否需要显示新用户引导
@@ -181,6 +200,20 @@ export function Dashboard({ companyName, user, onLogout }: DashboardProps) {
     });
   };
 
+  const handleTabChange = (nextTab: DashboardTab) => {
+    setActiveTab(nextTab);
+
+    const nextSearchParams = new URLSearchParams(searchParams.toString());
+    if (nextTab === 'catalog') {
+      nextSearchParams.delete('tab');
+    } else {
+      nextSearchParams.set('tab', nextTab);
+    }
+
+    const nextQuery = nextSearchParams.toString();
+    router.replace(nextQuery ? `${pathname}?${nextQuery}` : pathname, { scroll: false });
+  };
+
   return (
     <div className="min-h-screen bg-zinc-50 flex flex-col">
       <header className="bg-white border-b border-zinc-200 sticky top-0 z-30">
@@ -253,7 +286,7 @@ export function Dashboard({ companyName, user, onLogout }: DashboardProps) {
 
           <nav className="hidden md:flex items-center gap-1 bg-zinc-100 p-1 rounded-xl">
             <button
-              onClick={() => setActiveTab('catalog')}
+              onClick={() => handleTabChange('catalog')}
               className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all flex items-center gap-2 ${
                 activeTab === 'catalog' ? 'bg-white text-zinc-900 shadow-sm' : 'text-zinc-500 hover:text-zinc-900'
               }`}
@@ -262,7 +295,7 @@ export function Dashboard({ companyName, user, onLogout }: DashboardProps) {
               家具图册
             </button>
             <button
-              onClick={() => setActiveTab('editor')}
+              onClick={() => handleTabChange('editor')}
               className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all flex items-center gap-2 ${
                 activeTab === 'editor' ? 'bg-white text-zinc-900 shadow-sm' : 'text-zinc-500 hover:text-zinc-900'
               }`}
@@ -271,7 +304,18 @@ export function Dashboard({ companyName, user, onLogout }: DashboardProps) {
               室内编辑器
             </button>
             <button
-              onClick={() => setActiveTab('vip')}
+              onClick={() => handleTabChange(INVITE_DASHBOARD_TAB)}
+              className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all flex items-center gap-2 ${
+                activeTab === INVITE_DASHBOARD_TAB
+                  ? 'bg-white text-zinc-900 shadow-sm'
+                  : 'text-zinc-500 hover:text-zinc-900'
+              }`}
+            >
+              <UserPlus size={16} />
+              邀请中心
+            </button>
+            <button
+              onClick={() => handleTabChange('vip')}
               className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all flex items-center gap-2 ${
                 activeTab === 'vip' ? 'bg-white text-zinc-900 shadow-sm' : 'text-amber-600 hover:text-amber-700'
               }`}
@@ -304,7 +348,7 @@ export function Dashboard({ companyName, user, onLogout }: DashboardProps) {
 
       <div className="md:hidden bg-white border-b border-zinc-200 px-4 py-2 flex gap-2 overflow-x-auto">
         <button
-          onClick={() => setActiveTab('catalog')}
+          onClick={() => handleTabChange('catalog')}
           className={`px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2 whitespace-nowrap ${
             activeTab === 'catalog' ? 'bg-zinc-100 text-zinc-900' : 'text-zinc-500'
           }`}
@@ -313,7 +357,7 @@ export function Dashboard({ companyName, user, onLogout }: DashboardProps) {
           家具图册
         </button>
         <button
-          onClick={() => setActiveTab('editor')}
+          onClick={() => handleTabChange('editor')}
           className={`px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2 whitespace-nowrap ${
             activeTab === 'editor' ? 'bg-zinc-100 text-zinc-900' : 'text-zinc-500'
           }`}
@@ -322,13 +366,22 @@ export function Dashboard({ companyName, user, onLogout }: DashboardProps) {
           室内编辑器
         </button>
         <button
-          onClick={() => setActiveTab('vip')}
+          onClick={() => handleTabChange('vip')}
           className={`px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2 whitespace-nowrap ${
             activeTab === 'vip' ? 'bg-amber-100 text-amber-900' : 'text-amber-600'
           }`}
         >
           <Crown size={16} />
           会员中心
+        </button>
+        <button
+          onClick={() => handleTabChange(INVITE_DASHBOARD_TAB)}
+          className={`px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2 whitespace-nowrap ${
+            activeTab === INVITE_DASHBOARD_TAB ? 'bg-zinc-100 text-zinc-900' : 'text-zinc-500'
+          }`}
+        >
+          <UserPlus size={16} />
+          邀请中心
         </button>
       </div>
 
@@ -343,13 +396,15 @@ export function Dashboard({ companyName, user, onLogout }: DashboardProps) {
             isLoading={isCatalogLoading}
             error={catalogError}
           />
+        ) : activeTab === INVITE_DASHBOARD_TAB ? (
+          <InviteCenter />
+        ) : activeTab === 'vip' ? (
+          <VipCenter user={user} />
         ) : isCatalogLoading ? (
           <div className="bg-white border border-zinc-200 rounded-2xl p-10 flex items-center justify-center gap-3 text-zinc-500">
             <Loader2 size={20} className="animate-spin" />
             正在载入图册资源...
           </div>
-        ) : activeTab === 'vip' ? (
-          <VipCenter user={user} />
         ) : (
           <RoomEditor catalog={catalog} onUploadFiles={handleUploadFiles} user={user} />
         )}
