@@ -3,18 +3,26 @@
 import { useEffect, useRef, useState, type MouseEvent } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import Image from 'next/image';
-import { Trash2 } from 'lucide-react';
+import { CheckCircle2, Trash2 } from 'lucide-react';
 import type { RoomImage } from '@/lib/dashboard-types';
 
 const CONFIRMATION_TIMEOUT_MS = 3000;
 
 type SwipeableRoomCardProps = {
   room: RoomImage;
+  isActive: boolean;
+  onSelect: (id: string) => void;
   onDelete: (id: string) => void;
   onPreview: (url: string) => void;
 };
 
-export function SwipeableRoomCard({ room, onDelete, onPreview }: SwipeableRoomCardProps) {
+export function SwipeableRoomCard({
+  room,
+  isActive,
+  onSelect,
+  onDelete,
+  onPreview,
+}: SwipeableRoomCardProps) {
   const [isConfirming, setIsConfirming] = useState(false);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -59,13 +67,22 @@ export function SwipeableRoomCard({ room, onDelete, onPreview }: SwipeableRoomCa
       return;
     }
 
+    if (!isActive) {
+      onSelect(room.id);
+      return;
+    }
+
     onPreview(room.imageUrl);
   }
 
   return (
     <motion.div
       layout
-      className="relative aspect-video rounded-xl overflow-hidden border border-zinc-200 shadow-sm group"
+      className={`relative aspect-video rounded-xl overflow-hidden border shadow-sm group transition-all ${
+        isActive
+          ? 'border-indigo-500 ring-2 ring-indigo-500/20 shadow-md'
+          : 'border-zinc-200'
+      }`}
     >
       {/* 变暗遮罩：当处于确认状态时，略微压暗图片以突出删除按钮 */}
       <AnimatePresence>
@@ -90,6 +107,15 @@ export function SwipeableRoomCard({ room, onDelete, onPreview }: SwipeableRoomCa
 
       {/* 优雅的防误触二次确认按钮区域 */}
       {/* 使用 p-2 扩大实际触控热区到推荐的至少 44px 级别，而视觉上按钮依然很精巧 */}
+      {isActive && (
+        <div className="absolute top-2 left-2 z-10">
+          <div className="inline-flex items-center gap-1 rounded-full bg-white/90 px-2 py-1 text-[11px] font-medium text-indigo-600 shadow-sm backdrop-blur-md">
+            <CheckCircle2 size={12} />
+            当前室内图
+          </div>
+        </div>
+      )}
+
       <div className="absolute top-0 right-0 p-2 z-10 flex justify-end">
         <motion.button
           layout

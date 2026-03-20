@@ -107,6 +107,12 @@ create table if not exists generation_history (
   created_at timestamptz not null default now()
 );
 
+alter table generation_history
+  add column if not exists selected_furniture_item_ids text[];
+
+alter table generation_history
+  add column if not exists selected_furnitures_snapshot jsonb;
+
 create index if not exists furniture_items_user_id_created_at_idx
   on furniture_items (user_id, created_at desc);
 

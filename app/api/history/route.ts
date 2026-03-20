@@ -25,9 +25,17 @@ export async function POST(request: Request) {
 
   try {
     const body = await request.json();
+    const furnitureItemIds = Array.isArray(body?.furnitureItemIds)
+      ? body.furnitureItemIds
+          .map((itemId: unknown) => (typeof itemId === 'string' ? itemId.trim() : ''))
+          .filter(Boolean)
+      : typeof body?.furnitureItemId === 'string' && body.furnitureItemId.trim()
+        ? [body.furnitureItemId.trim()]
+        : [];
+
     const item = await createHistoryItem(authState.session.user.id, {
       roomImageId: String(body?.roomImageId ?? ''),
-      furnitureItemId: String(body?.furnitureItemId ?? ''),
+      furnitureItemIds,
       generatedDataUrl: String(body?.generatedDataUrl ?? ''),
       customInstruction: typeof body?.customInstruction === 'string' ? body.customInstruction : null,
     });

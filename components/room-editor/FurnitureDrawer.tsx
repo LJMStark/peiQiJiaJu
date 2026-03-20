@@ -10,6 +10,7 @@ type FurnitureDrawerProps = {
   onClose: () => void;
   catalog: FurnitureItem[];
   selectedFurnitures: FurnitureItem[];
+  maxSelections: number;
   activeCategory: string;
   onCategoryChange: (category: string) => void;
   onToggleFurniture: (item: FurnitureItem) => void;
@@ -23,6 +24,7 @@ export function FurnitureDrawer({
   onClose,
   catalog,
   selectedFurnitures,
+  maxSelections,
   activeCategory,
   onCategoryChange,
   onToggleFurniture,
@@ -108,6 +110,7 @@ export function FurnitureDrawer({
                 </button>
                 {filteredCatalog.map((item) => {
                   const isSelected = selectedFurnitures.some(f => f.id === item.id);
+                  const selectionLimitReached = !isSelected && selectedFurnitures.length >= maxSelections;
                   return (
                     <div
                       key={item.id}
@@ -115,10 +118,17 @@ export function FurnitureDrawer({
                       onDragStart={(e) => {
                         e.dataTransfer.setData('application/json', JSON.stringify({ type: 'NEW', furnitureId: item.id }));
                       }}
-                      onClick={() => onToggleFurniture(item)}
+                      onClick={() => {
+                        if (selectionLimitReached) {
+                          return;
+                        }
+                        onToggleFurniture(item);
+                      }}
                       className={`relative aspect-square rounded-xl overflow-hidden border-2 transition-all cursor-pointer group ${
                         isSelected
                           ? 'border-indigo-500 ring-2 ring-indigo-500/20'
+                          : selectionLimitReached
+                            ? 'border-zinc-100 opacity-40 cursor-not-allowed'
                           : 'border-zinc-100 hover:border-zinc-300'
                       }`}
                     >
@@ -145,6 +155,9 @@ export function FurnitureDrawer({
             </div>
 
             <div className="p-4 border-t border-zinc-200 bg-zinc-50">
+              <p className="text-xs text-zinc-500 mb-3 text-center">
+                当前最多选择 {maxSelections} 张家具图
+              </p>
               <button
                 onClick={onClose}
                 className="w-full py-3 bg-zinc-900 text-white rounded-xl font-medium hover:bg-zinc-800 transition-colors shadow-sm flex items-center justify-center gap-2"

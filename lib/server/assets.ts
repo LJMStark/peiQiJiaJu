@@ -3,6 +3,11 @@ import 'server-only';
 import { randomUUID } from 'node:crypto';
 import { query } from '@/lib/db';
 import type { FurnitureItem, HistoryItem, RoomAspectRatio, RoomImage } from '@/lib/dashboard-types';
+import {
+  normalizeHistoryFurnitureSnapshots,
+  resolveHistoryFurnitureSelection,
+  type HistoryFurnitureSnapshot as HistoryFurnitureSnapshotData,
+} from '@/lib/room-visualization';
 import { createSignedImageUrl, removeImage, uploadGeneratedImage, uploadImageFile } from '@/lib/server/storage';
 
 type FurnitureRow = {
@@ -31,6 +36,8 @@ type HistoryRow = {
   id: string;
   room_image_id: string | null;
   furniture_item_id: string | null;
+  selected_furniture_item_ids: string[] | null;
+  selected_furnitures_snapshot: HistoryFurnitureSnapshotData[] | null;
   room_name_snapshot: string;
   room_storage_path_snapshot: string;
   room_mime_type_snapshot: string;
@@ -57,6 +64,17 @@ function coerceDisplayName(name: string | null | undefined, fallback: string) {
 function normalizeInstruction(value: string | null | undefined) {
   const trimmed = value?.trim();
   return trimmed || null;
+}
+
+function buildGeneratedName(roomName: string, furnitures: HistoryFurnitureSnapshotData[]) {
+  const baseLabel = furnitures
+    .slice(0, 2)
+    .map((furniture) => furniture.name)
+    .filter(Boolean)
+    .join('-') || 'furniture';
+  const suffix = furnitures.length > 2 ? `-plus-${furnitures.length - 2}-more` : '';
+
+  return `${roomName}-${baseLabel}${suffix}-generated`;
 }
 
 async function serializeFurniture(row: FurnitureRow): Promise<FurnitureItem> {
@@ -87,7 +105,40 @@ async function serializeRoom(row: RoomRow): Promise<RoomImage> {
   };
 }
 
+async function serializeHistoryFurnitureSnapshot(
+  snapshot: HistoryFurnitureSnapshotData,
+  fallbackId: string,
+  createdAt: string
+): Promise<FurnitureItem> {
+  return {
+    id: snapshot.id ?? fallbackId,
+    name: snapshot.name,
+    category: snapshot.category || '其他',
+    storagePath: snapshot.storagePath,
+    imageUrl: await createSignedImageUrl('furniture', snapshot.storagePath),
+    mimeType: snapshot.mimeType,
+    fileSize: snapshot.fileSize,
+    createdAt,
+  };
+}
+
 async function serializeHistory(row: HistoryRow): Promise<HistoryItem> {
+  const furnitures = await Promise.all(
+    normalizeHistoryFurnitureSnapshots({
+      legacyFurniture: {
+        id: row.furniture_item_id,
+        name: row.furniture_name_snapshot,
+        category: row.furniture_category_snapshot,
+        storagePath: row.furniture_storage_path_snapshot,
+        mimeType: row.furniture_mime_type_snapshot,
+        fileSize: row.furniture_file_size_snapshot,
+      },
+      selectedFurnituresSnapshot: row.selected_furnitures_snapshot,
+    }).map((snapshot, index) =>
+      serializeHistoryFurnitureSnapshot(snapshot, `${row.id}:furniture:${index}`, row.created_at)
+    )
+  );
+
   return {
     id: row.id,
     roomImage: {
@@ -100,16 +151,8 @@ async function serializeHistory(row: HistoryRow): Promise<HistoryItem> {
       aspectRatio: (row.room_aspect_ratio_snapshot as RoomAspectRatio | null) ?? undefined,
       createdAt: row.created_at,
     },
-    furniture: {
-      id: row.furniture_item_id ?? `${row.id}:furniture`,
-      name: row.furniture_name_snapshot,
-      category: row.furniture_category_snapshot,
-      storagePath: row.furniture_storage_path_snapshot,
-      imageUrl: await createSignedImageUrl('furniture', row.furniture_storage_path_snapshot),
-      mimeType: row.furniture_mime_type_snapshot,
-      fileSize: row.furniture_file_size_snapshot,
-      createdAt: row.created_at,
-    },
+    furniture: furnitures[0]!,
+    furnitures,
     generatedImage: {
       id: `${row.id}:generated`,
       name: row.generated_name,
@@ -198,7 +241,13 @@ export async function deleteFurnitureItem(userId: string, id: string) {
   }
 
   const historyCount = await query<{ count: string }>(
-    `select count(*)::text as count from generation_history where user_id = $1 and furniture_item_id = $2`,
+    `select count(*)::text as count
+     from generation_history
+     where user_id = $1
+       and (
+         furniture_item_id = $2
+         or $2 = any(coalesce(selected_furniture_item_ids, ARRAY[]::text[]))
+       )`,
     [userId, id]
   );
 
@@ -274,6 +323,8 @@ export async function listHistoryItems(userId: string) {
         id,
         room_image_id,
         furniture_item_id,
+        selected_furniture_item_ids,
+        selected_furnitures_snapshot,
         room_name_snapshot,
         room_storage_path_snapshot,
         room_mime_type_snapshot,
@@ -303,7 +354,7 @@ export async function createHistoryItem(
   userId: string,
   input: {
     roomImageId: string;
-    furnitureItemId: string;
+    furnitureItemIds: string[];
     generatedDataUrl: string;
     customInstruction?: string | null;
     roomFallback?: {
@@ -313,13 +364,13 @@ export async function createHistoryItem(
       fileSize: number;
       aspectRatio?: string | null;
     };
-    furnitureFallback?: {
+    furnitureFallbacks?: Array<{
       name: string;
       storagePath: string;
       mimeType: string;
       fileSize: number;
       category?: string;
-    };
+    }>;
   }
 ) {
   const [roomResult, furnitureResult] = await Promise.all([
@@ -332,13 +383,13 @@ export async function createHistoryItem(
     query<FurnitureRow>(
       `select id, name, category, storage_path, mime_type, file_size, created_at, updated_at
        from furniture_items
-       where id = $1 and user_id = $2`,
-      [input.furnitureItemId, userId]
+       where user_id = $2 and id = any($1::text[])`,
+      [input.furnitureItemIds, userId]
     ),
   ]);
 
   const room = roomResult.rows[0];
-  const furniture = furnitureResult.rows[0];
+  const furnitureRowsById = new Map(furnitureResult.rows.map((row) => [row.id, row]));
 
   const roomSnapshot = room
     ? { id: room.id, name: room.name, storagePath: room.storage_path, mimeType: room.mime_type, fileSize: room.file_size, aspectRatio: room.aspect_ratio }
@@ -346,21 +397,35 @@ export async function createHistoryItem(
       ? { id: null, name: input.roomFallback.name, storagePath: input.roomFallback.storagePath, mimeType: input.roomFallback.mimeType, fileSize: input.roomFallback.fileSize, aspectRatio: input.roomFallback.aspectRatio ?? null }
       : null;
 
-  const furnitureSnapshot = furniture
-    ? { id: furniture.id, name: furniture.name, storagePath: furniture.storage_path, mimeType: furniture.mime_type, fileSize: furniture.file_size, category: furniture.category }
-    : input.furnitureFallback
-      ? { id: null, name: input.furnitureFallback.name, storagePath: input.furnitureFallback.storagePath, mimeType: input.furnitureFallback.mimeType, fileSize: input.furnitureFallback.fileSize, category: input.furnitureFallback.category ?? '其他' }
-      : null;
+  const resolvedFurnitureSelection = resolveHistoryFurnitureSelection({
+    furnitureItemIds: input.furnitureItemIds,
+    persistedFurnitures: input.furnitureItemIds.flatMap((furnitureItemId) => {
+      const furniture = furnitureRowsById.get(furnitureItemId);
+      return furniture
+        ? [{
+            id: furniture.id,
+            name: furniture.name,
+            storagePath: furniture.storage_path,
+            mimeType: furniture.mime_type,
+            fileSize: furniture.file_size,
+            category: furniture.category,
+          }]
+        : [];
+    }),
+    furnitureFallbacks: input.furnitureFallbacks,
+  });
 
   if (!roomSnapshot) {
     throw new Error('Room image not found.');
   }
 
-  if (!furnitureSnapshot) {
+  if (!resolvedFurnitureSelection) {
     throw new Error('Furniture item not found.');
   }
 
-  const generatedName = `${roomSnapshot.name}-${furnitureSnapshot.name}-generated`;
+  const resolvedFurnitureSnapshots = resolvedFurnitureSelection.snapshots;
+  const primaryFurnitureSnapshot = resolvedFurnitureSnapshots[0]!;
+  const generatedName = buildGeneratedName(roomSnapshot.name, resolvedFurnitureSnapshots);
   const uploaded = await uploadGeneratedImage(userId, input.generatedDataUrl, generatedName);
   const id = randomUUID();
 
@@ -371,6 +436,8 @@ export async function createHistoryItem(
         user_id,
         room_image_id,
         furniture_item_id,
+        selected_furniture_item_ids,
+        selected_furnitures_snapshot,
         room_name_snapshot,
         room_storage_path_snapshot,
         room_mime_type_snapshot,
@@ -387,13 +454,15 @@ export async function createHistoryItem(
         generated_file_size,
         custom_instruction
       ) values (
-        $1, $2, $3, $4, $5, $6, $7, $8, $9,
-        $10, $11, $12, $13, $14, $15, $16, $17, $18, $19
+        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
+        $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21
       )
       returning
         id,
         room_image_id,
         furniture_item_id,
+        selected_furniture_item_ids,
+        selected_furnitures_snapshot,
         room_name_snapshot,
         room_storage_path_snapshot,
         room_mime_type_snapshot,
@@ -414,17 +483,19 @@ export async function createHistoryItem(
         id,
         userId,
         roomSnapshot.id,
-        furnitureSnapshot.id,
+        resolvedFurnitureSelection.primaryHistoryFurnitureId,
+        resolvedFurnitureSnapshots.map((snapshot) => snapshot.id),
+        JSON.stringify(resolvedFurnitureSnapshots),
         roomSnapshot.name,
         roomSnapshot.storagePath,
         roomSnapshot.mimeType,
         roomSnapshot.fileSize,
         roomSnapshot.aspectRatio,
-        furnitureSnapshot.name,
-        furnitureSnapshot.storagePath,
-        furnitureSnapshot.mimeType,
-        furnitureSnapshot.fileSize,
-        furnitureSnapshot.category,
+        primaryFurnitureSnapshot.name,
+        primaryFurnitureSnapshot.storagePath,
+        primaryFurnitureSnapshot.mimeType,
+        primaryFurnitureSnapshot.fileSize,
+        primaryFurnitureSnapshot.category,
         generatedName,
         uploaded.storagePath,
         uploaded.mimeType,

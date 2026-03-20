@@ -4,6 +4,7 @@ import { GoogleGenAI } from '@google/genai';
 import { FURNITURE_CATEGORIES } from '@/lib/dashboard-types';
 import { query } from '@/lib/db';
 import { GEMINI_CLASSIFIER_MODEL, GEMINI_IMAGE_MODEL } from '@/lib/gemini-config';
+import { buildVisualizationPrompt } from '@/lib/room-visualization';
 import { createHistoryItem } from '@/lib/server/assets';
 import { getStorageBucket } from '@/lib/storage-config';
 import { getSupabaseAdmin } from '@/lib/supabase-admin';
@@ -67,41 +68,6 @@ async function downloadStorageAssetBase64(
   return buffer.toString('base64');
 }
 
-function buildGenerationPrompt(customInstruction: string | null | undefined) {
-  let prompt = `你是一位顶级的室内设计师和高级图像合成专家。
-我按顺序提供了两张图片：
-[图片 1]：基础场景（室内房间实景图）。
-[图片 2]：目标物体（需要放入房间的家具参考图）。
-
-【核心任务】
-以 [图片 1] 为绝对的基础背景，将 [图片 2] 中的主体家具完美、无痕地合成到 [图片 1] 中。
-严禁改变 [图片 1] 的房间结构、墙壁、地板和其他不相关的背景元素！
-
-【高级合成规范】
-1. 空间透视与比例 (Perspective & Scale)：
-   - 严格遵循 [图片 1] 的空间透视灭点（Vanishing Points）。
-   - 确保新家具的三维透视形变与房间的地板、墙面完全吻合。
-   - 准确评估房间的物理尺度，使新家具的比例（长宽高）与周围环境（如门、窗、其他家具）保持绝对协调。
-2. 光影与材质 (Lighting & Shadows)：
-   - 深度分析 [图片 1] 的主光源方向、色温和环境光（Ambient Light）。
-   - 为新家具重新生成符合房间光源的受光面、背光面和高光。
-   - 必须在家具底部和接触面生成准确的接触阴影（Contact Shadows）和投射阴影（Cast Shadows），阴影的软硬程度需与房间现有阴影一致。
-   - 如果地板是反光材质（如瓷砖、抛光木地板），必须生成新家具的真实倒影。
-3. 遮挡与融合 (Occlusion & Blending)：
-   - 妥善处理新家具与房间原有物品的前后遮挡关系。
-   - 边缘融合必须自然，无明显的抠图白边或生硬过渡。
-4. 智能替换与摆放 (Placement)：
-   - 优先识别并替换 [图片 1] 中与 [图片 2] 功能相似的旧家具。
-   - 如果是新增家具，请选择符合室内设计美学和动线逻辑的合理位置。`;
-
-  const normalizedInstruction = customInstruction?.trim();
-  if (normalizedInstruction) {
-    prompt += `\n\n【用户的特别指示与反馈】\n${normalizedInstruction}`;
-  }
-
-  return prompt;
-}
-
 export async function classifyFurnitureFile(
   file: File,
   fallbackCategory?: string | null
@@ -144,10 +110,10 @@ export async function generateRoomVisualization(
   userId: string,
   input: {
     roomImageId: string;
-    furnitureItemId: string;
+    furnitureItemIds: string[];
     customInstruction?: string | null;
     roomFallback?: AssetFallback;
-    furnitureFallback?: AssetFallback;
+    furnitureFallbacks?: AssetFallback[];
   }
 ) {
   const [roomResult, furnitureResult] = await Promise.all([
@@ -160,13 +126,16 @@ export async function generateRoomVisualization(
     query<FurnitureSourceRow>(
       `select id, name, category, storage_path, mime_type
        from furniture_items
-       where id = $1 and user_id = $2`,
-      [input.furnitureItemId, userId]
+       where user_id = $2 and id = any($1::text[])`,
+      [input.furnitureItemIds, userId]
     ),
   ]);
 
   const roomRow = roomResult.rows[0];
-  const furnitureRow = furnitureResult.rows[0];
+  const furnitureRowsById = new Map(furnitureResult.rows.map((row) => [row.id, row]));
+  const fallbackById = new Map(
+    (input.furnitureFallbacks ?? []).map((fallback, index) => [input.furnitureItemIds[index], fallback] as const)
+  );
 
   const room = roomRow
     ? { id: roomRow.id, name: roomRow.name, storagePath: roomRow.storage_path, mimeType: roomRow.mime_type, aspectRatio: roomRow.aspect_ratio }
@@ -174,23 +143,46 @@ export async function generateRoomVisualization(
       ? { id: input.roomImageId, name: input.roomFallback.name ?? 'room', storagePath: input.roomFallback.storagePath, mimeType: input.roomFallback.mimeType, aspectRatio: input.roomFallback.aspectRatio ?? null }
       : null;
 
-  const furniture = furnitureRow
-    ? { id: furnitureRow.id, name: furnitureRow.name, storagePath: furnitureRow.storage_path, mimeType: furnitureRow.mime_type, category: furnitureRow.category ?? '其他' }
-    : input.furnitureFallback
-      ? { id: input.furnitureItemId, name: input.furnitureFallback.name ?? 'furniture', storagePath: input.furnitureFallback.storagePath, mimeType: input.furnitureFallback.mimeType, category: input.furnitureFallback.category ?? '其他' }
-      : null;
+  const furnitures = input.furnitureItemIds.map((furnitureItemId) => {
+    const furnitureRow = furnitureRowsById.get(furnitureItemId);
+    if (furnitureRow) {
+      return {
+        id: furnitureRow.id,
+        name: furnitureRow.name,
+        storagePath: furnitureRow.storage_path,
+        mimeType: furnitureRow.mime_type,
+        category: furnitureRow.category ?? '其他',
+      };
+    }
+
+    const fallback = fallbackById.get(furnitureItemId);
+    if (!fallback) {
+      return null;
+    }
+
+    return {
+      id: furnitureItemId,
+      name: fallback.name ?? 'furniture',
+      storagePath: fallback.storagePath,
+      mimeType: fallback.mimeType,
+      category: fallback.category ?? '其他',
+    };
+  });
 
   if (!room) {
     throw new Error('Room image not found.');
   }
 
-  if (!furniture) {
+  if (furnitures.length === 0 || furnitures.some((furniture) => !furniture)) {
     throw new Error('Furniture item not found.');
   }
 
-  const [roomBase64, furnitureBase64] = await Promise.all([
+  const resolvedFurnitures = furnitures.filter((furniture): furniture is NonNullable<typeof furniture> => Boolean(furniture));
+  const [roomBase64, ...furnitureBase64List] = await Promise.all([
     downloadStorageAssetBase64(getStorageBucket('room'), room.storagePath),
-    downloadStorageAssetBase64(getStorageBucket('furniture'), furniture.storagePath),
+    ...resolvedFurnitures.map((furniture) =>
+      downloadStorageAssetBase64(getStorageBucket('furniture'), furniture.storagePath)
+    ),
   ]);
 
   const response = await getGeminiClient().models.generateContent({
@@ -203,14 +195,21 @@ export async function generateRoomVisualization(
             mimeType: room.mimeType,
           },
         },
-        {
+        ...resolvedFurnitures.map((furniture, index) => ({
           inlineData: {
-            data: furnitureBase64,
+            data: furnitureBase64List[index],
             mimeType: furniture.mimeType,
           },
-        },
+        })),
         {
-          text: buildGenerationPrompt(input.customInstruction),
+          text: buildVisualizationPrompt(
+            resolvedFurnitures.map((furniture) => ({
+              id: furniture.id,
+              name: furniture.name,
+              category: furniture.category,
+            })),
+            input.customInstruction
+          ),
         },
       ],
     },
@@ -232,7 +231,7 @@ export async function generateRoomVisualization(
 
   return createHistoryItem(userId, {
     roomImageId: room.id,
-    furnitureItemId: furniture.id,
+    furnitureItemIds: resolvedFurnitures.map((furniture) => furniture.id),
     generatedDataUrl: `data:${imagePart.inlineData.mimeType};base64,${imagePart.inlineData.data}`,
     customInstruction: input.customInstruction ?? null,
     roomFallback: roomRow ? undefined : {
@@ -242,12 +241,12 @@ export async function generateRoomVisualization(
       fileSize: 0,
       aspectRatio: room.aspectRatio,
     },
-    furnitureFallback: furnitureRow ? undefined : {
+    furnitureFallbacks: resolvedFurnitures.map((furniture) => ({
       name: furniture.name,
       storagePath: furniture.storagePath,
       mimeType: furniture.mimeType,
       fileSize: 0,
       category: furniture.category,
-    },
+    })),
   });
 }

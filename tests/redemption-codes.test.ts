@@ -4,7 +4,7 @@ import test from 'node:test';
 const helperModuleUrl = new URL('../lib/redemption-codes.ts', import.meta.url);
 
 async function loadHelpers() {
-  return import(helperModuleUrl);
+  return import(helperModuleUrl.href);
 }
 
 test('normalizeRedemptionCodeInput strips separators and uppercases user input', async () => {

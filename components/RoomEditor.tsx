@@ -8,6 +8,7 @@ import { readJson, type RoomsResponse, type RoomMutationResponse, type HistoryRe
 import { formatBeijingTime } from '@/lib/beijing-time';
 import { type FurnitureItem, type HistoryItem, type PlacedFurniture, type RoomImage } from '@/lib/dashboard-types';
 import { inferAspectRatio } from '@/lib/client/image-utils';
+import { findDuplicateFurnitureGroups } from '@/lib/room-visualization';
 import { FurniturePreviewModal } from './room-editor/FurniturePreviewModal';
 import { FurnitureDrawer } from './room-editor/FurnitureDrawer';
 import { FeedbackModal } from './room-editor/FeedbackModal';
@@ -16,6 +17,7 @@ import { SwipeableRoomCard } from './room-editor/SwipeableRoomCard';
 import { UsageLimitModal } from './UsageLimitModal';
 
 const COMMON_FURNITURE = ['沙发', '床', '餐桌', '茶几', '椅子', '书桌', '衣柜', '电视柜'];
+const MAX_SELECTED_FURNITURES = 2;
 const RECOMMENDED_INSTRUCTIONS = [
   "请将新家具放在房间的中心位置，保持原有的光影效果。",
   "只提取参考图中的主体家具，忽略背景，替换掉房间里靠窗的旧家具。",
@@ -43,13 +45,13 @@ function getErrorMessage(error: unknown): string {
 
 export function RoomEditor({ catalog, onUploadFiles, user }: RoomEditorProps) {
   const [roomImages, setRoomImages] = useState<RoomImage[]>([]);
+  const [activeRoomId, setActiveRoomId] = useState<string | null>(null);
   const [selectedFurnitures, setSelectedFurnitures] = useState<FurnitureItem[]>([]);
   const [customInstruction, setCustomInstruction] = useState('');
   const [currentGeneratedImage, setCurrentGeneratedImage] = useState<HistoryItem['generatedImage'] | null>(null);
   const [generationSessionId, setGenerationSessionId] = useState<string | null>(null);
   const [currentResultIndex, setCurrentResultIndex] = useState(0);
   const [isGenerating, setIsGenerating] = useState(false);
-  const [batchProgress, setBatchProgress] = useState<{ current: number, total: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [previewFurniture, setPreviewFurniture] = useState<FurnitureItem | null>(null);
@@ -68,6 +70,8 @@ export function RoomEditor({ catalog, onUploadFiles, user }: RoomEditorProps) {
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const furnitureInputRef = useRef<HTMLInputElement>(null);
+  const activeRoom = roomImages.find((room) => room.id === activeRoomId) ?? roomImages[0] ?? null;
+  const hasDuplicateFurnitureTypes = findDuplicateFurnitureGroups(selectedFurnitures).length > 0;
 
   useEffect(() => {
     const loadPersistedAssets = async () => {
@@ -81,6 +85,7 @@ export function RoomEditor({ catalog, onUploadFiles, user }: RoomEditorProps) {
         const historyPayload = await readJson<HistoryResponse>(historyResponse);
 
         setRoomImages(roomsPayload.items);
+        setActiveRoomId(roomsPayload.items[0]?.id ?? null);
         setHistory(historyPayload.items);
       } catch (loadError) {
         setError(loadError instanceof Error ? loadError.message : '加载编辑器资源失败，请刷新页面重试。');
@@ -92,16 +97,34 @@ export function RoomEditor({ catalog, onUploadFiles, user }: RoomEditorProps) {
     void loadPersistedAssets();
   }, []);
 
+  useEffect(() => {
+    if (roomImages.length === 0) {
+      if (activeRoomId !== null) {
+        setActiveRoomId(null);
+      }
+      return;
+    }
+
+    if (!activeRoomId || !roomImages.some((room) => room.id === activeRoomId)) {
+      setActiveRoomId(roomImages[0].id);
+    }
+  }, [activeRoomId, roomImages]);
+
   const handleFurnitureUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
       setError(null);
       setIsUploadingFurniture(true);
       try {
-        const MAX_FURNITURE_UPLOAD = 4;
+        const availableSlots = Math.max(0, MAX_SELECTED_FURNITURES - selectedFurnitures.length);
+        if (availableSlots === 0) {
+          setError(`当前最多只能选择 ${MAX_SELECTED_FURNITURES} 张家具图，请先移除一张再继续添加。`);
+          return;
+        }
+
         const allFiles = Array.from(e.target.files);
-        const filesToUpload = allFiles.slice(0, MAX_FURNITURE_UPLOAD);
-        if (allFiles.length > MAX_FURNITURE_UPLOAD) {
-          setError(`每次最多上传 ${MAX_FURNITURE_UPLOAD} 张家具图，已自动选取前 ${MAX_FURNITURE_UPLOAD} 张。`);
+        const filesToUpload = allFiles.slice(0, availableSlots);
+        if (allFiles.length > availableSlots) {
+          setError(`当前最多还能添加 ${availableSlots} 张家具图，已自动选取前 ${availableSlots} 张。`);
         }
         const uploadedItems = await onUploadFiles(filesToUpload);
         if (uploadedItems && uploadedItems.length > 0) {
@@ -146,6 +169,7 @@ export function RoomEditor({ catalog, onUploadFiles, user }: RoomEditorProps) {
 
         if (newRooms.length > 0) {
           setRoomImages((current) => [...newRooms, ...current]);
+          setActiveRoomId(newRooms[0].id);
         }
       } finally {
         if (fileInputRef.current) {
@@ -162,19 +186,36 @@ export function RoomEditor({ catalog, onUploadFiles, user }: RoomEditorProps) {
     });
 
     await readJson<{ success: true }>(response);
-    setRoomImages((current) => current.filter((room) => room.id !== id));
+    setRoomImages((current) => {
+      const nextRooms = current.filter((room) => room.id !== id);
+
+      if (activeRoomId === id) {
+        setActiveRoomId(nextRooms[0]?.id ?? null);
+      }
+
+      return nextRooms;
+    });
   };
 
   const toggleFurniture = (item: FurnitureItem) => {
-    setSelectedFurnitures(prev => 
-      prev.some(f => f.id === item.id) 
-        ? prev.filter(f => f.id !== item.id) 
-        : [...prev, item]
-    );
+    setSelectedFurnitures((prev) => {
+      const isSelected = prev.some((f) => f.id === item.id);
+      if (isSelected) {
+        return prev.filter((f) => f.id !== item.id);
+      }
+
+      if (prev.length >= MAX_SELECTED_FURNITURES) {
+        setError(`室内编辑器一次最多只能选择 ${MAX_SELECTED_FURNITURES} 张家具图，请先移除一张。`);
+        return prev;
+      }
+
+      setError(null);
+      return [...prev, item];
+    });
   };
 
   const handleGenerate = async (feedbackOverride?: string) => {
-    if (roomImages.length === 0 || selectedFurnitures.length === 0) return;
+    if (!activeRoom || selectedFurnitures.length === 0) return;
 
     // Pre-check: VIP expired users should be blocked immediately on client side
     const isVip = Boolean(user.vipExpiresAt && new Date(user.vipExpiresAt) > new Date());
@@ -194,108 +235,74 @@ export function RoomEditor({ catalog, onUploadFiles, user }: RoomEditorProps) {
     setGenerationSessionId(sessionId);
     setCurrentResultIndex(0);
 
-    const total = roomImages.length * selectedFurnitures.length;
-    let current = 0;
-    setBatchProgress({ current, total });
-
     let effectiveInstruction = customInstruction;
     if (feedbackOverride) {
       const feedbackLine = `[修正反馈]: ${feedbackOverride}`;
       effectiveInstruction = customInstruction.trim() ? `${customInstruction}\n${feedbackLine}` : feedbackLine;
     }
 
-    const errors: string[] = [];
-
     try {
-      for (const room of roomImages) {
-        for (const furniture of selectedFurnitures) {
-          current++;
-          setBatchProgress({ current, total });
+      const response = await fetch('/api/generate', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          roomImageId: activeRoom.id,
+          furnitureItemIds: selectedFurnitures.map((furniture) => furniture.id),
+          customInstruction: effectiveInstruction.trim() ? effectiveInstruction : null,
+          roomFallback: {
+            storagePath: activeRoom.storagePath,
+            mimeType: activeRoom.mimeType,
+            name: activeRoom.name,
+            aspectRatio: activeRoom.aspectRatio,
+          },
+          furnitureFallbacks: selectedFurnitures.map((furniture) => ({
+            storagePath: furniture.storagePath,
+            mimeType: furniture.mimeType,
+            name: furniture.name,
+            category: furniture.category,
+          })),
+        }),
+      });
+      const payload = await readJson<HistoryMutationResponse>(response);
+      const itemWithSession = { ...payload.item, sessionId };
 
-          try {
-            const response = await fetch('/api/generate', {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify({
-                roomImageId: room.id,
-                furnitureItemId: furniture.id,
-                customInstruction: effectiveInstruction.trim() ? effectiveInstruction : null,
-                roomFallback: {
-                  storagePath: room.storagePath,
-                  mimeType: room.mimeType,
-                  name: room.name,
-                  aspectRatio: room.aspectRatio,
-                },
-                furnitureFallback: {
-                  storagePath: furniture.storagePath,
-                  mimeType: furniture.mimeType,
-                  name: furniture.name,
-                  category: furniture.category,
-                },
-              }),
-            });
-            const payload = await readJson<HistoryMutationResponse>(response);
-            const itemWithSession = { ...payload.item, sessionId };
-
-            setCurrentGeneratedImage(itemWithSession.generatedImage);
-            setHistory((previous) => [itemWithSession, ...previous]);
-          } catch (err: unknown) {
-            console.error("单个组合生成错误:", err);
-            const msg = getErrorMessage(err);
-            // Handle usage limit errors from backend
-            if (msg.includes('免费用户生图额度已用完') || msg.includes('FREE_LIMIT_REACHED')) {
-              setLimitModalType('free_limit');
-              setIsGenerating(false);
-              setBatchProgress(null);
-              return;
-            }
-            if (msg.includes('会员套餐已到期') || msg.includes('VIP_EXPIRED')) {
-              setLimitModalType('vip_expired');
-              setIsGenerating(false);
-              setBatchProgress(null);
-              return;
-            }
-            if (msg.includes("Requested entity was not found")) {
-              throw err;
-            }
-            if (msg.includes("429") || msg.toLowerCase().includes("rate limit") || msg.toLowerCase().includes("quota")) {
-              errors.push("AI 服务请求过于频繁，请稍后再试");
-            } else if (msg.includes("500") || msg.includes("503")) {
-              errors.push("AI 服务暂时不可用");
-            } else {
-              errors.push(msg);
-            }
-          }
-        }
-      }
-
-      if (errors.length > 0) {
-        if (errors.length === total) {
-          setError("所有组合均生成失败，请检查网络或稍后再试。");
-        } else {
-          setError(`${total} 个组合中有 ${errors.length} 个生成失败。`);
-        }
-        setErrorDetails([...new Set(errors)]);
-      }
+      setCurrentGeneratedImage(itemWithSession.generatedImage);
+      setHistory((previous) => [itemWithSession, ...previous]);
     } catch (err: unknown) {
-      console.error("批量生成错误:", err);
+      console.error('室内图生成错误:', err);
       const msg = getErrorMessage(err);
+      if (msg.includes('免费用户生图额度已用完') || msg.includes('FREE_LIMIT_REACHED')) {
+        setLimitModalType('free_limit');
+        return;
+      }
+      if (msg.includes('会员套餐已到期') || msg.includes('VIP_EXPIRED')) {
+        setLimitModalType('vip_expired');
+        return;
+      }
       if (msg.includes("Requested entity was not found")) {
         setError("当前 AI 服务暂不可用，请联系管理员检查 Gemini API 配置。");
+      } else if (msg.includes("429") || msg.toLowerCase().includes("rate limit") || msg.toLowerCase().includes("quota")) {
+        setError("AI 服务请求过于频繁，请稍后再试。");
+      } else if (msg.includes("500") || msg.includes("503")) {
+        setError("AI 服务暂时不可用，请稍后再试。");
       } else {
         setError(msg || "生成过程中发生错误。");
       }
     } finally {
       setIsGenerating(false);
-      setBatchProgress(null);
     }
   };
 
   const loadHistoryItem = (item: HistoryItem) => {
-    setRoomImages([item.roomImage]);
-    setSelectedFurnitures([item.furniture]);
+    setRoomImages((current) =>
+      current.some((room) => room.id === item.roomImage.id)
+        ? current
+        : [item.roomImage, ...current]
+    );
+    setActiveRoomId(item.roomImage.id);
+    setSelectedFurnitures(item.furnitures.length > 0 ? item.furnitures : [item.furniture]);
     setCurrentGeneratedImage(item.generatedImage);
     setCustomInstruction(item.customInstruction || '');
     setPlacedFurnitures([]);
@@ -322,12 +329,10 @@ export function RoomEditor({ catalog, onUploadFiles, user }: RoomEditorProps) {
     void handleGenerate(feedback);
   };
 
-  const totalCombos = roomImages.length * selectedFurnitures.length;
-
   // Compute current session results for carousel navigation
   const currentSessionResults = generationSessionId
-    ? history.filter((item) => (item as HistoryItem & { sessionId?: string }).sessionId === generationSessionId)
-    : [];
+      ? history.filter((item) => (item as HistoryItem & { sessionId?: string }).sessionId === generationSessionId)
+      : [];
 
   const handleResultPrev = () => {
     if (currentSessionResults.length <= 1) return;
@@ -346,8 +351,8 @@ export function RoomEditor({ catalog, onUploadFiles, user }: RoomEditorProps) {
   return (
     <div className="space-y-8">
       <div>
-        <h2 className="text-2xl font-bold text-zinc-900 mb-1">室内编辑器 (批量处理)</h2>
-        <p className="text-zinc-500">上传多张室内照片，选择多件家具，一次性生成所有组合的可视化效果。</p>
+        <h2 className="text-2xl font-bold text-zinc-900 mb-1">室内编辑器</h2>
+        <p className="text-zinc-500">选择 1 张当前室内图，并将已选家具一次性融合到同一张效果图中。</p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 lg:gap-8 lg:h-[calc(100vh-180px)]">
@@ -361,7 +366,7 @@ export function RoomEditor({ catalog, onUploadFiles, user }: RoomEditorProps) {
                 <h3 className="font-medium text-zinc-900">上传室内图</h3>
               </div>
               <span className="text-xs font-medium bg-zinc-100 text-zinc-600 px-2 py-1 rounded-md">
-                {isBootstrapping ? '同步中...' : `已选 ${roomImages.length} 张`}
+                {isBootstrapping ? '同步中...' : activeRoom ? `当前 1 张 / 共 ${roomImages.length} 张` : `共 ${roomImages.length} 张`}
               </span>
             </div>
             
@@ -379,6 +384,8 @@ export function RoomEditor({ catalog, onUploadFiles, user }: RoomEditorProps) {
                   >
                     <SwipeableRoomCard
                       room={room}
+                      isActive={activeRoom?.id === room.id}
+                      onSelect={setActiveRoomId}
                       onDelete={(id) => removeRoom(id)}
                       onPreview={(url) => setLightboxImageUrl(url)}
                     />
@@ -423,13 +430,18 @@ export function RoomEditor({ catalog, onUploadFiles, user }: RoomEditorProps) {
                 <div className="w-8 h-8 rounded-full bg-zinc-100 text-zinc-900 font-bold flex items-center justify-center text-sm">2</div>
                 <h3 className="font-medium text-zinc-900">选择家具</h3>
               </div>
-              <button
-                onClick={() => setIsDrawerOpen(true)}
-                className="text-sm text-indigo-600 hover:text-indigo-700 font-medium flex items-center gap-1.5 bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded-lg transition-colors"
-              >
-                <Layers size={16} />
-                打开图册
-              </button>
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-medium bg-zinc-100 text-zinc-600 px-2 py-1 rounded-md">
+                  最多 {MAX_SELECTED_FURNITURES} 张
+                </span>
+                <button
+                  onClick={() => setIsDrawerOpen(true)}
+                  className="text-sm text-indigo-600 hover:text-indigo-700 font-medium flex items-center gap-1.5 bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded-lg transition-colors"
+                >
+                  <Layers size={16} />
+                  打开图册
+                </button>
+              </div>
             </div>
 
             {selectedFurnitures.length === 0 ? (
@@ -518,10 +530,18 @@ export function RoomEditor({ catalog, onUploadFiles, user }: RoomEditorProps) {
               </div>
             </div>
 
+            {hasDuplicateFurnitureTypes && (
+              <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+                <p className="text-sm text-amber-800 leading-relaxed">
+                  友情提醒：当前选择中包含同类家具。建议您在下方附加指令里补充更细的描述，例如“双人沙发”“餐椅”“梳妆凳”，帮助 AI 更准确地区分它们，并把所有家具放进同一张空间效果图中。
+                </p>
+              </div>
+            )}
+
             <textarea
               value={customInstruction}
               onChange={(e) => setCustomInstruction(e.target.value)}
-              placeholder="例如：只提取图中的单人沙发，并替换房间里的木椅子..."
+              placeholder="例如：第1件家具是双人沙发，第2件家具是餐椅。请把这两件家具同时放进当前房间..."
               className="w-full px-4 py-3 rounded-xl border border-zinc-200 focus:border-zinc-900 focus:ring-1 focus:ring-zinc-900 outline-none transition-all resize-none h-24 text-sm"
             />
           </div>
@@ -530,9 +550,9 @@ export function RoomEditor({ catalog, onUploadFiles, user }: RoomEditorProps) {
           <div className="sticky bottom-0 pt-4 pb-2 bg-gradient-to-t from-zinc-50 via-zinc-50/90 to-transparent backdrop-blur-[2px] z-20 mt-auto -mx-1 px-1">
             <button
               onClick={() => handleGenerate()}
-              disabled={totalCombos === 0 || isGenerating}
+              disabled={!activeRoom || selectedFurnitures.length === 0 || isGenerating}
               className={`w-full py-4 rounded-2xl font-medium flex items-center justify-center gap-2 transition-all duration-300 active:scale-[0.98] group ${
-                totalCombos === 0
+                !activeRoom || selectedFurnitures.length === 0
                   ? 'bg-zinc-100 text-zinc-400 cursor-not-allowed border border-zinc-200'
                   : isGenerating
                   ? 'bg-indigo-500 text-white cursor-wait shadow-lg shadow-indigo-500/20'
@@ -542,13 +562,15 @@ export function RoomEditor({ catalog, onUploadFiles, user }: RoomEditorProps) {
               {isGenerating ? (
                 <>
                   <Loader2 size={20} className="animate-spin" />
-                  正在生成 ({batchProgress?.current}/{batchProgress?.total})...
+                  正在生成当前室内图...
                 </>
               ) : (
                 <>
-                  {totalCombos > 1 ? <Layers size={20} className="group-hover:rotate-6 transition-transform" /> : <Sparkles size={20} className="group-hover:rotate-12 transition-transform" />}
+                  {selectedFurnitures.length > 1 ? <Layers size={20} className="group-hover:rotate-6 transition-transform" /> : <Sparkles size={20} className="group-hover:rotate-12 transition-transform" />}
                   <span className="group-hover:tracking-wider transition-all duration-300">
-                    {totalCombos > 1 ? `批量生成 (${totalCombos} 个组合)` : '在房间中可视化'}
+                    {selectedFurnitures.length > 1
+                      ? `将 ${selectedFurnitures.length} 件家具放入当前房间`
+                      : '在当前房间中可视化'}
                   </span>
                 </>
               )}
@@ -589,7 +611,7 @@ export function RoomEditor({ catalog, onUploadFiles, user }: RoomEditorProps) {
           <div className="p-4 border-b border-zinc-100 flex justify-between items-center bg-zinc-50/50">
             <h3 className="font-medium text-zinc-900 flex items-center gap-2">
               <ImageIcon size={18} className="text-zinc-400" />
-              生成结果 {isGenerating && batchProgress && <span className="text-indigo-600 text-sm ml-2">({batchProgress.current}/{batchProgress.total})</span>}
+              生成结果
             </h3>
             {currentGeneratedImage && !isGenerating && (
               <div className="flex items-center gap-2">
@@ -620,7 +642,7 @@ export function RoomEditor({ catalog, onUploadFiles, user }: RoomEditorProps) {
           
           <div className="flex-1 p-4 sm:p-6 flex flex-col items-center justify-center min-h-[300px] sm:min-h-[400px] bg-zinc-50/30 relative">
             <AnimatePresence>
-              {isGenerating && batchProgress && (
+              {isGenerating && (
                 <motion.div 
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
@@ -631,19 +653,19 @@ export function RoomEditor({ catalog, onUploadFiles, user }: RoomEditorProps) {
                     <div className="w-16 h-16 bg-indigo-50 rounded-2xl flex items-center justify-center mx-auto mb-5">
                       <Loader2 size={32} className="text-indigo-600 animate-spin" />
                     </div>
-                    <h3 className="text-xl font-bold text-zinc-900 mb-2">AI 正在批量处理</h3>
+                    <h3 className="text-xl font-bold text-zinc-900 mb-2">AI 正在生成室内效果图</h3>
                     <p className="text-zinc-500 text-sm mb-8">
-                      正在生成第 <span className="font-bold text-indigo-600 text-lg mx-1">{batchProgress.current}</span> 个组合，共 <span className="font-bold text-zinc-900 text-lg mx-1">{batchProgress.total}</span> 个
+                      正在把已选家具融合进当前室内图，请稍候片刻。
                     </p>
                     
                     <div className="w-full h-4 bg-zinc-100 rounded-full overflow-hidden mb-3 shadow-inner">
                       <div 
                         className="h-full bg-indigo-500 transition-all duration-500 ease-out rounded-full"
-                        style={{ width: `${(batchProgress.current / batchProgress.total) * 100}%` }}
+                        style={{ width: '75%' }}
                       ></div>
                     </div>
                     <div className="flex justify-between text-xs text-zinc-500 font-medium">
-                      <span>进度 {Math.round((batchProgress.current / batchProgress.total) * 100)}%</span>
+                      <span>处理中</span>
                       <span>请耐心等待...</span>
                     </div>
                   </div>
@@ -810,9 +832,9 @@ export function RoomEditor({ catalog, onUploadFiles, user }: RoomEditorProps) {
                 <div className="w-20 h-20 bg-zinc-100 rounded-full flex items-center justify-center mx-auto mb-4 relative before:absolute before:inset-0 before:bg-indigo-100/50 before:rounded-full before:animate-ping before:duration-1000">
                   <Layers size={32} className="text-zinc-400 relative z-10" />
                 </div>
-                <h4 className="text-lg font-medium text-zinc-900 mb-2">准备批量生成</h4>
+                <h4 className="text-lg font-medium text-zinc-900 mb-2">准备生成当前房间效果</h4>
                 <p className="text-zinc-500 text-sm">
-                  上传多张室内照片并选择多件家具，AI 将为您生成所有组合的可视化效果。
+                  选择 1 张当前室内图与要融合的家具，AI 会将它们一次性放进同一张空间效果图中。
                 </p>
               </motion.div>
             )}
@@ -843,76 +865,89 @@ export function RoomEditor({ catalog, onUploadFiles, user }: RoomEditorProps) {
           
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
             <AnimatePresence>
-              {history.slice(0, historyDisplayCount).map((item, index) => (
-                <motion.div
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: index * 0.05 }}
-                  key={item.id}
-                  onClick={() => loadHistoryItem(item)}
-                  className="bg-white border border-zinc-200 rounded-2xl overflow-hidden shadow-sm hover:shadow-xl hover:-translate-y-1.5 transition-all duration-300 cursor-pointer group flex flex-col"
-                >
-                  <div className="relative aspect-[4/3] bg-zinc-100 overflow-hidden">
-                    <Image
-                      src={item.generatedImage.imageUrl}
-                      alt="History result"
-                      fill
-                      className="object-cover transition-transform duration-700 ease-out group-hover:scale-110"
-                      sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
-                    />
-                    
-                    <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col items-center justify-center gap-3 backdrop-blur-sm">
-                      <motion.div 
-                        initial={{ scale: 0.8 }}
-                        whileInView={{ scale: 1 }}
-                        className="bg-white/90 text-zinc-900 font-medium text-sm px-4 py-2 rounded-full shadow-lg transform translate-y-4 group-hover:translate-y-0 transition-transform duration-300"
-                      >
-                        点击恢复此状态
-                      </motion.div>
-                    </div>
+              {history.slice(0, historyDisplayCount).map((item, index) => {
+                const historyFurnitures = item.furnitures.length > 0 ? item.furnitures : [item.furniture];
 
-                    <div className="absolute top-3 right-3 bg-white/90 backdrop-blur-md text-zinc-700 text-xs font-medium px-2.5 py-1.5 rounded-lg shadow-sm flex items-center gap-1.5">
-                      <Clock size={12} />
-                      {formatBeijingTime(item.createdAt)}
-                    </div>
-                  </div>
-
-                  <div className="p-4 bg-white flex-1 flex flex-col justify-between border-t border-zinc-100">
-                    <div className="flex items-center gap-3 mb-3">
-                      <div className="text-xs font-medium text-zinc-400 uppercase tracking-wider w-12">家具</div>
-                      <div className="flex items-center gap-2 bg-zinc-50 px-2 py-1.5 rounded-lg flex-1 border border-zinc-100 overflow-hidden group-hover:bg-zinc-100/50 transition-colors">
-                        <div className="relative w-6 h-6 rounded-md overflow-hidden bg-white border border-zinc-200 shrink-0 shadow-sm">
-                          <Image src={item.furniture.imageUrl} alt={item.furniture.name} fill className="object-contain p-0.5" sizes="24px" />
-                        </div>
-                        <span className="text-sm font-medium text-zinc-700 truncate">
-                          {item.furniture.name}
-                        </span>
+                return (
+                  <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: index * 0.05 }}
+                    key={item.id}
+                    onClick={() => loadHistoryItem(item)}
+                    className="bg-white border border-zinc-200 rounded-2xl overflow-hidden shadow-sm hover:shadow-xl hover:-translate-y-1.5 transition-all duration-300 cursor-pointer group flex flex-col"
+                  >
+                    <div className="relative aspect-[4/3] bg-zinc-100 overflow-hidden">
+                      <Image
+                        src={item.generatedImage.imageUrl}
+                        alt="History result"
+                        fill
+                        className="object-cover transition-transform duration-700 ease-out group-hover:scale-110"
+                        sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
+                      />
+                      
+                      <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col items-center justify-center gap-3 backdrop-blur-sm">
+                        <motion.div 
+                          initial={{ scale: 0.8 }}
+                          whileInView={{ scale: 1 }}
+                          className="bg-white/90 text-zinc-900 font-medium text-sm px-4 py-2 rounded-full shadow-lg transform translate-y-4 group-hover:translate-y-0 transition-transform duration-300"
+                        >
+                          点击恢复此状态
+                        </motion.div>
                       </div>
-                    </div>
-                    
-                    <div className="flex items-center gap-3">
-                      <div className="text-xs font-medium text-zinc-400 uppercase tracking-wider w-12">场景</div>
-                      <div className="flex items-center gap-2 bg-zinc-50 px-2 py-1.5 rounded-lg flex-1 border border-zinc-100 overflow-hidden group-hover:bg-zinc-100/50 transition-colors">
-                        <div className="relative w-6 h-6 rounded-md overflow-hidden bg-zinc-200 shrink-0 shadow-sm">
-                          <Image src={item.roomImage.imageUrl} alt={item.roomImage.name} fill className="object-cover" sizes="24px" />
-                        </div>
-                        <span className="text-sm text-zinc-600 truncate">
-                          原始室内图
-                        </span>
+
+                      <div className="absolute top-3 right-3 bg-white/90 backdrop-blur-md text-zinc-700 text-xs font-medium px-2.5 py-1.5 rounded-lg shadow-sm flex items-center gap-1.5">
+                        <Clock size={12} />
+                        {formatBeijingTime(item.createdAt)}
                       </div>
                     </div>
 
-                    {item.customInstruction && (
-                      <div className="flex items-start gap-3 mt-3 pt-3 border-t border-zinc-100">
-                        <div className="text-xs font-medium text-zinc-400 uppercase tracking-wider w-12 mt-0.5">指令</div>
-                        <div className="text-xs text-zinc-600 flex-1 line-clamp-2" title={item.customInstruction}>
-                          {item.customInstruction}
+                    <div className="p-4 bg-white flex-1 flex flex-col justify-between border-t border-zinc-100">
+                      <div className="flex items-center gap-3 mb-3">
+                        <div className="text-xs font-medium text-zinc-400 uppercase tracking-wider w-12">家具</div>
+                        <div className="flex items-center gap-2 bg-zinc-50 px-2 py-1.5 rounded-lg flex-1 border border-zinc-100 overflow-hidden group-hover:bg-zinc-100/50 transition-colors">
+                          <div className="flex -space-x-2 shrink-0">
+                            {historyFurnitures.slice(0, 3).map((furniture) => (
+                              <div
+                                key={`${item.id}-${furniture.id}`}
+                                className="relative w-6 h-6 rounded-md overflow-hidden bg-white border border-zinc-200 shadow-sm"
+                              >
+                                <Image src={furniture.imageUrl} alt={furniture.name} fill className="object-contain p-0.5" sizes="24px" />
+                              </div>
+                            ))}
+                          </div>
+                          <span className="text-sm font-medium text-zinc-700 truncate">
+                            {historyFurnitures.length === 1
+                              ? historyFurnitures[0].name
+                              : `${historyFurnitures[0].name} 等 ${historyFurnitures.length} 件家具`}
+                          </span>
                         </div>
                       </div>
-                    )}
-                  </div>
-                </motion.div>
-              ))}
+                      
+                      <div className="flex items-center gap-3">
+                        <div className="text-xs font-medium text-zinc-400 uppercase tracking-wider w-12">场景</div>
+                        <div className="flex items-center gap-2 bg-zinc-50 px-2 py-1.5 rounded-lg flex-1 border border-zinc-100 overflow-hidden group-hover:bg-zinc-100/50 transition-colors">
+                          <div className="relative w-6 h-6 rounded-md overflow-hidden bg-zinc-200 shrink-0 shadow-sm">
+                            <Image src={item.roomImage.imageUrl} alt={item.roomImage.name} fill className="object-cover" sizes="24px" />
+                          </div>
+                          <span className="text-sm text-zinc-600 truncate">
+                            原始室内图
+                          </span>
+                        </div>
+                      </div>
+
+                      {item.customInstruction && (
+                        <div className="flex items-start gap-3 mt-3 pt-3 border-t border-zinc-100">
+                          <div className="text-xs font-medium text-zinc-400 uppercase tracking-wider w-12 mt-0.5">指令</div>
+                          <div className="text-xs text-zinc-600 flex-1 line-clamp-2" title={item.customInstruction}>
+                            {item.customInstruction}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </motion.div>
+                );
+              })}
             </AnimatePresence>
           </div>
 
@@ -948,6 +983,7 @@ export function RoomEditor({ catalog, onUploadFiles, user }: RoomEditorProps) {
         onPreview={setPreviewFurniture}
         onUploadClick={() => furnitureInputRef.current?.click()}
         isUploading={isUploadingFurniture}
+        maxSelections={MAX_SELECTED_FURNITURES}
       />
 
       <FeedbackModal

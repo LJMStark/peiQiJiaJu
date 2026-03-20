@@ -48,6 +48,7 @@ export interface HistoryItem {
   id: string;
   roomImage: RoomImage;
   furniture: FurnitureItem;
+  furnitures: FurnitureItem[];
   generatedImage: GeneratedImageAsset;
   customInstruction?: string;
   createdAt: string;

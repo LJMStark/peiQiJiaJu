@@ -49,23 +49,60 @@ export async function POST(request: Request) {
   try {
     const body = await request.json();
     const roomImageId = typeof body?.roomImageId === 'string' ? body.roomImageId.trim() : '';
-    const furnitureItemId =
-      typeof body?.furnitureItemId === 'string' ? body.furnitureItemId.trim() : '';
+    const furnitureItemIds = Array.isArray(body?.furnitureItemIds)
+      ? body.furnitureItemIds
+          .map((itemId: unknown) => (typeof itemId === 'string' ? itemId.trim() : ''))
+          .filter(Boolean)
+      : typeof body?.furnitureItemId === 'string' && body.furnitureItemId.trim()
+        ? [body.furnitureItemId.trim()]
+        : [];
 
-    if (!roomImageId || !furnitureItemId) {
-      return badRequest('Room image and furniture item are required.');
+    if (!roomImageId || furnitureItemIds.length === 0) {
+      return badRequest('Room image and at least one furniture item are required.');
     }
 
     const item = await generateRoomVisualization(authState.session.user.id, {
       roomImageId,
-      furnitureItemId,
+      furnitureItemIds,
       customInstruction: typeof body?.customInstruction === 'string' ? body.customInstruction : null,
       roomFallback: body?.roomFallback?.storagePath && body?.roomFallback?.mimeType
         ? { storagePath: body.roomFallback.storagePath, mimeType: body.roomFallback.mimeType, name: body.roomFallback.name, aspectRatio: body.roomFallback.aspectRatio }
         : undefined,
-      furnitureFallback: body?.furnitureFallback?.storagePath && body?.furnitureFallback?.mimeType
-        ? { storagePath: body.furnitureFallback.storagePath, mimeType: body.furnitureFallback.mimeType, name: body.furnitureFallback.name, category: body.furnitureFallback.category }
-        : undefined,
+      furnitureFallbacks: Array.isArray(body?.furnitureFallbacks)
+        ? body.furnitureFallbacks
+            .filter(
+              (item: unknown): item is {
+                storagePath: string;
+                mimeType: string;
+                name?: string;
+                category?: string;
+              } =>
+                Boolean(
+                  item &&
+                    typeof item === 'object' &&
+                    typeof (item as { storagePath?: string }).storagePath === 'string' &&
+                    typeof (item as { mimeType?: string }).mimeType === 'string'
+                )
+            )
+            .map((item: {
+              storagePath: string;
+              mimeType: string;
+              name?: string;
+              category?: string;
+            }) => ({
+              storagePath: item.storagePath,
+              mimeType: item.mimeType,
+              name: item.name,
+              category: item.category,
+            }))
+        : body?.furnitureFallback?.storagePath && body?.furnitureFallback?.mimeType
+          ? [{
+              storagePath: body.furnitureFallback.storagePath,
+              mimeType: body.furnitureFallback.mimeType,
+              name: body.furnitureFallback.name,
+              category: body.furnitureFallback.category,
+            }]
+          : undefined,
     });
 
     return NextResponse.json({ item }, { status: 201 });
