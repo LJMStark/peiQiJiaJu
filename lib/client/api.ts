@@ -10,16 +10,28 @@ export async function readJson<T>(response: Response): Promise<T> {
   return payload;
 }
 
-export async function postJson<TResponse>(url: string, body?: unknown): Promise<TResponse> {
-  const response = await fetch(url, {
+function buildJsonHeaders(headers?: HeadersInit): Headers {
+  const jsonHeaders = new Headers(headers);
+  jsonHeaders.set('Content-Type', 'application/json');
+  return jsonHeaders;
+}
+
+export async function requestJson<TResponse>(url: string, init?: RequestInit): Promise<TResponse> {
+  const response = await fetch(url, init);
+  return readJson<TResponse>(response);
+}
+
+export async function postJson<TResponse>(
+  url: string,
+  body?: unknown,
+  init?: Omit<RequestInit, 'body' | 'method'>
+): Promise<TResponse> {
+  return requestJson<TResponse>(url, {
+    ...init,
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
+    headers: buildJsonHeaders(init?.headers),
     body: body === undefined ? undefined : JSON.stringify(body),
   });
-
-  return readJson<TResponse>(response);
 }
 
 export type CatalogResponse = {

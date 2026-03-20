@@ -1,6 +1,14 @@
 import { INVITE_LATE_CLAIM_WINDOW_HOURS, buildInviteUrl } from '../invitations.ts';
 
 const MAX_INVITE_CODE_GENERATION_ATTEMPTS = 5;
+const INVITE_LATE_CLAIM_WINDOW_MS = INVITE_LATE_CLAIM_WINDOW_HOURS * 60 * 60 * 1000;
+const NON_FATAL_FINALIZE_ERROR_MESSAGES = new Set([
+  'INVITE_LINK_NOT_FOUND',
+  'INVITE_LINK_NOT_ACTIVE',
+  'INVITE_LATE_CLAIM_WINDOW_EXPIRED',
+  'SELF_INVITE_NOT_ALLOWED',
+  'INVITEE_ALREADY_ATTRIBUTED',
+]);
 
 export type InviteLinkStatus = 'active' | 'rotated' | 'disabled';
 export type InviteReferralStatus = 'registered' | 'verified';
@@ -126,8 +134,24 @@ type RotateInviteLinkForUserInput = {
   codeGenerator: () => string;
 };
 
-function isLateClaimEligible(createdAt: Date, now: Date) {
-  return now.getTime() - createdAt.getTime() <= INVITE_LATE_CLAIM_WINDOW_HOURS * 60 * 60 * 1000;
+function normalizeInviteeEmail(email: string): string {
+  return email.trim().toLowerCase();
+}
+
+function normalizeInviteeCompanyName(companyName: string | null | undefined): string | null {
+  const trimmedCompanyName = companyName?.trim();
+  return trimmedCompanyName ? trimmedCompanyName : null;
+}
+
+function buildInviteeSnapshot(email: string, companyName: string | null | undefined) {
+  return {
+    inviteeEmailSnapshot: normalizeInviteeEmail(email),
+    inviteeCompanySnapshot: normalizeInviteeCompanyName(companyName),
+  };
+}
+
+function isLateClaimEligible(createdAt: Date, now: Date): boolean {
+  return now.getTime() - createdAt.getTime() <= INVITE_LATE_CLAIM_WINDOW_MS;
 }
 
 function buildInviteLinkResult(baseUrl: string, link: InviteLinkRecord): InviteLinkResult {
@@ -139,6 +163,33 @@ function buildInviteLinkResult(baseUrl: string, link: InviteLinkRecord): InviteL
 
 function isInviteCodeConflict(error: unknown) {
   return typeof error === 'object' && error !== null && 'code' in error && error.code === '23505';
+}
+
+function assertNotSelfInvite(input: {
+  inviterUserId: string;
+  inviterEmail: string;
+  inviteeUserId: string;
+  inviteeEmail: string;
+}): void {
+  if (input.inviterUserId === input.inviteeUserId) {
+    throw new Error('SELF_INVITE_NOT_ALLOWED');
+  }
+
+  if (normalizeInviteeEmail(input.inviterEmail) === normalizeInviteeEmail(input.inviteeEmail)) {
+    throw new Error('SELF_INVITE_NOT_ALLOWED');
+  }
+}
+
+async function getInviterUserOrThrow(
+  repo: InvitationRepository,
+  inviterUserId: string
+): Promise<InvitationServiceUser> {
+  const inviterUser = await repo.getUserById(inviterUserId);
+  if (!inviterUser) {
+    throw new Error('INVITER_NOT_FOUND');
+  }
+
+  return inviterUser;
 }
 
 async function createInviteLinkWithRetries(params: {
@@ -188,19 +239,14 @@ async function createReferralFromUser(params: {
   now: Date;
 }) {
   const { repo, inviteLink, inviteeUser, attributionMethod, now } = params;
+  const inviterUser = await getInviterUserOrThrow(repo, inviteLink.inviterUserId);
 
-  if (inviteLink.inviterUserId === inviteeUser.id) {
-    throw new Error('SELF_INVITE_NOT_ALLOWED');
-  }
-
-  const inviterUser = await repo.getUserById(inviteLink.inviterUserId);
-  if (!inviterUser) {
-    throw new Error('INVITER_NOT_FOUND');
-  }
-
-  if (inviterUser.email.toLowerCase() === inviteeUser.email.toLowerCase()) {
-    throw new Error('SELF_INVITE_NOT_ALLOWED');
-  }
+  assertNotSelfInvite({
+    inviterUserId: inviteLink.inviterUserId,
+    inviterEmail: inviterUser.email,
+    inviteeUserId: inviteeUser.id,
+    inviteeEmail: inviteeUser.email,
+  });
 
   const existingReferral = await repo.getReferralByInviteeUserId(inviteeUser.id);
   if (existingReferral) {
@@ -219,8 +265,7 @@ async function createReferralFromUser(params: {
     attributedAt: now,
     verifiedAt: inviteeUser.emailVerified ? now : null,
     attributionMethod,
-    inviteeEmailSnapshot: inviteeUser.email.trim().toLowerCase(),
-    inviteeCompanySnapshot: inviteeUser.name?.trim() || null,
+    ...buildInviteeSnapshot(inviteeUser.email, inviteeUser.name),
   });
 }
 
@@ -282,14 +327,14 @@ export async function recordInviteSignup(input: RecordInviteSignupInput): Promis
     return existingReferral;
   }
 
-  const inviterUser = await repo.getUserById(inviteLink.inviterUserId);
-  if (!inviterUser) {
-    throw new Error('INVITER_NOT_FOUND');
-  }
+  const inviterUser = await getInviterUserOrThrow(repo, inviteLink.inviterUserId);
 
-  if (inviteLink.inviterUserId === inviteeUserId || inviterUser.email.toLowerCase() === inviteeEmail.trim().toLowerCase()) {
-    throw new Error('SELF_INVITE_NOT_ALLOWED');
-  }
+  assertNotSelfInvite({
+    inviterUserId: inviteLink.inviterUserId,
+    inviterEmail: inviterUser.email,
+    inviteeUserId,
+    inviteeEmail,
+  });
 
   return repo.createReferral({
     inviteLinkId: inviteLink.id,
@@ -299,8 +344,7 @@ export async function recordInviteSignup(input: RecordInviteSignupInput): Promis
     attributedAt: now,
     verifiedAt: null,
     attributionMethod: 'signup',
-    inviteeEmailSnapshot: inviteeEmail.trim().toLowerCase(),
-    inviteeCompanySnapshot: inviteeCompanyName?.trim() || null,
+    ...buildInviteeSnapshot(inviteeEmail, inviteeCompanyName),
   });
 }
 
@@ -323,8 +367,7 @@ export async function finalizeInviteAfterVerification(
     return repo.markReferralVerified({
       inviteeUserId,
       verifiedAt: now,
-      inviteeEmailSnapshot: inviteeUser.email.trim().toLowerCase(),
-      inviteeCompanySnapshot: inviteeUser.name?.trim() || null,
+      ...buildInviteeSnapshot(inviteeUser.email, inviteeUser.name),
     });
   }
 
@@ -345,13 +388,7 @@ export async function finalizeInviteAfterVerification(
   } catch (error) {
     const message = error instanceof Error ? error.message : 'INVITE_FINALIZE_FAILED';
 
-    if (
-      message === 'INVITE_LINK_NOT_FOUND' ||
-      message === 'INVITE_LINK_NOT_ACTIVE' ||
-      message === 'INVITE_LATE_CLAIM_WINDOW_EXPIRED' ||
-      message === 'SELF_INVITE_NOT_ALLOWED' ||
-      message === 'INVITEE_ALREADY_ATTRIBUTED'
-    ) {
+    if (NON_FATAL_FINALIZE_ERROR_MESSAGES.has(message)) {
       return null;
     }
 

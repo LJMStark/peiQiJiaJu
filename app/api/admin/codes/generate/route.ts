@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { generateCodes } from '@/app/actions/admin';
-import { badRequest, readJsonBody } from '@/lib/server/api-utils';
+import { actionErrorResponse, badRequest, readJsonBody } from '@/lib/server/api-utils';
 
 export async function POST(request: Request) {
   const body = await readJsonBody<{ count?: unknown; days?: unknown }>(request);
@@ -15,8 +15,6 @@ export async function POST(request: Request) {
     const codes = await generateCodes(count, days);
     return NextResponse.json({ codes });
   } catch (error) {
-    const message = error instanceof Error ? error.message : '生成兑换码失败。';
-    const status = message === 'Unauthorized' ? 401 : 400;
-    return NextResponse.json({ error: message }, { status });
+    return actionErrorResponse(error, '生成兑换码失败。');
   }
 }

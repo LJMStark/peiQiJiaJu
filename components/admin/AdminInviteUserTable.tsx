@@ -16,7 +16,7 @@ type AdminInviteUser = {
 
 type NoticeTone = 'success' | 'error';
 
-function formatUserCreatedAt(value: string | Date) {
+function formatUserCreatedAt(value: string | Date): string {
   return new Intl.DateTimeFormat('zh-CN', {
     year: 'numeric',
     month: '2-digit',
@@ -27,7 +27,7 @@ function formatUserCreatedAt(value: string | Date) {
   }).format(new Date(value));
 }
 
-function getResetErrorMessage(error: unknown) {
+function getResetErrorMessage(error: unknown): string {
   const message = error instanceof Error ? error.message : '邀请链接重置失败，请稍后重试。';
 
   if (message === 'INVITER_EMAIL_NOT_VERIFIED') {
@@ -39,6 +39,18 @@ function getResetErrorMessage(error: unknown) {
   }
 
   return message;
+}
+
+function getNoticeClassName(tone: NoticeTone): string {
+  if (tone === 'success') {
+    return 'border border-emerald-200 bg-emerald-50 text-emerald-700';
+  }
+
+  return 'border border-rose-200 bg-rose-50 text-rose-700';
+}
+
+function getUserDisplayName(user: AdminInviteUser): string {
+  return user.name?.trim() || user.email;
 }
 
 export function AdminInviteUserTable({ users }: { users: AdminInviteUser[] }): JSX.Element {
@@ -68,7 +80,7 @@ export function AdminInviteUserTable({ users }: { users: AdminInviteUser[] }): J
         const inviteLink = await postJson<{ code: string }>('/api/admin/invitations/reset', {
           targetUserId: user.id,
         });
-        const displayName = user.name?.trim() || user.email;
+        const displayName = getUserDisplayName(user);
 
         setNotice(`${displayName} 的邀请链接已重置，新邀请码为 ${inviteLink.code}。`);
         setNoticeTone('success');
@@ -102,13 +114,7 @@ export function AdminInviteUserTable({ users }: { users: AdminInviteUser[] }): J
         </div>
 
         {notice ? (
-          <div
-            className={`rounded-xl px-4 py-3 text-sm ${
-              noticeTone === 'success'
-                ? 'border border-emerald-200 bg-emerald-50 text-emerald-700'
-                : 'border border-rose-200 bg-rose-50 text-rose-700'
-            }`}
-          >
+          <div className={`rounded-xl px-4 py-3 text-sm ${getNoticeClassName(noticeTone)}`}>
             {notice}
           </div>
         ) : null}

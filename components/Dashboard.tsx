@@ -1,5 +1,6 @@
 'use client';
 
+import type { LucideIcon } from 'lucide-react';
 import { useEffect, useState, useTransition } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { LayoutGrid, Loader2, LogOut, Sofa, Sparkles, Crown, ShieldAlert, PencilLine, Check, X, UserPlus } from 'lucide-react';
@@ -9,7 +10,7 @@ import { VipCenter } from './VipCenter';
 import { InviteCenter } from './InviteCenter';
 import { ContactQrCode } from './ContactQrCode';
 import { WelcomeGuideModal } from './WelcomeGuideModal';
-import { readJson, type CatalogResponse, type CatalogMutationResponse } from '@/lib/client/api';
+import { readJson, requestJson, type CatalogResponse, type CatalogMutationResponse } from '@/lib/client/api';
 import {
   DEFAULT_COMPANY_NAME,
   getCompanyNameValidationError,
@@ -31,6 +32,55 @@ type DashboardProps = {
 };
 
 type DashboardTab = 'catalog' | 'editor' | 'vip' | typeof INVITE_DASHBOARD_TAB;
+type DashboardTabVariant = 'desktop' | 'mobile';
+type DashboardTabConfig = {
+  value: DashboardTab;
+  label: string;
+  icon: LucideIcon;
+  desktopActiveClassName: string;
+  desktopInactiveClassName: string;
+  mobileActiveClassName: string;
+  mobileInactiveClassName: string;
+};
+
+const DASHBOARD_TABS: DashboardTabConfig[] = [
+  {
+    value: 'catalog',
+    label: '家具图册',
+    icon: LayoutGrid,
+    desktopActiveClassName: 'bg-white text-zinc-900 shadow-sm',
+    desktopInactiveClassName: 'text-zinc-500 hover:text-zinc-900',
+    mobileActiveClassName: 'bg-zinc-100 text-zinc-900',
+    mobileInactiveClassName: 'text-zinc-500',
+  },
+  {
+    value: 'editor',
+    label: '室内编辑器',
+    icon: Sparkles,
+    desktopActiveClassName: 'bg-white text-zinc-900 shadow-sm',
+    desktopInactiveClassName: 'text-zinc-500 hover:text-zinc-900',
+    mobileActiveClassName: 'bg-zinc-100 text-zinc-900',
+    mobileInactiveClassName: 'text-zinc-500',
+  },
+  {
+    value: INVITE_DASHBOARD_TAB,
+    label: '邀请中心',
+    icon: UserPlus,
+    desktopActiveClassName: 'bg-white text-zinc-900 shadow-sm',
+    desktopInactiveClassName: 'text-zinc-500 hover:text-zinc-900',
+    mobileActiveClassName: 'bg-zinc-100 text-zinc-900',
+    mobileInactiveClassName: 'text-zinc-500',
+  },
+  {
+    value: 'vip',
+    label: '会员中心',
+    icon: Crown,
+    desktopActiveClassName: 'bg-white text-zinc-900 shadow-sm',
+    desktopInactiveClassName: 'text-amber-600 hover:text-amber-700',
+    mobileActiveClassName: 'bg-amber-100 text-amber-900',
+    mobileInactiveClassName: 'text-amber-600',
+  },
+];
 
 function normalizeDashboardTab(tab: string | null): DashboardTab {
   if (tab === 'editor' || tab === 'vip' || tab === INVITE_DASHBOARD_TAB) {
@@ -38,6 +88,31 @@ function normalizeDashboardTab(tab: string | null): DashboardTab {
   }
 
   return 'catalog';
+}
+
+function getGuideStorageKey(userId: string): string {
+  return `has_seen_onboarding_${userId}`;
+}
+
+function getDashboardTabClassName(
+  tab: DashboardTabConfig,
+  activeTab: DashboardTab,
+  variant: DashboardTabVariant
+): string {
+  const baseClassName =
+    variant === 'desktop'
+      ? 'px-4 py-1.5 rounded-lg text-sm font-medium transition-all flex items-center gap-2'
+      : 'px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2 whitespace-nowrap';
+  const isActive = activeTab === tab.value;
+  let stateClassName = tab.mobileInactiveClassName;
+
+  if (variant === 'desktop') {
+    stateClassName = isActive ? tab.desktopActiveClassName : tab.desktopInactiveClassName;
+  } else {
+    stateClassName = isActive ? tab.mobileActiveClassName : tab.mobileInactiveClassName;
+  }
+
+  return `${baseClassName} ${stateClassName}`;
 }
 
 export function Dashboard({ companyName, user, onLogout }: DashboardProps) {
@@ -62,8 +137,7 @@ export function Dashboard({ companyName, user, onLogout }: DashboardProps) {
   }, [requestedTab]);
 
   useEffect(() => {
-    // 检查是否需要显示新用户引导
-    const guideKey = `has_seen_onboarding_${user.id}`;
+    const guideKey = getGuideStorageKey(user.id);
     if (!localStorage.getItem(guideKey)) {
       setShowWelcomeGuide(true);
     }
@@ -75,7 +149,7 @@ export function Dashboard({ companyName, user, onLogout }: DashboardProps) {
   }, [companyName]);
 
   const handleCloseWelcomeGuide = () => {
-    const guideKey = `has_seen_onboarding_${user.id}`;
+    const guideKey = getGuideStorageKey(user.id);
     localStorage.setItem(guideKey, 'true');
     setShowWelcomeGuide(false);
   };
@@ -83,8 +157,7 @@ export function Dashboard({ companyName, user, onLogout }: DashboardProps) {
   useEffect(() => {
     const loadCatalog = async () => {
       try {
-        const response = await fetch('/api/catalog', { cache: 'no-store' });
-        const payload = await readJson<CatalogResponse>(response);
+        const payload = await requestJson<CatalogResponse>('/api/catalog', { cache: 'no-store' });
         setCatalog(payload.items);
         setCatalogError(null);
       } catch (error) {
@@ -131,7 +204,7 @@ export function Dashboard({ companyName, user, onLogout }: DashboardProps) {
   };
 
   const handleUpdateFurniture = async (id: string, updates: Partial<FurnitureItem>) => {
-    const response = await fetch(`/api/catalog/${id}`, {
+    const payload = await requestJson<CatalogMutationResponse>(`/api/catalog/${id}`, {
       method: 'PATCH',
       headers: {
         'Content-Type': 'application/json',
@@ -141,17 +214,14 @@ export function Dashboard({ companyName, user, onLogout }: DashboardProps) {
         category: updates.category,
       }),
     });
-    const payload = await readJson<CatalogMutationResponse>(response);
 
     setCatalog((current) => current.map((item) => (item.id === id ? payload.item : item)));
   };
 
   const handleDeleteFurniture = async (id: string) => {
-    const response = await fetch(`/api/catalog/${id}`, {
+    await requestJson<{ success: true }>(`/api/catalog/${id}`, {
       method: 'DELETE',
     });
-
-    await readJson<{ success: true }>(response);
     setCatalog((current) => current.filter((item) => item.id !== id));
   };
 
@@ -285,44 +355,20 @@ export function Dashboard({ companyName, user, onLogout }: DashboardProps) {
           </div>
 
           <nav className="hidden md:flex items-center gap-1 bg-zinc-100 p-1 rounded-xl">
-            <button
-              onClick={() => handleTabChange('catalog')}
-              className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all flex items-center gap-2 ${
-                activeTab === 'catalog' ? 'bg-white text-zinc-900 shadow-sm' : 'text-zinc-500 hover:text-zinc-900'
-              }`}
-            >
-              <LayoutGrid size={16} />
-              家具图册
-            </button>
-            <button
-              onClick={() => handleTabChange('editor')}
-              className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all flex items-center gap-2 ${
-                activeTab === 'editor' ? 'bg-white text-zinc-900 shadow-sm' : 'text-zinc-500 hover:text-zinc-900'
-              }`}
-            >
-              <Sparkles size={16} />
-              室内编辑器
-            </button>
-            <button
-              onClick={() => handleTabChange(INVITE_DASHBOARD_TAB)}
-              className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all flex items-center gap-2 ${
-                activeTab === INVITE_DASHBOARD_TAB
-                  ? 'bg-white text-zinc-900 shadow-sm'
-                  : 'text-zinc-500 hover:text-zinc-900'
-              }`}
-            >
-              <UserPlus size={16} />
-              邀请中心
-            </button>
-            <button
-              onClick={() => handleTabChange('vip')}
-              className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all flex items-center gap-2 ${
-                activeTab === 'vip' ? 'bg-white text-zinc-900 shadow-sm' : 'text-amber-600 hover:text-amber-700'
-              }`}
-            >
-              <Crown size={16} />
-              会员中心
-            </button>
+            {DASHBOARD_TABS.map((tab) => {
+              const Icon = tab.icon;
+
+              return (
+                <button
+                  key={tab.value}
+                  onClick={() => handleTabChange(tab.value)}
+                  className={getDashboardTabClassName(tab, activeTab, 'desktop')}
+                >
+                  <Icon size={16} />
+                  {tab.label}
+                </button>
+              );
+            })}
           </nav>
 
           <div className="flex items-center gap-2">
@@ -347,42 +393,20 @@ export function Dashboard({ companyName, user, onLogout }: DashboardProps) {
       </header>
 
       <div className="md:hidden bg-white border-b border-zinc-200 px-4 py-2 flex gap-2 overflow-x-auto">
-        <button
-          onClick={() => handleTabChange('catalog')}
-          className={`px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2 whitespace-nowrap ${
-            activeTab === 'catalog' ? 'bg-zinc-100 text-zinc-900' : 'text-zinc-500'
-          }`}
-        >
-          <LayoutGrid size={16} />
-          家具图册
-        </button>
-        <button
-          onClick={() => handleTabChange('editor')}
-          className={`px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2 whitespace-nowrap ${
-            activeTab === 'editor' ? 'bg-zinc-100 text-zinc-900' : 'text-zinc-500'
-          }`}
-        >
-          <Sparkles size={16} />
-          室内编辑器
-        </button>
-        <button
-          onClick={() => handleTabChange('vip')}
-          className={`px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2 whitespace-nowrap ${
-            activeTab === 'vip' ? 'bg-amber-100 text-amber-900' : 'text-amber-600'
-          }`}
-        >
-          <Crown size={16} />
-          会员中心
-        </button>
-        <button
-          onClick={() => handleTabChange(INVITE_DASHBOARD_TAB)}
-          className={`px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2 whitespace-nowrap ${
-            activeTab === INVITE_DASHBOARD_TAB ? 'bg-zinc-100 text-zinc-900' : 'text-zinc-500'
-          }`}
-        >
-          <UserPlus size={16} />
-          邀请中心
-        </button>
+        {DASHBOARD_TABS.map((tab) => {
+          const Icon = tab.icon;
+
+          return (
+            <button
+              key={tab.value}
+              onClick={() => handleTabChange(tab.value)}
+              className={getDashboardTabClassName(tab, activeTab, 'mobile')}
+            >
+              <Icon size={16} />
+              {tab.label}
+            </button>
+          );
+        })}
       </div>
 
       <main className="flex-1 max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-4 sm:py-8">

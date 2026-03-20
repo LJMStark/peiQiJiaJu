@@ -2,15 +2,35 @@ import { NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { getCompanyNameValidationError, normalizeCompanyNameInput } from '@/lib/company-name';
 import { INVITE_DASHBOARD_PATH, readInviteCodeFromCookieHeader } from '@/lib/invitations';
+import { readJsonBody } from '@/lib/server/api-utils';
 import { createInvitationRepository, withInvitationTransaction } from '@/lib/server/invitation-store';
 import { recordInviteSignup } from '@/lib/server/invitation-service';
 import { db } from '@/lib/db';
+
+type SignUpRequestBody = {
+  name?: unknown;
+  email?: unknown;
+  password?: unknown;
+  confirmPassword?: unknown;
+};
 
 function jsonError(message: string, code: string, status = 400) {
   return NextResponse.json({ code, message }, { status });
 }
 
-function cloneAuthResponse(bodyText: string, status: number, headers: Headers) {
+function readStringField(value: unknown): string {
+  return typeof value === 'string' ? value : '';
+}
+
+function parseJsonText<T>(bodyText: string): T | null {
+  try {
+    return bodyText ? (JSON.parse(bodyText) as T) : null;
+  } catch {
+    return null;
+  }
+}
+
+function cloneTextResponse(bodyText: string, status: number, headers: Headers) {
   return new NextResponse(bodyText, {
     status,
     headers,
@@ -18,22 +38,15 @@ function cloneAuthResponse(bodyText: string, status: number, headers: Headers) {
 }
 
 export async function POST(request: Request) {
-  let body: unknown;
-
-  try {
-    body = await request.json();
-  } catch {
+  const body = await readJsonBody<SignUpRequestBody>(request);
+  if (!body) {
     return jsonError('请求体格式不正确。', 'INVALID_JSON');
   }
 
-  const nameInput = typeof (body as { name?: unknown })?.name === 'string' ? (body as { name: string }).name : '';
-  const emailInput = typeof (body as { email?: unknown })?.email === 'string' ? (body as { email: string }).email : '';
-  const password = typeof (body as { password?: unknown })?.password === 'string'
-    ? (body as { password: string }).password
-    : '';
-  const confirmPassword = typeof (body as { confirmPassword?: unknown })?.confirmPassword === 'string'
-    ? (body as { confirmPassword: string }).confirmPassword
-    : '';
+  const nameInput = readStringField(body.name);
+  const emailInput = readStringField(body.email);
+  const password = readStringField(body.password);
+  const confirmPassword = readStringField(body.confirmPassword);
 
   const companyNameError = getCompanyNameValidationError(nameInput);
   if (companyNameError) {
@@ -71,13 +84,7 @@ export async function POST(request: Request) {
 
   const responseHeaders = new Headers(authResponse.headers);
   const bodyText = await authResponse.text();
-  let payload: { user?: { id?: string } } | null = null;
-
-  try {
-    payload = bodyText ? JSON.parse(bodyText) : null;
-  } catch {
-    payload = null;
-  }
+  const payload = parseJsonText<{ user?: { id?: string } }>(bodyText);
 
   if (authResponse.ok && inviteCode) {
     const actualUser = await invitationRepo.getUserByEmail(normalizedEmail);
@@ -107,5 +114,5 @@ export async function POST(request: Request) {
     responseHeaders.set('content-type', 'application/json');
   }
 
-  return cloneAuthResponse(bodyText, authResponse.status, responseHeaders);
+  return cloneTextResponse(bodyText, authResponse.status, responseHeaders);
 }

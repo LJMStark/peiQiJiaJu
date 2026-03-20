@@ -3,7 +3,7 @@
 import type { JSX } from 'react';
 import { useEffect, useState, useTransition } from 'react';
 import { CheckCircle2, Clock3, Copy, Link2, Loader2, RefreshCcw, Users } from 'lucide-react';
-import { readJson } from '@/lib/client/api';
+import { postJson, requestJson } from '@/lib/client/api';
 
 type InviteCenterResponse = {
   inviteUrl: string;
@@ -29,7 +29,7 @@ type InviteLinkResetResponse = {
 
 type NoticeTone = 'success' | 'error';
 
-function formatInviteTime(value: string | null) {
+function formatInviteTime(value: string | null): string {
   if (!value) {
     return '-';
   }
@@ -57,9 +57,20 @@ function formatReferralStatus(status: 'registered' | 'verified') {
   };
 }
 
-async function requestInviteCenterData() {
-  const response = await fetch('/api/invitations/me', { cache: 'no-store' });
-  return readJson<InviteCenterResponse>(response);
+function getNoticeClassName(tone: NoticeTone): string {
+  if (tone === 'success') {
+    return 'border border-emerald-200 bg-emerald-50 text-emerald-700';
+  }
+
+  return 'border border-rose-200 bg-rose-50 text-rose-700';
+}
+
+function getInviteCenterErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : '邀请中心加载失败，请稍后重试。';
+}
+
+async function requestInviteCenterData(): Promise<InviteCenterResponse> {
+  return requestJson<InviteCenterResponse>('/api/invitations/me', { cache: 'no-store' });
 }
 
 export function InviteCenter(): JSX.Element {
@@ -84,7 +95,7 @@ export function InviteCenter(): JSX.Element {
         }
       } catch (loadError) {
         if (!isCancelled) {
-          setError(loadError instanceof Error ? loadError.message : '邀请中心加载失败，请稍后重试。');
+          setError(getInviteCenterErrorMessage(loadError));
         }
       } finally {
         if (!isCancelled) {
@@ -108,7 +119,7 @@ export function InviteCenter(): JSX.Element {
       const payload = await requestInviteCenterData();
       setData(payload);
     } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : '邀请中心加载失败，请稍后重试。');
+      setError(getInviteCenterErrorMessage(loadError));
     } finally {
       setIsLoading(false);
     }
@@ -134,10 +145,7 @@ export function InviteCenter(): JSX.Element {
 
     startResetTransition(async () => {
       try {
-        const response = await fetch('/api/invitations/me/reset', {
-          method: 'POST',
-        });
-        const payload = await readJson<InviteLinkResetResponse>(response);
+        const payload = await postJson<InviteLinkResetResponse>('/api/invitations/me/reset');
 
         setData((current) =>
           current
@@ -183,6 +191,27 @@ export function InviteCenter(): JSX.Element {
       </div>
     );
   }
+
+  const statsCards = [
+    {
+      title: '已注册',
+      value: data.stats.registered,
+      valueClassName: 'text-zinc-900',
+      description: '已被邀请并完成注册的账号数',
+    },
+    {
+      title: '待验证',
+      value: data.stats.pending,
+      valueClassName: 'text-amber-600',
+      description: '还没有完成邮箱验证的邀请记录',
+    },
+    {
+      title: '已验证',
+      value: data.stats.verified,
+      valueClassName: 'text-emerald-600',
+      description: '已经完成最终转化的有效邀请',
+    },
+  ];
 
   return (
     <div className="max-w-5xl mx-auto space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -233,34 +262,20 @@ export function InviteCenter(): JSX.Element {
             </div>
 
             {notice ? (
-              <div
-                className={`rounded-xl px-4 py-3 text-sm ${
-                  noticeTone === 'success'
-                    ? 'border border-emerald-200 bg-emerald-50 text-emerald-700'
-                    : 'border border-rose-200 bg-rose-50 text-rose-700'
-                }`}
-              >
+              <div className={`rounded-xl px-4 py-3 text-sm ${getNoticeClassName(noticeTone)}`}>
                 {notice}
               </div>
             ) : null}
           </div>
 
           <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-            <div className="rounded-2xl border border-zinc-200 bg-white p-5">
-              <p className="text-sm text-zinc-500">已注册</p>
-              <p className="mt-3 text-3xl font-bold text-zinc-900">{data.stats.registered}</p>
-              <p className="mt-2 text-sm text-zinc-500">已被邀请并完成注册的账号数</p>
-            </div>
-            <div className="rounded-2xl border border-zinc-200 bg-white p-5">
-              <p className="text-sm text-zinc-500">待验证</p>
-              <p className="mt-3 text-3xl font-bold text-amber-600">{data.stats.pending}</p>
-              <p className="mt-2 text-sm text-zinc-500">还没有完成邮箱验证的邀请记录</p>
-            </div>
-            <div className="rounded-2xl border border-zinc-200 bg-white p-5">
-              <p className="text-sm text-zinc-500">已验证</p>
-              <p className="mt-3 text-3xl font-bold text-emerald-600">{data.stats.verified}</p>
-              <p className="mt-2 text-sm text-zinc-500">已经完成最终转化的有效邀请</p>
-            </div>
+            {statsCards.map((card) => (
+              <div key={card.title} className="rounded-2xl border border-zinc-200 bg-white p-5">
+                <p className="text-sm text-zinc-500">{card.title}</p>
+                <p className={`mt-3 text-3xl font-bold ${card.valueClassName}`}>{card.value}</p>
+                <p className="mt-2 text-sm text-zinc-500">{card.description}</p>
+              </div>
+            ))}
           </div>
         </div>
       </section>

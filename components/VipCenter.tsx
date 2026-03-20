@@ -12,9 +12,30 @@ type VipCenterProps = {
   user: {
     id: string;
     role?: string;
-    vipExpiresAt?: Date | null;
+    vipExpiresAt?: Date | string | null;
   };
 };
+
+function isVipActive(vipExpiresAt: Date | string | null | undefined): boolean {
+  if (!vipExpiresAt) {
+    return false;
+  }
+
+  return new Date(vipExpiresAt) > new Date();
+}
+
+function getRemainingVipDays(vipExpiresAt: Date | string | null | undefined): number {
+  if (!isVipActive(vipExpiresAt) || !vipExpiresAt) {
+    return 0;
+  }
+
+  const msDiff = new Date(vipExpiresAt).getTime() - Date.now();
+  return Math.ceil(msDiff / (1000 * 60 * 60 * 24));
+}
+
+function getRedeemErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : '兑换失败，请检查卡密是否正确';
+}
 
 export function VipCenter({ user }: VipCenterProps): JSX.Element {
   const [code, setCode] = useState('');
@@ -35,26 +56,17 @@ export function VipCenter({ user }: VipCenterProps): JSX.Element {
           setStatus('success');
           setMessage(result.message);
           setCode('');
-          // Refresh the router to get the latest session data from the server
-          router.refresh(); 
+          router.refresh();
         }
-      } catch (err: any) {
+      } catch (error) {
         setStatus('error');
-        setMessage(err.message || '兑换失败，请检查卡密是否正确');
+        setMessage(getRedeemErrorMessage(error));
       }
     });
   };
 
-  const isVip = Boolean(user.vipExpiresAt && new Date(user.vipExpiresAt) > new Date());
-  
-  function getRemainingDays(): number {
-    if (!isVip || !user.vipExpiresAt) return 0;
-    // 使用传入或初始化的变量代替 Date.now()
-    const msDiff = new Date(user.vipExpiresAt).getTime() - new Date().getTime();
-    return Math.ceil(msDiff / (1000 * 60 * 60 * 24));
-  }
-  
-  const daysLeft = getRemainingDays();
+  const isVip = isVipActive(user.vipExpiresAt);
+  const daysLeft = getRemainingVipDays(user.vipExpiresAt);
 
   return (
     <div className="max-w-3xl mx-auto space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">

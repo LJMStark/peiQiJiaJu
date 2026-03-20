@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { redeemCode } from '@/app/actions/user';
-import { badRequest, readJsonBody } from '@/lib/server/api-utils';
+import { actionErrorResponse, badRequest, readJsonBody } from '@/lib/server/api-utils';
 
 export async function POST(request: Request) {
   const body = await readJsonBody<{ code?: unknown }>(request);
@@ -14,8 +14,6 @@ export async function POST(request: Request) {
     const result = await redeemCode(code);
     return NextResponse.json(result);
   } catch (error) {
-    const message = error instanceof Error ? error.message : '兑换失败，请稍后重试。';
-    const status = message === 'Unauthorized' ? 401 : 400;
-    return NextResponse.json({ error: message }, { status });
+    return actionErrorResponse(error, '兑换失败，请稍后重试。');
   }
 }
