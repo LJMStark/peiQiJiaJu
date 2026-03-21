@@ -11,6 +11,7 @@ import { getGenerationAccessState } from '@/lib/generation-access';
 import { loadRoomEditorBootstrapState } from '@/lib/room-editor-bootstrap';
 import { shouldBypassImageOptimization } from '@/lib/remote-images';
 import { inferAspectRatio } from '@/lib/client/image-utils';
+import { getFileInputSelection } from '@/lib/client/file-input';
 import { findDuplicateFurnitureGroups } from '@/lib/room-visualization';
 import { resolveHistoryRestoreRoomId } from '@/lib/room-editor-history-state';
 import { removeRoomFromState } from '@/lib/room-editor-room-state';
@@ -131,7 +132,8 @@ export function RoomEditor({ catalog, onUploadFiles, user }: RoomEditorProps) {
   }, [activeRoomId, roomImages]);
 
   const handleFurnitureUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files.length > 0) {
+    const { input, files } = getFileInputSelection(e);
+    if (files.length > 0) {
       setError(null);
       setErrorDetails([]);
       setIsUploadingFurniture(true);
@@ -142,9 +144,8 @@ export function RoomEditor({ catalog, onUploadFiles, user }: RoomEditorProps) {
           return;
         }
 
-        const allFiles = Array.from(e.target.files);
-        const filesToUpload = allFiles.slice(0, availableSlots);
-        if (allFiles.length > availableSlots) {
+        const filesToUpload = files.slice(0, availableSlots);
+        if (files.length > availableSlots) {
           setError(`当前最多还能添加 ${availableSlots} 张家具图，已自动选取前 ${availableSlots} 张。`);
         }
         const uploadedItems = await onUploadFiles(filesToUpload);
@@ -155,20 +156,21 @@ export function RoomEditor({ catalog, onUploadFiles, user }: RoomEditorProps) {
         setError(uploadError instanceof Error ? uploadError.message : '上传家具图片失败，请稍后重试。');
         setErrorDetails([]);
       } finally {
-        e.currentTarget.value = '';
+        input.value = '';
         setIsUploadingFurniture(false);
       }
     }
   };
 
   const handleRoomUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files.length > 0) {
+    const { input, files } = getFileInputSelection(e);
+    if (files.length > 0) {
       setError(null);
       setErrorDetails([]);
       setIsUploadingRooms(true);
 
       try {
-        const [file] = Array.from(e.target.files);
+        const [file] = files;
         if (!file || !file.type.startsWith('image/')) {
           return;
         }
@@ -190,7 +192,7 @@ export function RoomEditor({ catalog, onUploadFiles, user }: RoomEditorProps) {
         setError(uploadError instanceof Error ? uploadError.message : '上传室内图失败，请稍后重试。');
         setErrorDetails([]);
       } finally {
-        e.currentTarget.value = '';
+        input.value = '';
         setIsUploadingRooms(false);
       }
     }

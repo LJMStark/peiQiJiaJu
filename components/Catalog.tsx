@@ -5,6 +5,7 @@ import Image from 'next/image';
 import { motion } from 'motion/react';
 import { Image as ImageIcon, Loader2, Trash2, Upload } from 'lucide-react';
 import { FURNITURE_CATEGORIES, type FurnitureItem } from '@/lib/dashboard-types';
+import { getFileInputSelection } from '@/lib/client/file-input';
 import { shouldBypassImageOptimization } from '@/lib/remote-images';
 
 type CatalogProps = {
@@ -35,9 +36,10 @@ export function Catalog({
   const isDeleteDisabled = deletingItemId !== null;
 
   const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    if (event.target.files && event.target.files.length > 0) {
-      await onUploadFiles(Array.from(event.target.files));
-      event.currentTarget.value = '';
+    const { input, files } = getFileInputSelection(event);
+    if (files.length > 0) {
+      await onUploadFiles(files);
+      input.value = '';
     }
   };
 
