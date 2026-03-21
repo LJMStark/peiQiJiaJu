@@ -1,15 +1,18 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { Upload, Sparkles, Image as ImageIcon, Loader2, Download, History, Clock, X, Layers, MessageSquareText, Lightbulb, Sofa, ChevronLeft, ChevronRight } from 'lucide-react';
 import Image from 'next/image';
 import { motion, AnimatePresence } from 'motion/react';
 import { readJson, type RoomsResponse, type RoomMutationResponse, type HistoryResponse, type HistoryMutationResponse } from '@/lib/client/api';
 import { formatBeijingTime } from '@/lib/beijing-time';
 import { type FurnitureItem, type HistoryItem, type PlacedFurniture, type RoomImage } from '@/lib/dashboard-types';
+import { getGenerationAccessState } from '@/lib/generation-access';
 import { shouldBypassImageOptimization } from '@/lib/remote-images';
 import { inferAspectRatio } from '@/lib/client/image-utils';
 import { findDuplicateFurnitureGroups } from '@/lib/room-visualization';
+import { resolveHistoryRestoreRoomId } from '@/lib/room-editor-history-state';
+import { removeRoomFromState } from '@/lib/room-editor-room-state';
 import { FurniturePreviewModal } from './room-editor/FurniturePreviewModal';
 import { FurnitureDrawer } from './room-editor/FurnitureDrawer';
 import { FeedbackModal } from './room-editor/FeedbackModal';
@@ -33,6 +36,7 @@ type RoomEditorProps = {
   onUploadFiles: (files: File[]) => Promise<FurnitureItem[]>;
   user: {
     id: string;
+    role?: string;
     vipExpiresAt?: Date | null;
   };
 };
@@ -60,6 +64,7 @@ export function RoomEditor({ catalog, onUploadFiles, user }: RoomEditorProps) {
   const [activeCategory, setActiveCategory] = useState('全部');
   const [isUploadingFurniture, setIsUploadingFurniture] = useState(false);
   const [isUploadingRooms, setIsUploadingRooms] = useState(false);
+  const [deletingRoomIds, setDeletingRoomIds] = useState<string[]>([]);
   const [isBootstrapping, setIsBootstrapping] = useState(true);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [isFeedbackModalOpen, setIsFeedbackModalOpen] = useState(false);
@@ -69,10 +74,15 @@ export function RoomEditor({ catalog, onUploadFiles, user }: RoomEditorProps) {
   const [historyDisplayCount, setHistoryDisplayCount] = useState(12);
   const [limitModalType, setLimitModalType] = useState<'free_limit' | 'vip_expired' | null>(null);
 
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const furnitureInputRef = useRef<HTMLInputElement>(null);
+  const furnitureUploadInputId = useId();
+  const activeRoomIdRef = useRef<string | null>(activeRoomId);
+  const deletingRoomIdsRef = useRef<Set<string>>(new Set());
   const activeRoom = roomImages.find((room) => room.id === activeRoomId) ?? roomImages[0] ?? null;
   const hasDuplicateFurnitureTypes = findDuplicateFurnitureGroups(selectedFurnitures).length > 0;
+
+  useEffect(() => {
+    activeRoomIdRef.current = activeRoomId;
+  }, [activeRoomId]);
 
   useEffect(() => {
     const loadPersistedAssets = async () => {
@@ -134,9 +144,7 @@ export function RoomEditor({ catalog, onUploadFiles, user }: RoomEditorProps) {
       } catch (uploadError) {
         setError(uploadError instanceof Error ? uploadError.message : '上传家具图片失败，请稍后重试。');
       } finally {
-        if (furnitureInputRef.current) {
-          furnitureInputRef.current.value = '';
-        }
+        e.currentTarget.value = '';
         setIsUploadingFurniture(false);
       }
     }
@@ -144,58 +152,77 @@ export function RoomEditor({ catalog, onUploadFiles, user }: RoomEditorProps) {
 
   const handleRoomUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
+      setError(null);
       setIsUploadingRooms(true);
 
       try {
-        const files = Array.from(e.target.files);
-        const newRooms: RoomImage[] = [];
-
-        for (const file of files) {
-          if (!file.type.startsWith('image/')) {
-            continue;
-          }
-
-          const formData = new FormData();
-          formData.append('file', file);
-          formData.append('name', file.name.replace(/\.[^/.]+$/, ''));
-          formData.append('aspectRatio', await inferAspectRatio(file));
-
-          const response = await fetch('/api/rooms', {
-            method: 'POST',
-            body: formData,
-          });
-          const payload = await readJson<RoomMutationResponse>(response);
-          newRooms.push(payload.item);
+        const [file] = Array.from(e.target.files);
+        if (!file || !file.type.startsWith('image/')) {
+          return;
         }
 
-        if (newRooms.length > 0) {
-          setRoomImages((current) => [...newRooms, ...current]);
-          setActiveRoomId(newRooms[0].id);
-        }
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('name', file.name.replace(/\.[^/.]+$/, ''));
+        formData.append('aspectRatio', await inferAspectRatio(file));
+
+        const response = await fetch('/api/rooms', {
+          method: 'POST',
+          body: formData,
+        });
+        const payload = await readJson<RoomMutationResponse>(response);
+
+        setRoomImages([payload.item]);
+        setActiveRoomId(payload.item.id);
+      } catch (uploadError) {
+        setError(uploadError instanceof Error ? uploadError.message : '上传室内图失败，请稍后重试。');
       } finally {
-        if (fileInputRef.current) {
-          fileInputRef.current.value = '';
-        }
+        e.currentTarget.value = '';
         setIsUploadingRooms(false);
       }
     }
   };
 
   const removeRoom = async (id: string) => {
-    const response = await fetch(`/api/rooms/${id}`, {
-      method: 'DELETE',
-    });
+    if (deletingRoomIdsRef.current.has(id)) {
+      return;
+    }
 
-    await readJson<{ success: true }>(response);
-    setRoomImages((current) => {
-      const nextRooms = current.filter((room) => room.id !== id);
+    const syncRemovedRoom = () => {
+      setRoomImages((currentRooms) => {
+        const nextState = removeRoomFromState({
+          currentRooms,
+          currentActiveRoomId: activeRoomIdRef.current,
+          removedRoomId: id,
+        });
+        setActiveRoomId(nextState.activeRoomId);
+        return nextState.rooms;
+      });
+    };
 
-      if (activeRoomId === id) {
-        setActiveRoomId(nextRooms[0]?.id ?? null);
+    setError(null);
+    deletingRoomIdsRef.current.add(id);
+    setDeletingRoomIds((current) => (current.includes(id) ? current : [...current, id]));
+
+    try {
+      const response = await fetch(`/api/rooms/${id}`, {
+        method: 'DELETE',
+      });
+
+      await readJson<{ success: true }>(response);
+      syncRemovedRoom();
+    } catch (removeError) {
+      const message = getErrorMessage(removeError);
+      if (message.includes('Room image not found')) {
+        syncRemovedRoom();
+        return;
       }
 
-      return nextRooms;
-    });
+      setError(message || '删除室内图失败，请稍后重试。');
+    } finally {
+      deletingRoomIdsRef.current.delete(id);
+      setDeletingRoomIds((current) => current.filter((roomId) => roomId !== id));
+    }
   };
 
   const toggleFurniture = (item: FurnitureItem) => {
@@ -219,9 +246,12 @@ export function RoomEditor({ catalog, onUploadFiles, user }: RoomEditorProps) {
     if (!activeRoom || selectedFurnitures.length === 0) return;
 
     // Pre-check: VIP expired users should be blocked immediately on client side
-    const isVip = Boolean(user.vipExpiresAt && new Date(user.vipExpiresAt) > new Date());
-    const vipExpired = Boolean(user.vipExpiresAt && new Date(user.vipExpiresAt) <= new Date());
-    if (!isVip && vipExpired) {
+    const access = getGenerationAccessState({
+      role: user.role,
+      vipExpiresAt: user.vipExpiresAt,
+      generationCount: 0,
+    });
+    if (access.vipExpired) {
       setLimitModalType('vip_expired');
       return;
     }
@@ -252,12 +282,6 @@ export function RoomEditor({ catalog, onUploadFiles, user }: RoomEditorProps) {
           roomImageId: activeRoom.id,
           furnitureItemIds: selectedFurnitures.map((furniture) => furniture.id),
           customInstruction: effectiveInstruction.trim() ? effectiveInstruction : null,
-          roomFallback: {
-            storagePath: activeRoom.storagePath,
-            mimeType: activeRoom.mimeType,
-            name: activeRoom.name,
-            aspectRatio: activeRoom.aspectRatio,
-          },
           furnitureFallbacks: selectedFurnitures.map((furniture) => ({
             storagePath: furniture.storagePath,
             mimeType: furniture.mimeType,
@@ -284,6 +308,8 @@ export function RoomEditor({ catalog, onUploadFiles, user }: RoomEditorProps) {
       }
       if (msg.includes("Requested entity was not found")) {
         setError("当前 AI 服务暂不可用，请联系管理员检查 Gemini API 配置。");
+      } else if (msg.includes('Room image not found')) {
+        setError('当前室内图已失效，请先重新上传后再生成。');
       } else if (msg.includes("429") || msg.toLowerCase().includes("rate limit") || msg.toLowerCase().includes("quota")) {
         setError("AI 服务请求过于频繁，请稍后再试。");
       } else if (msg.includes("500") || msg.includes("503")) {
@@ -297,12 +323,13 @@ export function RoomEditor({ catalog, onUploadFiles, user }: RoomEditorProps) {
   };
 
   const loadHistoryItem = (item: HistoryItem) => {
-    setRoomImages((current) =>
-      current.some((room) => room.id === item.roomImage.id)
-        ? current
-        : [item.roomImage, ...current]
+    setActiveRoomId((currentActiveRoomId) =>
+      resolveHistoryRestoreRoomId({
+        currentRooms: roomImages,
+        currentActiveRoomId,
+        historyRoomId: item.roomImage.id,
+      })
     );
-    setActiveRoomId(item.roomImage.id);
     setSelectedFurnitures(item.furnitures.length > 0 ? item.furnitures : [item.furniture]);
     setCurrentGeneratedImage(item.generatedImage);
     setCustomInstruction(item.customInstruction || '');
@@ -367,7 +394,7 @@ export function RoomEditor({ catalog, onUploadFiles, user }: RoomEditorProps) {
                 <h3 className="font-medium text-zinc-900">上传室内图</h3>
               </div>
               <span className="text-xs font-medium bg-zinc-100 text-zinc-600 px-2 py-1 rounded-md">
-                {isBootstrapping ? '同步中...' : activeRoom ? `当前 1 张 / 共 ${roomImages.length} 张` : `共 ${roomImages.length} 张`}
+                {isBootstrapping ? '同步中...' : activeRoom ? '当前 1 张' : '未上传'}
               </span>
             </div>
             
@@ -386,6 +413,7 @@ export function RoomEditor({ catalog, onUploadFiles, user }: RoomEditorProps) {
                     <SwipeableRoomCard
                       room={room}
                       isActive={activeRoom?.id === room.id}
+                      isDeleting={deletingRoomIds.includes(room.id)}
                       onSelect={setActiveRoomId}
                       onDelete={(id) => removeRoom(id)}
                       onPreview={(url) => setLightboxImageUrl(url)}
@@ -393,35 +421,37 @@ export function RoomEditor({ catalog, onUploadFiles, user }: RoomEditorProps) {
                   </motion.div>
                 ))}
               </AnimatePresence>
-              <button
-                onClick={() => !isUploadingRooms && fileInputRef.current?.click()}
-                disabled={isUploadingRooms}
-                className={`aspect-video border-2 border-dashed rounded-xl flex flex-col items-center justify-center transition-colors ${
+              <div
+                className={`relative aspect-video border-2 border-dashed rounded-xl transition-colors ${
                   isUploadingRooms
-                    ? 'border-zinc-200 bg-zinc-50 text-zinc-400 cursor-not-allowed'
+                    ? 'border-zinc-200 bg-zinc-50 text-zinc-400'
                     : 'border-zinc-200 text-zinc-500 hover:bg-zinc-50 hover:border-zinc-300'
                 }`}
               >
-                {isUploadingRooms ? (
-                  <>
-                    <Loader2 size={20} className="mb-1 text-indigo-500 animate-spin" />
-                    <span className="text-xs font-medium text-indigo-500">上传中...</span>
-                  </>
-                ) : (
-                  <>
-                    <Upload size={20} className="mb-1 text-zinc-400" />
-                    <span className="text-xs font-medium">添加图片</span>
-                  </>
-                )}
-              </button>
+                <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
+                  {isUploadingRooms ? (
+                    <>
+                      <Loader2 size={20} className="mb-1 text-indigo-500 animate-spin" />
+                      <span className="text-xs font-medium text-indigo-500">上传中...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Upload size={20} className="mb-1 text-zinc-400" />
+                      <span className="text-xs font-medium">{activeRoom ? '替换室内图' : '上传室内图'}</span>
+                    </>
+                  )}
+                </div>
+                {/* Keep the native file input as the actual tap target for mobile browser reliability. */}
+                <input
+                  type="file"
+                  onChange={handleRoomUpload}
+                  className={`absolute inset-0 h-full w-full opacity-0 ${isUploadingRooms ? 'cursor-not-allowed' : 'cursor-pointer'}`}
+                  accept="image/*"
+                  disabled={isUploadingRooms}
+                  aria-label={activeRoom ? '替换室内图' : '上传室内图'}
+                />
+              </div>
             </div>
-            <input 
-              type="file" 
-              ref={fileInputRef} 
-              onChange={handleRoomUpload} 
-              className="hidden" 
-              accept="image/*"
-            />
           </div>
 
           {/* Step 2: Select Furniture */}
@@ -487,22 +517,28 @@ export function RoomEditor({ catalog, onUploadFiles, user }: RoomEditorProps) {
                     </motion.div>
                   ))}
                 </AnimatePresence>
-                <button
-                  onClick={() => setIsDrawerOpen(true)}
-                  className="w-20 h-20 border-2 border-dashed border-zinc-200 rounded-lg flex flex-col items-center justify-center text-zinc-500 hover:bg-zinc-50 hover:border-zinc-300 transition-colors"
+                <label
+                  htmlFor={furnitureUploadInputId}
+                  aria-disabled={isUploadingFurniture}
+                  className={`w-20 h-20 border-2 border-dashed rounded-lg flex flex-col items-center justify-center transition-colors ${
+                    isUploadingFurniture
+                      ? 'border-zinc-200 bg-zinc-50 text-zinc-400 cursor-not-allowed'
+                      : 'border-zinc-200 text-zinc-500 hover:bg-zinc-50 hover:border-zinc-300 cursor-pointer'
+                  }`}
                 >
                   <Upload size={16} className="mb-1 text-zinc-400" />
                   <span className="text-[10px] font-medium">继续添加</span>
-                </button>
+                </label>
               </div>
             )}
             <input 
+              id={furnitureUploadInputId}
               type="file" 
-              ref={furnitureInputRef} 
               onChange={handleFurnitureUpload} 
-              className="hidden" 
+              className="sr-only" 
               accept="image/*"
               multiple
+              disabled={isUploadingFurniture}
             />
           </div>
 
@@ -874,7 +910,7 @@ export function RoomEditor({ catalog, onUploadFiles, user }: RoomEditorProps) {
                     {history.length}
                   </span>
                 </h3>
-                <p className="text-sm text-zinc-500 mt-1">点击任意卡片即可恢复之前的编辑状态</p>
+                <p className="text-sm text-zinc-500 mt-1">点击任意卡片即可恢复家具、指令与结果预览</p>
                 <p className="text-xs text-amber-600 mt-1">生成结果保留 30 天，请及时下载保存。</p>
               </div>
             </div>
@@ -1013,7 +1049,7 @@ export function RoomEditor({ catalog, onUploadFiles, user }: RoomEditorProps) {
         onCategoryChange={setActiveCategory}
         onToggleFurniture={toggleFurniture}
         onPreview={setPreviewFurniture}
-        onUploadClick={() => furnitureInputRef.current?.click()}
+        uploadInputId={furnitureUploadInputId}
         isUploading={isUploadingFurniture}
         maxSelections={MAX_SELECTED_FURNITURES}
       />

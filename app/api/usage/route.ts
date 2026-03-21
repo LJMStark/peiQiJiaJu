@@ -1,8 +1,7 @@
 import { NextResponse } from 'next/server';
 import { requireVerifiedRequestSession } from '@/lib/auth-session';
 import { query } from '@/lib/db';
-
-const FREE_GENERATION_LIMIT = 10;
+import { getGenerationAccessState } from '@/lib/generation-access';
 
 export async function GET(request: Request) {
   const authState = await requireVerifiedRequestSession(request);
@@ -11,13 +10,6 @@ export async function GET(request: Request) {
   }
 
   const userId = authState.session.user.id;
-  const vipExpiresAt = authState.session.user.vipExpiresAt
-    ? new Date(authState.session.user.vipExpiresAt)
-    : null;
-
-  const now = new Date();
-  const isVip = Boolean(vipExpiresAt && vipExpiresAt > now);
-  const vipExpired = Boolean(vipExpiresAt && vipExpiresAt <= now);
 
   const countResult = await query<{ count: number }>(
     `SELECT COUNT(*)::int AS count FROM generation_history WHERE user_id = $1`,
@@ -25,12 +17,18 @@ export async function GET(request: Request) {
   );
 
   const generationCount = countResult.rows[0]?.count ?? 0;
+  const access = getGenerationAccessState({
+    role: authState.session.user.role,
+    vipExpiresAt: authState.session.user.vipExpiresAt,
+    generationCount,
+  });
 
   return NextResponse.json({
     generationCount,
-    isVip,
-    vipExpired,
-    freeLimit: FREE_GENERATION_LIMIT,
-    canGenerate: isVip || generationCount < FREE_GENERATION_LIMIT,
+    isVip: access.isVip,
+    isAdmin: access.isAdmin,
+    vipExpired: access.vipExpired,
+    freeLimit: access.freeLimit,
+    canGenerate: access.canGenerate,
   });
 }

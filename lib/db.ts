@@ -1,11 +1,12 @@
 import 'server-only';
 
 import { Pool, type PoolConfig, type QueryResult, type QueryResultRow } from 'pg';
+import { shouldIgnorePgPoolError } from '@/lib/db-error';
 
-const connectionString = process.env.DATABASE_URL;
+const connectionString = process.env.DATABASE_URL ?? process.env.DIRECT_URL ?? '';
 
 if (!connectionString) {
-  throw new Error('DATABASE_URL is not set. Add it to your local .env file before using the database.');
+  throw new Error('DATABASE_URL or DIRECT_URL is not set. Add a database connection to your local .env file before using the database.');
 }
 
 const poolConfig: PoolConfig = {
@@ -18,9 +19,26 @@ const poolConfig: PoolConfig = {
 
 const globalForDb = globalThis as typeof globalThis & {
   __pgPool?: Pool;
+  __pgPoolErrorHandlersRegistered?: boolean;
 };
 
 export const db = globalForDb.__pgPool ?? new Pool(poolConfig);
+
+function handlePgPoolError(error: unknown) {
+  if (shouldIgnorePgPoolError(error)) {
+    return;
+  }
+
+  console.error('Unexpected Postgres pool error:', error);
+}
+
+if (!globalForDb.__pgPoolErrorHandlersRegistered) {
+  db.on('error', handlePgPoolError);
+  db.on('connect', (client) => {
+    client.on('error', handlePgPoolError);
+  });
+  globalForDb.__pgPoolErrorHandlersRegistered = true;
+}
 
 if (process.env.NODE_ENV !== 'production') {
   globalForDb.__pgPool = db;

@@ -16,7 +16,7 @@ type FurnitureDrawerProps = {
   onCategoryChange: (category: string) => void;
   onToggleFurniture: (item: FurnitureItem) => void;
   onPreview: (item: FurnitureItem) => void;
-  onUploadClick: () => void;
+  uploadInputId: string;
   isUploading: boolean;
 };
 
@@ -30,7 +30,7 @@ export function FurnitureDrawer({
   onCategoryChange,
   onToggleFurniture,
   onPreview,
-  onUploadClick,
+  uploadInputId,
   isUploading,
 }: FurnitureDrawerProps) {
   const filteredCatalog = activeCategory === '全部'
@@ -88,13 +88,13 @@ export function FurnitureDrawer({
 
             <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                <button
-                  onClick={() => !isUploading && onUploadClick()}
-                  disabled={isUploading}
+                <label
+                  htmlFor={uploadInputId}
+                  aria-disabled={isUploading}
                   className={`aspect-square border-2 border-dashed rounded-xl flex flex-col items-center justify-center transition-colors ${
                     isUploading
                       ? 'border-zinc-200 bg-zinc-50 text-zinc-400 cursor-not-allowed'
-                      : 'border-zinc-200 text-zinc-500 hover:bg-zinc-50 hover:border-zinc-300'
+                      : 'border-zinc-200 text-zinc-500 hover:bg-zinc-50 hover:border-zinc-300 cursor-pointer'
                   }`}
                 >
                   {isUploading ? (
@@ -108,7 +108,7 @@ export function FurnitureDrawer({
                       <span className="text-xs font-medium">上传家具</span>
                     </>
                   )}
-                </button>
+                </label>
                 {filteredCatalog.map((item) => {
                   const isSelected = selectedFurnitures.some(f => f.id === item.id);
                   const selectionLimitReached = !isSelected && selectedFurnitures.length >= maxSelections;

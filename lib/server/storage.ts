@@ -141,6 +141,39 @@ export async function uploadGeneratedImage(userId: string, dataUrl: string, file
   };
 }
 
+export async function copyStoredImage(
+  userId: string,
+  kind: AssetUploadKind,
+  input: { sourcePath: string; mimeType: string; fileName: string }
+) {
+  const bucket = getStorageBucket(kind);
+  const supabase = getSupabaseAdmin();
+  const { data, error } = await supabase.storage.from(bucket).download(input.sourcePath);
+
+  if (error || !data) {
+    throw new Error(`Failed to copy stored image: ${error?.message ?? 'Unknown storage error'}`);
+  }
+
+  const buffer = Buffer.from(await data.arrayBuffer());
+  const storagePath = buildStoragePath(userId, kind, input.fileName, input.mimeType);
+  const { error: uploadError } = await supabase.storage.from(bucket).upload(storagePath, buffer, {
+    cacheControl: '3600',
+    contentType: input.mimeType,
+    upsert: false,
+  });
+
+  if (uploadError) {
+    throw new Error(`Storage upload failed: ${uploadError.message}`);
+  }
+
+  return {
+    bucket,
+    storagePath,
+    mimeType: input.mimeType,
+    fileSize: buffer.byteLength,
+  };
+}
+
 async function createSignedUrl(bucket: string, storagePath: string): Promise<string> {
   const supabase = getSupabaseAdmin();
   const { data, error } = await supabase.storage

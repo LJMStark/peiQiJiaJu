@@ -1,14 +1,28 @@
 import 'server-only';
 
 import { randomUUID } from 'node:crypto';
-import { query } from '@/lib/db';
+import type { PoolClient } from 'pg';
+import { db, query } from '@/lib/db';
 import type { FurnitureItem, HistoryItem, RoomAspectRatio, RoomImage } from '@/lib/dashboard-types';
+import { createRoomImageCleanupPlan } from '@/lib/room-image-policy';
+import {
+  getGenerationHistoryCountByFurnitureQuery,
+  getGenerationHistoryInsertQuery,
+  getGenerationHistorySelectQuery,
+  isMissingGenerationHistorySelectionColumnError,
+} from '@/lib/server/generation-history-schema';
 import {
   normalizeHistoryFurnitureSnapshots,
   resolveHistoryFurnitureSelection,
   type HistoryFurnitureSnapshot as HistoryFurnitureSnapshotData,
 } from '@/lib/room-visualization';
-import { createSignedImageUrl, removeImage, uploadGeneratedImage, uploadImageFile } from '@/lib/server/storage';
+import {
+  copyStoredImage,
+  createSignedImageUrl,
+  removeImage,
+  uploadGeneratedImage,
+  uploadImageFile,
+} from '@/lib/server/storage';
 
 type FurnitureRow = {
   id: string;
@@ -30,6 +44,10 @@ type RoomRow = {
   aspect_ratio: string | null;
   created_at: string;
   updated_at: string;
+};
+
+type RoomRowWithHistoryReferenceCount = RoomRow & {
+  history_reference_count: number;
 };
 
 type HistoryRow = {
@@ -56,6 +74,54 @@ type HistoryRow = {
   created_at: string;
 };
 
+const GENERATION_HISTORY_SELECTION_COLUMNS_SQL = `
+alter table generation_history
+  add column if not exists selected_furniture_item_ids text[];
+
+alter table generation_history
+  add column if not exists selected_furnitures_snapshot jsonb;
+`;
+
+let generationHistorySelectionColumnsReady: Promise<void> | null = null;
+
+async function ensureGenerationHistorySelectionColumns() {
+  if (!generationHistorySelectionColumnsReady) {
+    generationHistorySelectionColumnsReady = query(GENERATION_HISTORY_SELECTION_COLUMNS_SQL)
+      .then(() => undefined)
+      .catch((error) => {
+        generationHistorySelectionColumnsReady = null;
+        throw error;
+      });
+  }
+
+  await generationHistorySelectionColumnsReady;
+}
+
+async function withGenerationHistorySchemaFallback<T>(input: {
+  modern: () => Promise<T>;
+  legacy: () => Promise<T>;
+}) {
+  try {
+    return await input.modern();
+  } catch (error) {
+    if (!isMissingGenerationHistorySelectionColumnError(error)) {
+      throw error;
+    }
+
+    await ensureGenerationHistorySelectionColumns().catch(() => undefined);
+
+    try {
+      return await input.modern();
+    } catch (retryError) {
+      if (!isMissingGenerationHistorySelectionColumnError(retryError)) {
+        throw retryError;
+      }
+
+      return input.legacy();
+    }
+  }
+}
+
 function coerceDisplayName(name: string | null | undefined, fallback: string) {
   const value = name?.trim();
   return value || fallback;
@@ -75,6 +141,10 @@ function buildGeneratedName(roomName: string, furnitures: HistoryFurnitureSnapsh
   const suffix = furnitures.length > 2 ? `-plus-${furnitures.length - 2}-more` : '';
 
   return `${roomName}-${baseLabel}${suffix}-generated`;
+}
+
+function buildRoomHistorySnapshotName(roomName: string) {
+  return `${roomName}-history-room`;
 }
 
 async function serializeFurniture(row: FurnitureRow): Promise<FurnitureItem> {
@@ -103,6 +173,53 @@ async function serializeRoom(row: RoomRow): Promise<RoomImage> {
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
+}
+
+async function loadRoomImagesWithHistoryReferenceCounts(client: PoolClient, userId: string) {
+  const result = await client.query<RoomRowWithHistoryReferenceCount>(
+    `select
+       r.id,
+       r.name,
+       r.storage_path,
+       r.mime_type,
+       r.file_size,
+       r.aspect_ratio,
+       r.created_at,
+       r.updated_at,
+       count(h.id)::int as history_reference_count
+     from room_images r
+     left join generation_history h
+       on h.user_id = r.user_id
+      and h.room_image_id = r.id
+     where r.user_id = $1
+     group by
+       r.id,
+       r.name,
+       r.storage_path,
+       r.mime_type,
+       r.file_size,
+       r.aspect_ratio,
+       r.created_at,
+       r.updated_at
+     order by r.created_at desc, r.id desc`,
+    [userId]
+  );
+
+  return result.rows;
+}
+
+async function deleteRoomImagesByIds(client: PoolClient, userId: string, roomIds: readonly string[]) {
+  if (roomIds.length === 0) {
+    return;
+  }
+
+  await client.query(`delete from room_images where user_id = $1 and id = any($2::text[])`, [userId, roomIds]);
+}
+
+async function removeRoomImageStoragePaths(storagePaths: readonly string[]) {
+  await Promise.all(
+    storagePaths.map((storagePath) => removeImage('room', storagePath).catch(() => undefined))
+  );
 }
 
 async function serializeHistoryFurnitureSnapshot(
@@ -240,16 +357,10 @@ export async function deleteFurnitureItem(userId: string, id: string) {
     throw new Error('Furniture item not found.');
   }
 
-  const historyCount = await query<{ count: string }>(
-    `select count(*)::text as count
-     from generation_history
-     where user_id = $1
-       and (
-         furniture_item_id = $2
-         or $2 = any(coalesce(selected_furniture_item_ids, ARRAY[]::text[]))
-       )`,
-    [userId, id]
-  );
+  const historyCount = await withGenerationHistorySchemaFallback({
+    modern: () => query<{ count: string }>(getGenerationHistoryCountByFurnitureQuery('modern'), [userId, id]),
+    legacy: () => query<{ count: string }>(getGenerationHistoryCountByFurnitureQuery('legacy'), [userId, id]),
+  });
 
   await query(`delete from furniture_items where id = $1 and user_id = $2`, [id, userId]);
 
@@ -259,15 +370,39 @@ export async function deleteFurnitureItem(userId: string, id: string) {
 }
 
 export async function listRoomImages(userId: string) {
-  const result = await query<RoomRow>(
-    `select id, name, storage_path, mime_type, file_size, aspect_ratio, created_at, updated_at
-     from room_images
-     where user_id = $1
-     order by created_at desc`,
-    [userId]
-  );
+  const client = await db.connect();
+  let currentRooms: RoomRow[] = [];
+  let staleStoragePathsToDelete: string[] = [];
 
-  return Promise.all(result.rows.map(serializeRoom));
+  try {
+    await client.query('BEGIN');
+
+    const roomRows = await loadRoomImagesWithHistoryReferenceCounts(client, userId);
+    const currentRoom = roomRows[0];
+    const cleanupPlan = createRoomImageCleanupPlan(
+      roomRows.map((room) => ({
+        id: room.id,
+        storagePath: room.storage_path,
+        historyReferenceCount: room.history_reference_count,
+      })),
+      currentRoom ? [currentRoom.id] : []
+    );
+
+    await deleteRoomImagesByIds(client, userId, cleanupPlan.staleRoomIds);
+    await client.query('COMMIT');
+
+    currentRooms = currentRoom ? [currentRoom] : [];
+    staleStoragePathsToDelete = cleanupPlan.staleStoragePathsToDelete;
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => undefined);
+    throw error;
+  } finally {
+    client.release();
+  }
+
+  await removeRoomImageStoragePaths(staleStoragePathsToDelete);
+
+  return Promise.all(currentRooms.map(serializeRoom));
 }
 
 export async function createRoomImage(
@@ -277,75 +412,89 @@ export async function createRoomImage(
   const name = coerceDisplayName(input.name, input.file.name.replace(/\.[^.]+$/, ''));
   const uploaded = await uploadImageFile(userId, 'room', input.file, input.file.name);
   const id = randomUUID();
+  const client = await db.connect();
+  let createdRoom: RoomRow | null = null;
+  let staleStoragePathsToDelete: string[] = [];
+  let didCommit = false;
 
   try {
-    const result = await query<RoomRow>(
+    await client.query('BEGIN');
+
+    const existingRooms = await loadRoomImagesWithHistoryReferenceCounts(client, userId);
+    const result = await client.query<RoomRow>(
       `insert into room_images (
-        id, user_id, name, storage_path, mime_type, file_size, aspect_ratio
-      ) values ($1, $2, $3, $4, $5, $6, $7)
-      returning id, name, storage_path, mime_type, file_size, aspect_ratio, created_at, updated_at`,
+         id, user_id, name, storage_path, mime_type, file_size, aspect_ratio
+       ) values ($1, $2, $3, $4, $5, $6, $7)
+       returning id, name, storage_path, mime_type, file_size, aspect_ratio, created_at, updated_at`,
       [id, userId, name, uploaded.storagePath, uploaded.mimeType, uploaded.fileSize, input.aspectRatio ?? null]
     );
+    const cleanupPlan = createRoomImageCleanupPlan(
+      existingRooms.map((room) => ({
+        id: room.id,
+        storagePath: room.storage_path,
+        historyReferenceCount: room.history_reference_count,
+      })),
+      []
+    );
 
-    return serializeRoom(result.rows[0]);
+    await deleteRoomImagesByIds(client, userId, cleanupPlan.staleRoomIds);
+    await client.query('COMMIT');
+
+    createdRoom = result.rows[0] ?? null;
+    staleStoragePathsToDelete = cleanupPlan.staleStoragePathsToDelete;
+    didCommit = true;
   } catch (error) {
-    await removeImage('room', uploaded.storagePath).catch(() => undefined);
+    if (!didCommit) {
+      await client.query('ROLLBACK').catch(() => undefined);
+      await removeImage('room', uploaded.storagePath).catch(() => undefined);
+    }
     throw error;
+  } finally {
+    client.release();
   }
+
+  await removeRoomImageStoragePaths(staleStoragePathsToDelete);
+
+  if (!createdRoom) {
+    throw new Error('Room image upload did not return a record.');
+  }
+
+  return serializeRoom(createdRoom);
 }
 
 export async function deleteRoomImage(userId: string, id: string) {
-  const existingResult = await query<Pick<RoomRow, 'storage_path'>>(
-    `select storage_path from room_images where id = $1 and user_id = $2`,
+  const deletedResult = await query<{ storage_path: string; history_reference_count: number }>(
+    `with deleted_room as (
+       delete from room_images
+       where id = $1 and user_id = $2
+       returning storage_path
+     )
+     select
+       deleted_room.storage_path,
+       (
+         select count(*)::int
+         from generation_history
+         where user_id = $2 and room_image_id = $1
+       ) as history_reference_count
+     from deleted_room`,
     [id, userId]
   );
 
-  const existing = existingResult.rows[0];
-  if (!existing) {
-    throw new Error('Room image not found.');
+  const deletedRoom = deletedResult.rows[0];
+  if (!deletedRoom) {
+    return;
   }
 
-  const historyCount = await query<{ count: string }>(
-    `select count(*)::text as count from generation_history where user_id = $1 and room_image_id = $2`,
-    [userId, id]
-  );
-
-  await query(`delete from room_images where id = $1 and user_id = $2`, [id, userId]);
-
-  if (Number(historyCount.rows[0]?.count ?? '0') === 0) {
-    await removeImage('room', existing.storage_path);
+  if (deletedRoom.history_reference_count === 0) {
+    await removeImage('room', deletedRoom.storage_path).catch(() => undefined);
   }
 }
 
 export async function listHistoryItems(userId: string) {
-  const result = await query<HistoryRow>(
-    `select
-        id,
-        room_image_id,
-        furniture_item_id,
-        selected_furniture_item_ids,
-        selected_furnitures_snapshot,
-        room_name_snapshot,
-        room_storage_path_snapshot,
-        room_mime_type_snapshot,
-        room_file_size_snapshot,
-        room_aspect_ratio_snapshot,
-        furniture_name_snapshot,
-        furniture_storage_path_snapshot,
-        furniture_mime_type_snapshot,
-        furniture_file_size_snapshot,
-        furniture_category_snapshot,
-        generated_name,
-        generated_storage_path,
-        generated_mime_type,
-        generated_file_size,
-        custom_instruction,
-        created_at
-      from generation_history
-      where user_id = $1
-      order by created_at desc`,
-    [userId]
-  );
+  const result = await withGenerationHistorySchemaFallback({
+    modern: () => query<HistoryRow>(getGenerationHistorySelectQuery('modern'), [userId]),
+    legacy: () => query<HistoryRow>(getGenerationHistorySelectQuery('legacy'), [userId]),
+  });
 
   return Promise.all(result.rows.map(serializeHistory));
 }
@@ -357,13 +506,6 @@ export async function createHistoryItem(
     furnitureItemIds: string[];
     generatedDataUrl: string;
     customInstruction?: string | null;
-    roomFallback?: {
-      name: string;
-      storagePath: string;
-      mimeType: string;
-      fileSize: number;
-      aspectRatio?: string | null;
-    };
     furnitureFallbacks?: Array<{
       name: string;
       storagePath: string;
@@ -391,12 +533,6 @@ export async function createHistoryItem(
   const room = roomResult.rows[0];
   const furnitureRowsById = new Map(furnitureResult.rows.map((row) => [row.id, row]));
 
-  const roomSnapshot = room
-    ? { id: room.id, name: room.name, storagePath: room.storage_path, mimeType: room.mime_type, fileSize: room.file_size, aspectRatio: room.aspect_ratio }
-    : input.roomFallback
-      ? { id: null, name: input.roomFallback.name, storagePath: input.roomFallback.storagePath, mimeType: input.roomFallback.mimeType, fileSize: input.roomFallback.fileSize, aspectRatio: input.roomFallback.aspectRatio ?? null }
-      : null;
-
   const resolvedFurnitureSelection = resolveHistoryFurnitureSelection({
     furnitureItemIds: input.furnitureItemIds,
     persistedFurnitures: input.furnitureItemIds.flatMap((furnitureItemId) => {
@@ -415,7 +551,7 @@ export async function createHistoryItem(
     furnitureFallbacks: input.furnitureFallbacks,
   });
 
-  if (!roomSnapshot) {
+  if (!room) {
     throw new Error('Room image not found.');
   }
 
@@ -423,63 +559,27 @@ export async function createHistoryItem(
     throw new Error('Furniture item not found.');
   }
 
+  const roomSnapshotUpload = await copyStoredImage(userId, 'room', {
+    sourcePath: room.storage_path,
+    mimeType: room.mime_type,
+    fileName: buildRoomHistorySnapshotName(room.name),
+  });
+  const roomSnapshot = {
+    id: null,
+    name: room.name,
+    storagePath: roomSnapshotUpload.storagePath,
+    mimeType: room.mime_type,
+    fileSize: roomSnapshotUpload.fileSize,
+    aspectRatio: room.aspect_ratio,
+  };
   const resolvedFurnitureSnapshots = resolvedFurnitureSelection.snapshots;
   const primaryFurnitureSnapshot = resolvedFurnitureSnapshots[0]!;
   const generatedName = buildGeneratedName(roomSnapshot.name, resolvedFurnitureSnapshots);
-  const uploaded = await uploadGeneratedImage(userId, input.generatedDataUrl, generatedName);
-  const id = randomUUID();
-
   try {
-    const result = await query<HistoryRow>(
-      `insert into generation_history (
-        id,
-        user_id,
-        room_image_id,
-        furniture_item_id,
-        selected_furniture_item_ids,
-        selected_furnitures_snapshot,
-        room_name_snapshot,
-        room_storage_path_snapshot,
-        room_mime_type_snapshot,
-        room_file_size_snapshot,
-        room_aspect_ratio_snapshot,
-        furniture_name_snapshot,
-        furniture_storage_path_snapshot,
-        furniture_mime_type_snapshot,
-        furniture_file_size_snapshot,
-        furniture_category_snapshot,
-        generated_name,
-        generated_storage_path,
-        generated_mime_type,
-        generated_file_size,
-        custom_instruction
-      ) values (
-        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
-        $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21
-      )
-      returning
-        id,
-        room_image_id,
-        furniture_item_id,
-        selected_furniture_item_ids,
-        selected_furnitures_snapshot,
-        room_name_snapshot,
-        room_storage_path_snapshot,
-        room_mime_type_snapshot,
-        room_file_size_snapshot,
-        room_aspect_ratio_snapshot,
-        furniture_name_snapshot,
-        furniture_storage_path_snapshot,
-        furniture_mime_type_snapshot,
-        furniture_file_size_snapshot,
-        furniture_category_snapshot,
-        generated_name,
-        generated_storage_path,
-        generated_mime_type,
-        generated_file_size,
-        custom_instruction,
-        created_at`,
-      [
+    const uploaded = await uploadGeneratedImage(userId, input.generatedDataUrl, generatedName);
+    try {
+      const id = randomUUID();
+      const modernInsertValues = [
         id,
         userId,
         roomSnapshot.id,
@@ -501,12 +601,43 @@ export async function createHistoryItem(
         uploaded.mimeType,
         uploaded.fileSize,
         normalizeInstruction(input.customInstruction),
-      ]
-    );
+      ] as const;
+      const legacyInsertValues = [
+        id,
+        userId,
+        roomSnapshot.id,
+        resolvedFurnitureSelection.primaryHistoryFurnitureId,
+        roomSnapshot.name,
+        roomSnapshot.storagePath,
+        roomSnapshot.mimeType,
+        roomSnapshot.fileSize,
+        roomSnapshot.aspectRatio,
+        primaryFurnitureSnapshot.name,
+        primaryFurnitureSnapshot.storagePath,
+        primaryFurnitureSnapshot.mimeType,
+        primaryFurnitureSnapshot.fileSize,
+        primaryFurnitureSnapshot.category,
+        generatedName,
+        uploaded.storagePath,
+        uploaded.mimeType,
+        uploaded.fileSize,
+        normalizeInstruction(input.customInstruction),
+      ] as const;
 
-    return serializeHistory(result.rows[0]);
+      const result = await withGenerationHistorySchemaFallback({
+        modern: () =>
+          query<HistoryRow>(getGenerationHistoryInsertQuery('modern'), modernInsertValues),
+        legacy: () =>
+          query<HistoryRow>(getGenerationHistoryInsertQuery('legacy'), legacyInsertValues),
+      });
+
+      return serializeHistory(result.rows[0]);
+    } catch (error) {
+      await removeImage('generated', uploaded.storagePath).catch(() => undefined);
+      throw error;
+    }
   } catch (error) {
-    await removeImage('generated', uploaded.storagePath).catch(() => undefined);
+    await removeImage('room', roomSnapshot.storagePath).catch(() => undefined);
     throw error;
   }
 }

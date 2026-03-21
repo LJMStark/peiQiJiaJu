@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Sofa, Image as ImageIcon, Sparkles, X, ChevronRight } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -13,18 +13,6 @@ type WelcomeGuideModalProps = {
 export function WelcomeGuideModal({ isOpen, onClose, userName }: WelcomeGuideModalProps) {
   const [activeStep, setActiveStep] = useState(0);
 
-  // 阻止背景滚动
-  useEffect(() => {
-    if (isOpen) {
-      document.body.style.overflow = 'hidden';
-    } else {
-      document.body.style.overflow = 'auto';
-    }
-    return () => {
-      document.body.style.overflow = 'auto';
-    };
-  }, [isOpen]);
-
   const steps = [
     {
       icon: Sofa,
@@ -36,7 +24,7 @@ export function WelcomeGuideModal({ isOpen, onClose, userName }: WelcomeGuideMod
     {
       icon: ImageIcon,
       title: '上传室内照片',
-      description: '进入「室内编辑器」，上传客户的毛坯房或真实空间的现场照片。您可以保存多张房间图，并随时切换当前要生成的室内场景。',
+      description: '进入「室内编辑器」，上传客户的毛坯房或真实空间照片。系统只保留 1 张当前室内图，新上传会直接替换，避免生成时串场景。',
       color: 'text-emerald-600',
       bgColor: 'bg-emerald-100',
     },
@@ -53,24 +41,13 @@ export function WelcomeGuideModal({ isOpen, onClose, userName }: WelcomeGuideMod
 
   return (
     <AnimatePresence>
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-        {/* 背景蒙层 */}
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          className="absolute inset-0 bg-black/40 backdrop-blur-sm"
-          onClick={onClose}
-        />
-
-        {/* 弹窗主体 */}
+      <div className="fixed inset-x-4 bottom-4 z-50 pointer-events-none md:left-auto md:right-4 md:w-[26rem]">
         <motion.div
           initial={{ opacity: 0, scale: 0.95, y: 20 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.95, y: 20 }}
-          className="relative w-full max-w-2xl bg-white rounded-2xl shadow-2xl overflow-hidden z-10"
+          className="pointer-events-auto relative w-full rounded-2xl border border-zinc-200 bg-white shadow-2xl overflow-hidden"
         >
-          {/* 关闭按钮 */}
           <button
             onClick={onClose}
             className="absolute top-4 right-4 p-2 text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100 rounded-full transition-colors z-20"
@@ -78,21 +55,16 @@ export function WelcomeGuideModal({ isOpen, onClose, userName }: WelcomeGuideMod
             <X size={20} />
           </button>
 
-          <div className="flex flex-col md:flex-row h-full">
-            {/* 左侧：欢迎文案 */}
-            <div className="bg-zinc-900 text-white p-8 md:w-2/5 flex flex-col justify-between">
+          <div className="flex flex-col h-full">
+            <div className="bg-zinc-900 text-white p-6">
               <div>
-                <h2 className="text-2xl font-bold mb-2">
-                  欢迎来到<br />佩奇家具
-                </h2>
-                <p className="text-zinc-400 text-sm leading-relaxed mt-4">
+                <h2 className="text-xl font-bold mb-2">快速上手</h2>
+                <p className="text-zinc-400 text-sm leading-relaxed mt-3">
                   {userName ? `你好，${userName}！` : '你好！'}
-                  我们为您准备了 10 张免费的 AI 效果图生成额度。
-                  <br /><br />
-                  使用前，请花 1 分钟了解我们的核心工作流，助您更高效地谈单。
+                  使用前看一眼这 3 步，就能更顺畅地完成首次上传和生图。
                 </p>
               </div>
-              <div className="mt-8">
+              <div className="mt-5">
                 <div className="flex gap-2">
                   {steps.map((_, idx) => (
                     <div
@@ -109,9 +81,8 @@ export function WelcomeGuideModal({ isOpen, onClose, userName }: WelcomeGuideMod
               </div>
             </div>
 
-            {/* 右侧：步骤详情 */}
-            <div className="p-8 md:w-3/5 flex flex-col justify-center bg-zinc-50/50">
-              <div className="min-h-[220px]">
+            <div className="p-6 bg-zinc-50/50">
+              <div className="min-h-[156px]">
                 <AnimatePresence mode="wait">
                   <motion.div
                     key={activeStep}
@@ -137,7 +108,7 @@ export function WelcomeGuideModal({ isOpen, onClose, userName }: WelcomeGuideMod
                 </AnimatePresence>
               </div>
 
-              <div className="mt-8 flex items-center justify-end gap-3 pt-6 border-t border-zinc-100">
+              <div className="mt-6 flex items-center justify-end gap-3 pt-4 border-t border-zinc-100">
                 {activeStep > 0 && (
                   <button
                     onClick={() => setActiveStep((prev) => prev - 1)}

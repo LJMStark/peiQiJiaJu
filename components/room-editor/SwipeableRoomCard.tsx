@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, type MouseEvent } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import Image from 'next/image';
-import { CheckCircle2, Trash2 } from 'lucide-react';
+import { CheckCircle2, Loader2, Trash2 } from 'lucide-react';
 import type { RoomImage } from '@/lib/dashboard-types';
 import { shouldBypassImageOptimization } from '@/lib/remote-images';
 
@@ -12,6 +12,7 @@ const CONFIRMATION_TIMEOUT_MS = 3000;
 type SwipeableRoomCardProps = {
   room: RoomImage;
   isActive: boolean;
+  isDeleting: boolean;
   onSelect: (id: string) => void;
   onDelete: (id: string) => void;
   onPreview: (url: string) => void;
@@ -20,6 +21,7 @@ type SwipeableRoomCardProps = {
 export function SwipeableRoomCard({
   room,
   isActive,
+  isDeleting,
   onSelect,
   onDelete,
   onPreview,
@@ -47,12 +49,19 @@ export function SwipeableRoomCard({
     };
   }, []);
 
-  const deleteButtonLabel = isConfirming ? `确认删除${room.name}` : `删除${room.name}`;
+  const isShowingConfirmation = isConfirming && !isDeleting;
+  const deleteButtonLabel = isDeleting
+    ? `${room.name}删除中`
+    : (isShowingConfirmation ? `确认删除${room.name}` : `删除${room.name}`);
 
   function handleDeleteClick(e: MouseEvent<HTMLButtonElement>): void {
     e.stopPropagation();
 
-    if (isConfirming) {
+    if (isDeleting) {
+      return;
+    }
+
+    if (isShowingConfirmation) {
       clearConfirmationTimeout();
       onDelete(room.id);
       return;
@@ -63,7 +72,11 @@ export function SwipeableRoomCard({
   }
 
   function handlePreviewClick(): void {
-    if (isConfirming) {
+    if (isDeleting) {
+      return;
+    }
+
+    if (isShowingConfirmation) {
       resetConfirmation();
       return;
     }
@@ -87,7 +100,7 @@ export function SwipeableRoomCard({
     >
       {/* 变暗遮罩：当处于确认状态时，略微压暗图片以突出删除按钮 */}
       <AnimatePresence>
-        {isConfirming && (
+        {isShowingConfirmation && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -103,6 +116,7 @@ export function SwipeableRoomCard({
         fill
         className={`object-cover cursor-pointer transition-all duration-500 ${isConfirming ? 'scale-[1.02]' : 'group-hover:scale-105'}`}
         sizes="(max-width: 640px) 45vw, 200px"
+        priority={isActive}
         unoptimized={shouldBypassImageOptimization(room.imageUrl)}
         onClick={handlePreviewClick}
       />
@@ -124,25 +138,32 @@ export function SwipeableRoomCard({
           type="button"
           onClick={handleDeleteClick}
           aria-label={deleteButtonLabel}
+          disabled={isDeleting}
           className={`flex items-center justify-center overflow-hidden shadow-sm backdrop-blur-md transition-colors ${
-            isConfirming
+            isDeleting
+              ? 'bg-black/35 border border-white/20 text-white/90 h-8 px-3 rounded-full gap-1.5 cursor-wait'
+              : isShowingConfirmation
               ? 'bg-red-500/95 text-white h-8 px-3.5 rounded-full gap-1.5'
               : 'bg-black/20 hover:bg-black/40 border border-white/20 text-white/90 h-7 w-7 rounded-full'
           }`}
           transition={{ type: 'spring', stiffness: 500, damping: 30 }}
         >
           <motion.div layout className="flex-shrink-0">
-            <Trash2 size={isConfirming ? 14 : 12} strokeWidth={isConfirming ? 2.5 : 2} />
+            {isDeleting ? (
+              <Loader2 size={14} className="animate-spin" />
+            ) : (
+              <Trash2 size={isShowingConfirmation ? 14 : 12} strokeWidth={isShowingConfirmation ? 2.5 : 2} />
+            )}
           </motion.div>
           <AnimatePresence>
-            {isConfirming && (
+            {(isDeleting || isShowingConfirmation) && (
               <motion.span
                 initial={{ opacity: 0, width: 0 }}
                 animate={{ opacity: 1, width: 'auto' }}
                 exit={{ opacity: 0, width: 0 }}
                 className="text-[11px] font-medium whitespace-nowrap overflow-hidden pr-0.5"
               >
-                确认删除
+                {isDeleting ? '删除中' : '确认删除'}
               </motion.span>
             )}
           </AnimatePresence>

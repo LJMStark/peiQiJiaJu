@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useId, useState } from 'react';
 import Image from 'next/image';
 import { motion } from 'motion/react';
 import { Image as ImageIcon, Loader2, Trash2, Upload } from 'lucide-react';
@@ -26,7 +26,7 @@ export function Catalog({
   isLoading = false,
   error = null,
 }: CatalogProps) {
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const fileInputId = useId();
   const [isDragging, setIsDragging] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState('');
@@ -34,9 +34,7 @@ export function Catalog({
   const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     if (event.target.files && event.target.files.length > 0) {
       await onUploadFiles(Array.from(event.target.files));
-      if (fileInputRef.current) {
-        fileInputRef.current.value = '';
-      }
+      event.currentTarget.value = '';
     }
   };
 
@@ -77,7 +75,6 @@ export function Catalog({
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
-        onClick={() => !isUploading && fileInputRef.current?.click()}
       >
         <div className="w-16 h-16 bg-white border border-zinc-100 shadow-sm rounded-full flex items-center justify-center mx-auto mb-4">
           {isUploading ? (
@@ -93,26 +90,21 @@ export function Catalog({
           将产品图片拖放到此处，或点击浏览。建议使用透明背景的 PNG 或干净背景的 JPG/WebP。
         </p>
         <input
+          id={fileInputId}
           type="file"
-          ref={fileInputRef}
           onChange={handleFileChange}
-          className="hidden"
+          className="sr-only"
           accept="image/*"
           multiple
           disabled={isUploading}
         />
-        <button
-          onClick={(event) => {
-            event.stopPropagation();
-            if (!isUploading) {
-              fileInputRef.current?.click();
-            }
-          }}
-          disabled={isUploading}
+        <label
+          htmlFor={fileInputId}
+          aria-disabled={isUploading}
           className="bg-white border border-zinc-200 text-zinc-900 font-medium py-2 px-6 rounded-xl hover:bg-zinc-50 transition-colors shadow-sm disabled:opacity-50"
         >
           浏览文件
-        </button>
+        </label>
       </div>
 
       {isLoading ? (

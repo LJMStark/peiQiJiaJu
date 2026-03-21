@@ -4,6 +4,7 @@ import { betterAuth } from 'better-auth';
 import { headers } from 'next/headers';
 import { cache } from 'react';
 import { Pool } from 'pg';
+import { shouldIgnorePgPoolError } from './db-error';
 import { sendEmail } from './send-email';
 import { readInviteCodeFromCookieHeader } from './invitations';
 import { withInvitationTransaction } from './server/invitation-store';
@@ -15,6 +16,7 @@ type AuthConfigOptions = {
 
 const globalForAuth = globalThis as typeof globalThis & {
   __betterAuthPools?: Map<string, Pool>;
+  __betterAuthPoolErrorHandlersRegistered?: Set<string>;
 };
 
 function getBaseUrl() {
@@ -54,21 +56,38 @@ function getConnectionString({ preferDirect = false }: AuthConfigOptions = {}) {
 function getPool(connectionString: string) {
   const pools = globalForAuth.__betterAuthPools ?? new Map<string, Pool>();
   globalForAuth.__betterAuthPools = pools;
+  const registeredHandlers =
+    globalForAuth.__betterAuthPoolErrorHandlersRegistered ?? new Set<string>();
+  globalForAuth.__betterAuthPoolErrorHandlersRegistered = registeredHandlers;
 
-  const existingPool = pools.get(connectionString);
-  if (existingPool) {
-    return existingPool;
+  let pool = pools.get(connectionString);
+  if (!pool) {
+    pool = new Pool({
+      connectionString,
+      ssl: {
+        rejectUnauthorized: false,
+      },
+      max: 10,
+    });
+    pools.set(connectionString, pool);
   }
 
-  const pool = new Pool({
-    connectionString,
-    ssl: {
-      rejectUnauthorized: false,
-    },
-    max: 10,
-  });
+  if (!registeredHandlers.has(connectionString)) {
+    const handlePoolError = (error: unknown) => {
+      if (shouldIgnorePgPoolError(error)) {
+        return;
+      }
 
-  pools.set(connectionString, pool);
+      console.error('Unexpected auth Postgres pool error:', error);
+    };
+
+    pool.on('error', handlePoolError);
+    pool.on('connect', (client) => {
+      client.on('error', handlePoolError);
+    });
+    registeredHandlers.add(connectionString);
+  }
+
   return pool;
 }
 

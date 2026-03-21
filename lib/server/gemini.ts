@@ -112,7 +112,6 @@ export async function generateRoomVisualization(
     roomImageId: string;
     furnitureItemIds: string[];
     customInstruction?: string | null;
-    roomFallback?: AssetFallback;
     furnitureFallbacks?: AssetFallback[];
   }
 ) {
@@ -136,12 +135,6 @@ export async function generateRoomVisualization(
   const fallbackById = new Map(
     (input.furnitureFallbacks ?? []).map((fallback, index) => [input.furnitureItemIds[index], fallback] as const)
   );
-
-  const room = roomRow
-    ? { id: roomRow.id, name: roomRow.name, storagePath: roomRow.storage_path, mimeType: roomRow.mime_type, aspectRatio: roomRow.aspect_ratio }
-    : input.roomFallback
-      ? { id: input.roomImageId, name: input.roomFallback.name ?? 'room', storagePath: input.roomFallback.storagePath, mimeType: input.roomFallback.mimeType, aspectRatio: input.roomFallback.aspectRatio ?? null }
-      : null;
 
   const furnitures = input.furnitureItemIds.map((furnitureItemId) => {
     const furnitureRow = furnitureRowsById.get(furnitureItemId);
@@ -169,7 +162,7 @@ export async function generateRoomVisualization(
     };
   });
 
-  if (!room) {
+  if (!roomRow) {
     throw new Error('Room image not found.');
   }
 
@@ -179,7 +172,7 @@ export async function generateRoomVisualization(
 
   const resolvedFurnitures = furnitures.filter((furniture): furniture is NonNullable<typeof furniture> => Boolean(furniture));
   const [roomBase64, ...furnitureBase64List] = await Promise.all([
-    downloadStorageAssetBase64(getStorageBucket('room'), room.storagePath),
+    downloadStorageAssetBase64(getStorageBucket('room'), roomRow.storage_path),
     ...resolvedFurnitures.map((furniture) =>
       downloadStorageAssetBase64(getStorageBucket('furniture'), furniture.storagePath)
     ),
@@ -192,7 +185,7 @@ export async function generateRoomVisualization(
         {
           inlineData: {
             data: roomBase64,
-            mimeType: room.mimeType,
+            mimeType: roomRow.mime_type,
           },
         },
         ...resolvedFurnitures.map((furniture, index) => ({
@@ -215,7 +208,7 @@ export async function generateRoomVisualization(
     },
     config: {
       imageConfig: {
-        aspectRatio: room.aspectRatio ?? '1:1',
+        aspectRatio: roomRow.aspect_ratio ?? '1:1',
         imageSize: '2K',
       },
     },
@@ -230,17 +223,10 @@ export async function generateRoomVisualization(
   }
 
   return createHistoryItem(userId, {
-    roomImageId: room.id,
+    roomImageId: roomRow.id,
     furnitureItemIds: resolvedFurnitures.map((furniture) => furniture.id),
     generatedDataUrl: `data:${imagePart.inlineData.mimeType};base64,${imagePart.inlineData.data}`,
     customInstruction: input.customInstruction ?? null,
-    roomFallback: roomRow ? undefined : {
-      name: room.name,
-      storagePath: room.storagePath,
-      mimeType: room.mimeType,
-      fileSize: 0,
-      aspectRatio: room.aspectRatio,
-    },
     furnitureFallbacks: resolvedFurnitures.map((furniture) => ({
       name: furniture.name,
       storagePath: furniture.storagePath,
