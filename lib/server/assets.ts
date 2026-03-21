@@ -4,6 +4,7 @@ import { randomUUID } from 'node:crypto';
 import type { PoolClient } from 'pg';
 import { db, query } from '@/lib/db';
 import type { FurnitureItem, HistoryItem, RoomAspectRatio, RoomImage } from '@/lib/dashboard-types';
+import { runWithRoomCleanupRecovery } from '@/lib/room-image-cleanup';
 import { createRoomImageCleanupPlan } from '@/lib/room-image-policy';
 import {
   getGenerationHistoryCountByFurnitureQuery,
@@ -20,6 +21,7 @@ import {
   copyStoredImage,
   createSignedImageUrl,
   removeImage,
+  removeImages,
   uploadGeneratedImage,
   uploadImageFile,
 } from '@/lib/server/storage';
@@ -216,10 +218,8 @@ async function deleteRoomImagesByIds(client: PoolClient, userId: string, roomIds
   await client.query(`delete from room_images where user_id = $1 and id = any($2::text[])`, [userId, roomIds]);
 }
 
-async function removeRoomImageStoragePaths(storagePaths: readonly string[]) {
-  await Promise.all(
-    storagePaths.map((storagePath) => removeImage('room', storagePath).catch(() => undefined))
-  );
+async function cleanupRoomImageStoragePaths(storagePaths: readonly string[]): Promise<void> {
+  await removeImages('room', storagePaths);
 }
 
 async function serializeHistoryFurnitureSnapshot(
@@ -354,7 +354,9 @@ export async function deleteFurnitureItem(userId: string, id: string) {
 
   const existing = existingResult.rows[0];
   if (!existing) {
-    throw new Error('Furniture item not found.');
+    return {
+      storagePathsToDelete: [],
+    };
   }
 
   const historyCount = await withGenerationHistorySchemaFallback({
@@ -364,9 +366,9 @@ export async function deleteFurnitureItem(userId: string, id: string) {
 
   await query(`delete from furniture_items where id = $1 and user_id = $2`, [id, userId]);
 
-  if (Number(historyCount.rows[0]?.count ?? '0') === 0) {
-    await removeImage('furniture', existing.storage_path);
-  }
+  return {
+    storagePathsToDelete: Number(historyCount.rows[0]?.count ?? '0') === 0 ? [existing.storage_path] : [],
+  };
 }
 
 export async function listRoomImages(userId: string) {
@@ -400,9 +402,16 @@ export async function listRoomImages(userId: string) {
     client.release();
   }
 
-  await removeRoomImageStoragePaths(staleStoragePathsToDelete);
+  const items = await runWithRoomCleanupRecovery({
+    action: () => Promise.all(currentRooms.map(serializeRoom)),
+    storagePathsToDelete: staleStoragePathsToDelete,
+    cleanup: cleanupRoomImageStoragePaths,
+  });
 
-  return Promise.all(currentRooms.map(serializeRoom));
+  return {
+    items,
+    storagePathsToDelete: staleStoragePathsToDelete,
+  };
 }
 
 export async function createRoomImage(
@@ -453,13 +462,20 @@ export async function createRoomImage(
     client.release();
   }
 
-  await removeRoomImageStoragePaths(staleStoragePathsToDelete);
-
   if (!createdRoom) {
     throw new Error('Room image upload did not return a record.');
   }
 
-  return serializeRoom(createdRoom);
+  const item = await runWithRoomCleanupRecovery({
+    action: () => serializeRoom(createdRoom),
+    storagePathsToDelete: staleStoragePathsToDelete,
+    cleanup: cleanupRoomImageStoragePaths,
+  });
+
+  return {
+    item,
+    storagePathsToDelete: staleStoragePathsToDelete,
+  };
 }
 
 export async function deleteRoomImage(userId: string, id: string) {
@@ -482,12 +498,14 @@ export async function deleteRoomImage(userId: string, id: string) {
 
   const deletedRoom = deletedResult.rows[0];
   if (!deletedRoom) {
-    return;
+    return {
+      storagePathsToDelete: [],
+    };
   }
 
-  if (deletedRoom.history_reference_count === 0) {
-    await removeImage('room', deletedRoom.storage_path).catch(() => undefined);
-  }
+  return {
+    storagePathsToDelete: deletedRoom.history_reference_count === 0 ? [deletedRoom.storage_path] : [],
+  };
 }
 
 export async function listHistoryItems(userId: string) {

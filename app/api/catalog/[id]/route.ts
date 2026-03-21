@@ -1,7 +1,8 @@
+import { after, NextResponse } from 'next/server';
 import { requireVerifiedRequestSession } from '@/lib/auth-session';
 import { errorResponse } from '@/lib/server/api-utils';
 import { deleteFurnitureItem, updateFurnitureItem } from '@/lib/server/assets';
-import { NextResponse } from 'next/server';
+import { removeImages } from '@/lib/server/storage';
 
 export async function PATCH(
   request: Request,
@@ -37,7 +38,12 @@ export async function DELETE(
 
   try {
     const { id } = await params;
-    await deleteFurnitureItem(authState.session.user.id, id);
+    const { storagePathsToDelete } = await deleteFurnitureItem(authState.session.user.id, id);
+
+    if (storagePathsToDelete.length > 0) {
+      after(() => removeImages('furniture', storagePathsToDelete));
+    }
+
     return NextResponse.json({ success: true });
   } catch (error) {
     return errorResponse(error, 'Failed to delete furniture item.');

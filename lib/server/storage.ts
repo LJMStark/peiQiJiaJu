@@ -200,3 +200,11 @@ export async function removeImage(kind: AssetUploadKind, storagePath: string) {
     throw new Error(`Failed to delete storage object: ${error.message}`);
   }
 }
+
+export async function removeImages(kind: AssetUploadKind, storagePaths: readonly string[]) {
+  if (storagePaths.length === 0) {
+    return;
+  }
+
+  await Promise.all(storagePaths.map((storagePath) => removeImage(kind, storagePath).catch(() => undefined)));
+}

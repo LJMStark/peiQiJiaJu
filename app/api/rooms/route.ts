@@ -1,7 +1,8 @@
-import { NextResponse } from 'next/server';
+import { after, NextResponse } from 'next/server';
 import { requireVerifiedRequestSession } from '@/lib/auth-session';
 import { badRequest, errorResponse } from '@/lib/server/api-utils';
 import { createRoomImage, listRoomImages } from '@/lib/server/assets';
+import { removeImages } from '@/lib/server/storage';
 
 export async function GET(request: Request) {
   const authState = await requireVerifiedRequestSession(request);
@@ -10,7 +11,12 @@ export async function GET(request: Request) {
   }
 
   try {
-    const items = await listRoomImages(authState.session.user.id);
+    const { items, storagePathsToDelete } = await listRoomImages(authState.session.user.id);
+
+    if (storagePathsToDelete.length > 0) {
+      after(() => removeImages('room', storagePathsToDelete));
+    }
+
     return NextResponse.json({ items });
   } catch (error) {
     return errorResponse(error, 'Failed to load room images.', 500);
@@ -33,11 +39,15 @@ export async function POST(request: Request) {
   }
 
   try {
-    const item = await createRoomImage(authState.session.user.id, {
+    const { item, storagePathsToDelete } = await createRoomImage(authState.session.user.id, {
       file,
       name: typeof name === 'string' ? name : null,
       aspectRatio: typeof aspectRatio === 'string' ? aspectRatio : null,
     });
+
+    if (storagePathsToDelete.length > 0) {
+      after(() => removeImages('room', storagePathsToDelete));
+    }
 
     return NextResponse.json({ item }, { status: 201 });
   } catch (error) {

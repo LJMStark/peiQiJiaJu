@@ -1,7 +1,8 @@
-import { NextResponse } from 'next/server';
+import { after, NextResponse } from 'next/server';
 import { requireVerifiedRequestSession } from '@/lib/auth-session';
 import { errorResponse } from '@/lib/server/api-utils';
 import { deleteRoomImage } from '@/lib/server/assets';
+import { removeImages } from '@/lib/server/storage';
 
 export async function DELETE(
   request: Request,
@@ -14,7 +15,12 @@ export async function DELETE(
 
   try {
     const { id } = await params;
-    await deleteRoomImage(authState.session.user.id, id);
+    const { storagePathsToDelete } = await deleteRoomImage(authState.session.user.id, id);
+
+    if (storagePathsToDelete.length > 0) {
+      after(() => removeImages('room', storagePathsToDelete));
+    }
+
     return NextResponse.json({ success: true });
   } catch (error) {
     return errorResponse(error, 'Failed to delete room image.');
