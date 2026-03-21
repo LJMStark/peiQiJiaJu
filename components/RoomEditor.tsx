@@ -10,7 +10,6 @@ import { type FurnitureItem, type HistoryItem, type PlacedFurniture, type RoomIm
 import { getGenerationAccessState } from '@/lib/generation-access';
 import { loadRoomEditorBootstrapState } from '@/lib/room-editor-bootstrap';
 import { shouldBypassImageOptimization } from '@/lib/remote-images';
-import { inferAspectRatio } from '@/lib/client/image-utils';
 import { getFileInputSelection } from '@/lib/client/file-input';
 import { findDuplicateFurnitureGroups } from '@/lib/room-visualization';
 import { resolveHistoryRestoreRoomId } from '@/lib/room-editor-history-state';
@@ -178,7 +177,6 @@ export function RoomEditor({ catalog, onUploadFiles, user }: RoomEditorProps) {
         const formData = new FormData();
         formData.append('file', file);
         formData.append('name', file.name.replace(/\.[^/.]+$/, ''));
-        formData.append('aspectRatio', await inferAspectRatio(file));
 
         const response = await fetch('/api/rooms', {
           method: 'POST',

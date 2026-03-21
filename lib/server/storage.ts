@@ -93,6 +93,8 @@ export async function uploadImageFile(
     storagePath,
     mimeType: processed.mimeType,
     fileSize: processed.fileSize,
+    width: processed.width,
+    height: processed.height,
   };
 }
 

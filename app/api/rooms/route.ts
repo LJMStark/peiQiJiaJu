@@ -32,7 +32,6 @@ export async function POST(request: Request) {
   const formData = await request.formData();
   const file = formData.get('file');
   const name = formData.get('name');
-  const aspectRatio = formData.get('aspectRatio');
 
   if (!(file instanceof File)) {
     return badRequest('Room image file is required.');
@@ -42,7 +41,6 @@ export async function POST(request: Request) {
     const { item, storagePathsToDelete } = await createRoomImage(authState.session.user.id, {
       file,
       name: typeof name === 'string' ? name : null,
-      aspectRatio: typeof aspectRatio === 'string' ? aspectRatio : null,
     });
 
     if (storagePathsToDelete.length > 0) {

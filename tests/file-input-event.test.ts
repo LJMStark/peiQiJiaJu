@@ -16,12 +16,13 @@ function createFileList(files: File[]): FileList {
 
 test('getFileInputSelection keeps the original input reference even if the event currentTarget becomes null later', () => {
   const file = new File(['room'], 'room.png', { type: 'image/png' });
-  const input = { value: 'room.png' };
+  const input = {
+    value: 'room.png',
+    files: createFileList([file]),
+  };
   const event = {
     currentTarget: input,
-    target: {
-      files: createFileList([file]),
-    },
+    target: input,
   };
 
   const selection = getFileInputSelection(event);
@@ -37,10 +38,27 @@ test('getFileInputSelection returns an empty file list when nothing is selected'
   const selection = getFileInputSelection({
     currentTarget: input,
     target: {
+      value: '',
       files: null,
     },
   });
 
   assert.deepEqual(selection.files, []);
   assert.equal(selection.input, input);
+});
+
+test('getFileInputSelection falls back to target when currentTarget is already null', () => {
+  const file = new File(['room'], 'room.png', { type: 'image/png' });
+  const input = {
+    value: 'room.png',
+    files: createFileList([file]),
+  };
+  const selection = getFileInputSelection({
+    currentTarget: null as never,
+    target: input,
+  });
+
+  assert.deepEqual(selection.files.map((selectedFile) => selectedFile.name), ['room.png']);
+  selection.input.value = '';
+  assert.equal(input.value, '');
 });

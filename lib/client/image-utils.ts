@@ -1,6 +1,7 @@
 'use client';
 
-import { ROOM_ASPECT_RATIOS, type RoomAspectRatio } from '@/lib/dashboard-types';
+import type { RoomAspectRatio } from '@/lib/dashboard-types';
+import { inferRoomAspectRatioFromDimensions } from '@/lib/room-aspect-ratio';
 
 function readBlobAsDataUrl(blob: Blob) {
   return new Promise<string>((resolve, reject) => {
@@ -38,27 +39,15 @@ export async function imageUrlToBase64(url: string) {
   return blobToBase64(blob);
 }
 
-export function getClosestAspectRatio(ratio: number): RoomAspectRatio {
-  let closest: (typeof ROOM_ASPECT_RATIOS)[number] = ROOM_ASPECT_RATIOS[0];
-  let minDiff = Math.abs(ratio - closest.value);
-
-  for (const candidate of ROOM_ASPECT_RATIOS.slice(1)) {
-    const diff = Math.abs(ratio - candidate.value);
-    if (diff < minDiff) {
-      closest = candidate;
-      minDiff = diff;
-    }
-  }
-
-  return closest.name;
-}
-
 export async function inferAspectRatio(file: File): Promise<RoomAspectRatio> {
   const dataUrl = await readBlobAsDataUrl(file);
 
   return new Promise((resolve, reject) => {
     const image = new window.Image();
-    image.onload = () => resolve(getClosestAspectRatio(image.width / image.height));
+    image.onload = () => resolve(inferRoomAspectRatioFromDimensions({
+      width: image.width,
+      height: image.height,
+    }));
     image.onerror = () => reject(new Error('Failed to read image dimensions.'));
     image.src = dataUrl;
   });

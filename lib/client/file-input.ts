@@ -3,15 +3,17 @@ type FileInputElement = {
 };
 
 type FileInputChangeEventLike = {
-  currentTarget: FileInputElement;
-  target: {
+  currentTarget: FileInputElement | null;
+  target: FileInputElement & {
     files: FileList | null;
   };
 };
 
 export function getFileInputSelection(event: FileInputChangeEventLike) {
+  // React may expose a null currentTarget while the underlying input target is still available.
+  const input = event.currentTarget ?? event.target;
   return {
-    input: event.currentTarget,
+    input,
     files: event.target.files ? Array.from(event.target.files) : [],
   };
 }

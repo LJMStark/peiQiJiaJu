@@ -6,6 +6,7 @@ import { db, query } from '@/lib/db';
 import type { FurnitureItem, HistoryItem, RoomAspectRatio, RoomImage } from '@/lib/dashboard-types';
 import { runWithRoomCleanupRecovery } from '@/lib/room-image-cleanup';
 import { createRoomImageCleanupPlan } from '@/lib/room-image-policy';
+import { inferRoomAspectRatioFromDimensions } from '@/lib/room-aspect-ratio';
 import { collectSettledResults } from '@/lib/settled-results';
 import {
   getGenerationHistoryCountByFurnitureQuery,
@@ -417,10 +418,14 @@ export async function listRoomImages(userId: string) {
 
 export async function createRoomImage(
   userId: string,
-  input: { file: File; name?: string | null; aspectRatio?: string | null }
+  input: { file: File; name?: string | null }
 ) {
   const name = coerceDisplayName(input.name, input.file.name.replace(/\.[^.]+$/, ''));
   const uploaded = await uploadImageFile(userId, 'room', input.file, input.file.name);
+  const aspectRatio = inferRoomAspectRatioFromDimensions({
+    width: uploaded.width,
+    height: uploaded.height,
+  });
   const id = randomUUID();
   const client = await db.connect();
   let createdRoom: RoomRow | null = null;
@@ -436,7 +441,7 @@ export async function createRoomImage(
          id, user_id, name, storage_path, mime_type, file_size, aspect_ratio
        ) values ($1, $2, $3, $4, $5, $6, $7)
        returning id, name, storage_path, mime_type, file_size, aspect_ratio, created_at, updated_at`,
-      [id, userId, name, uploaded.storagePath, uploaded.mimeType, uploaded.fileSize, input.aspectRatio ?? null]
+      [id, userId, name, uploaded.storagePath, uploaded.mimeType, uploaded.fileSize, aspectRatio]
     );
     const cleanupPlan = createRoomImageCleanupPlan(
       existingRooms.map((room) => ({

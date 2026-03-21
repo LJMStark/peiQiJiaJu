@@ -13,6 +13,8 @@ type PreprocessResult = {
   buffer: Buffer;
   mimeType: 'image/webp';
   fileSize: number;
+  width: number;
+  height: number;
 };
 
 /**
@@ -23,7 +25,7 @@ type PreprocessResult = {
  * 4. 剥离 EXIF 元数据（节省体积、保护隐私）
  */
 export async function preprocessImage(input: Buffer): Promise<PreprocessResult> {
-  const output = await sharp(input)
+  const { data, info } = await sharp(input)
     .rotate()
     .resize({
       width: MAX_DIMENSION,
@@ -32,11 +34,17 @@ export async function preprocessImage(input: Buffer): Promise<PreprocessResult> 
       withoutEnlargement: true,
     })
     .webp({ quality: WEBP_QUALITY })
-    .toBuffer();
+    .toBuffer({ resolveWithObject: true });
+
+  if (!info.width || !info.height) {
+    throw new Error('Failed to determine normalized image dimensions.');
+  }
 
   return {
-    buffer: output,
+    buffer: data,
     mimeType: 'image/webp',
-    fileSize: output.byteLength,
+    fileSize: data.byteLength,
+    width: info.width,
+    height: info.height,
   };
 }
