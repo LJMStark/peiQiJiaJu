@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { getCompanyNameValidationError, normalizeCompanyNameInput } from '@/lib/company-name';
 import { INVITE_DASHBOARD_PATH, readInviteCodeFromCookieHeader } from '@/lib/invitations';
-import { createErrorEnvelope } from '@/lib/server/api-utils';
+import { createErrorEnvelope, errorResponse } from '@/lib/server/api-utils';
 import { createInvitationRepository, withInvitationTransaction } from '@/lib/server/invitation-store';
 import { recordInviteSignup } from '@/lib/server/invitation-service';
 import { parseJsonObject, readString } from '@/lib/server/http/request-parsers';
@@ -24,7 +24,13 @@ function cloneTextResponse(bodyText: string, status: number, headers: Headers) {
 }
 
 export async function POST(request: Request) {
-  const body = await parseJsonObject(request);
+  let body;
+  try {
+    body = await parseJsonObject(request);
+  } catch (error) {
+    return errorResponse(error, '请求体格式不正确。', 400);
+  }
+
   const nameInput = readString(body, 'name');
   const emailInput = readString(body, 'email');
   const password = readString(body, 'password');
