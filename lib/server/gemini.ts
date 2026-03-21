@@ -2,27 +2,24 @@ import 'server-only';
 
 import { GoogleGenAI } from '@google/genai';
 import { FURNITURE_CATEGORIES } from '@/lib/dashboard-types';
-import { query } from '@/lib/db';
 import { GEMINI_CLASSIFIER_MODEL, GEMINI_IMAGE_MODEL } from '@/lib/gemini-config';
 import { buildVisualizationPrompt } from '@/lib/room-visualization';
-import { createHistoryItem } from '@/lib/server/assets';
-import { getStorageBucket } from '@/lib/storage-config';
-import { getSupabaseAdmin } from '@/lib/supabase-admin';
+import { downloadStoredImageBase64 } from '@/lib/server/storage';
 
-type FurnitureSourceRow = {
+type FurnitureSource = {
   id: string;
   name: string;
   category: string;
-  storage_path: string;
-  mime_type: string;
+  storagePath: string;
+  mimeType: string;
 };
 
-type RoomSourceRow = {
+type RoomSource = {
   id: string;
   name: string;
-  storage_path: string;
-  mime_type: string;
-  aspect_ratio: string | null;
+  storagePath: string;
+  mimeType: string;
+  aspectRatio: string | null;
 };
 
 const VALID_FURNITURE_CATEGORIES = new Set<string>(
@@ -51,21 +48,6 @@ function normalizeFurnitureCategory(category: string | null | undefined) {
   }
 
   return value;
-}
-
-async function downloadStorageAssetBase64(
-  bucket: string,
-  storagePath: string
-) {
-  const supabase = getSupabaseAdmin();
-  const { data, error } = await supabase.storage.from(bucket).download(storagePath);
-
-  if (error || !data) {
-    throw new Error(`Failed to load source image: ${error?.message ?? 'Unknown storage error'}`);
-  }
-
-  const buffer = Buffer.from(await data.arrayBuffer());
-  return buffer.toString('base64');
 }
 
 export async function classifyFurnitureFile(
@@ -98,83 +80,21 @@ export async function classifyFurnitureFile(
   }
 }
 
-type AssetFallback = {
-  storagePath: string;
-  mimeType: string;
-  name?: string;
-  aspectRatio?: string | null;
-  category?: string;
-};
-
 export async function generateRoomVisualization(
-  userId: string,
   input: {
-    roomImageId: string;
-    furnitureItemIds: string[];
+    roomImage: RoomSource;
+    furnitureItems: readonly FurnitureSource[];
     customInstruction?: string | null;
-    furnitureFallbacks?: AssetFallback[];
   }
 ) {
-  const [roomResult, furnitureResult] = await Promise.all([
-    query<RoomSourceRow>(
-      `select id, name, storage_path, mime_type, aspect_ratio
-       from room_images
-       where id = $1 and user_id = $2`,
-      [input.roomImageId, userId]
-    ),
-    query<FurnitureSourceRow>(
-      `select id, name, category, storage_path, mime_type
-       from furniture_items
-       where user_id = $2 and id = any($1::text[])`,
-      [input.furnitureItemIds, userId]
-    ),
-  ]);
-
-  const roomRow = roomResult.rows[0];
-  const furnitureRowsById = new Map(furnitureResult.rows.map((row) => [row.id, row]));
-  const fallbackById = new Map(
-    (input.furnitureFallbacks ?? []).map((fallback, index) => [input.furnitureItemIds[index], fallback] as const)
-  );
-
-  const furnitures = input.furnitureItemIds.map((furnitureItemId) => {
-    const furnitureRow = furnitureRowsById.get(furnitureItemId);
-    if (furnitureRow) {
-      return {
-        id: furnitureRow.id,
-        name: furnitureRow.name,
-        storagePath: furnitureRow.storage_path,
-        mimeType: furnitureRow.mime_type,
-        category: furnitureRow.category ?? '其他',
-      };
-    }
-
-    const fallback = fallbackById.get(furnitureItemId);
-    if (!fallback) {
-      return null;
-    }
-
-    return {
-      id: furnitureItemId,
-      name: fallback.name ?? 'furniture',
-      storagePath: fallback.storagePath,
-      mimeType: fallback.mimeType,
-      category: fallback.category ?? '其他',
-    };
-  });
-
-  if (!roomRow) {
-    throw new Error('Room image not found.');
-  }
-
-  if (furnitures.length === 0 || furnitures.some((furniture) => !furniture)) {
+  if (input.furnitureItems.length === 0) {
     throw new Error('Furniture item not found.');
   }
 
-  const resolvedFurnitures = furnitures.filter((furniture): furniture is NonNullable<typeof furniture> => Boolean(furniture));
   const [roomBase64, ...furnitureBase64List] = await Promise.all([
-    downloadStorageAssetBase64(getStorageBucket('room'), roomRow.storage_path),
-    ...resolvedFurnitures.map((furniture) =>
-      downloadStorageAssetBase64(getStorageBucket('furniture'), furniture.storagePath)
+    downloadStoredImageBase64('room', input.roomImage.storagePath),
+    ...input.furnitureItems.map((furniture) =>
+      downloadStoredImageBase64('furniture', furniture.storagePath)
     ),
   ]);
 
@@ -185,10 +105,10 @@ export async function generateRoomVisualization(
         {
           inlineData: {
             data: roomBase64,
-            mimeType: roomRow.mime_type,
+            mimeType: input.roomImage.mimeType,
           },
         },
-        ...resolvedFurnitures.map((furniture, index) => ({
+        ...input.furnitureItems.map((furniture, index) => ({
           inlineData: {
             data: furnitureBase64List[index],
             mimeType: furniture.mimeType,
@@ -196,7 +116,7 @@ export async function generateRoomVisualization(
         })),
         {
           text: buildVisualizationPrompt(
-            resolvedFurnitures.map((furniture) => ({
+            input.furnitureItems.map((furniture) => ({
               id: furniture.id,
               name: furniture.name,
               category: furniture.category,
@@ -208,7 +128,7 @@ export async function generateRoomVisualization(
     },
     config: {
       imageConfig: {
-        aspectRatio: roomRow.aspect_ratio ?? '1:1',
+        aspectRatio: input.roomImage.aspectRatio ?? '1:1',
         imageSize: '2K',
       },
     },
@@ -222,17 +142,8 @@ export async function generateRoomVisualization(
     throw new Error('Gemini did not return an image.');
   }
 
-  return createHistoryItem(userId, {
-    roomImageId: roomRow.id,
-    furnitureItemIds: resolvedFurnitures.map((furniture) => furniture.id),
+  return {
     generatedDataUrl: `data:${imagePart.inlineData.mimeType};base64,${imagePart.inlineData.data}`,
-    customInstruction: input.customInstruction ?? null,
-    furnitureFallbacks: resolvedFurnitures.map((furniture) => ({
-      name: furniture.name,
-      storagePath: furniture.storagePath,
-      mimeType: furniture.mimeType,
-      fileSize: 0,
-      category: furniture.category,
-    })),
-  });
+    mimeType: imagePart.inlineData.mimeType,
+  };
 }

@@ -299,12 +299,6 @@ export function RoomEditor({ catalog, onUploadFiles, user }: RoomEditorProps) {
           roomImageId: activeRoom.id,
           furnitureItemIds: selectedFurnitures.map((furniture) => furniture.id),
           customInstruction: effectiveInstruction.trim() ? effectiveInstruction : null,
-          furnitureFallbacks: selectedFurnitures.map((furniture) => ({
-            storagePath: furniture.storagePath,
-            mimeType: furniture.mimeType,
-            name: furniture.name,
-            category: furniture.category,
-          })),
         }),
       });
       const payload = await readJson<HistoryMutationResponse>(response);
