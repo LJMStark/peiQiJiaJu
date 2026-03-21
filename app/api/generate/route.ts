@@ -1,11 +1,33 @@
 import { NextResponse } from 'next/server';
 import { requireVerifiedRequestSession } from '@/lib/auth-session';
 import { FREE_GENERATION_LIMIT, getGenerationAccessState } from '@/lib/generation-access';
-import { badRequest, errorResponse } from '@/lib/server/api-utils';
+import { badRequest, errorResponse, forbidden } from '@/lib/server/api-utils';
+import {
+  parseJsonObject,
+  readOptionalTrimmedString,
+  readStringArray,
+  readTrimmedString,
+} from '@/lib/server/http/request-parsers';
 import { generateRoomVisualization } from '@/lib/server/gemini';
 import { query } from '@/lib/db';
 
 export const runtime = 'nodejs';
+
+type FurnitureFallbackInput = {
+  storagePath: string;
+  mimeType: string;
+  name?: string;
+  category?: string;
+};
+
+function isFurnitureFallbackInput(value: unknown): value is FurnitureFallbackInput {
+  return Boolean(
+    value &&
+      typeof value === 'object' &&
+      typeof (value as { storagePath?: string }).storagePath === 'string' &&
+      typeof (value as { mimeType?: string }).mimeType === 'string'
+  );
+}
 
 export async function POST(request: Request) {
   const authState = await requireVerifiedRequestSession(request);
@@ -26,66 +48,50 @@ export async function POST(request: Request) {
   });
 
   if (access.vipExpired) {
-    return NextResponse.json(
-      { error: '您的会员套餐已到期，请联系客服咨询续费。', code: 'VIP_EXPIRED' },
-      { status: 403 }
-    );
+    return forbidden('您的会员套餐已到期，请联系客服咨询续费。', 'VIP_EXPIRED');
   }
 
   if (access.freeLimitReached) {
-    return NextResponse.json(
-      { error: `免费用户生图额度已用完（共 ${FREE_GENERATION_LIMIT} 张），请联系客服咨询购买会员套餐。`, code: 'FREE_LIMIT_REACHED' },
-      { status: 403 }
+    return forbidden(
+      `免费用户生图额度已用完（共 ${FREE_GENERATION_LIMIT} 张），请联系客服咨询购买会员套餐。`,
+      'FREE_LIMIT_REACHED'
     );
   }
 
   try {
-    const body = await request.json();
-    const roomImageId = typeof body?.roomImageId === 'string' ? body.roomImageId.trim() : '';
-    const furnitureItemIds = Array.isArray(body?.furnitureItemIds)
-      ? body.furnitureItemIds
-          .map((itemId: unknown) => (typeof itemId === 'string' ? itemId.trim() : ''))
-          .filter(Boolean)
-      : typeof body?.furnitureItemId === 'string' && body.furnitureItemId.trim()
-        ? [body.furnitureItemId.trim()]
+    const body = await parseJsonObject(request);
+    const roomImageId = readTrimmedString(body, 'roomImageId');
+    const furnitureItemIds = readStringArray(body, 'furnitureItemIds');
+    const singleFurnitureItemId = readTrimmedString(body, 'furnitureItemId');
+    const resolvedFurnitureItemIds = furnitureItemIds.length > 0
+      ? furnitureItemIds
+      : singleFurnitureItemId
+        ? [singleFurnitureItemId]
         : [];
 
-    if (!roomImageId || furnitureItemIds.length === 0) {
-      return badRequest('Room image and at least one furniture item are required.');
+    if (!roomImageId || resolvedFurnitureItemIds.length === 0) {
+      return badRequest(
+        'Room image and at least one furniture item are required.',
+        'INVALID_GENERATION_REQUEST'
+      );
     }
 
     const item = await generateRoomVisualization(authState.session.user.id, {
       roomImageId,
-      furnitureItemIds,
-      customInstruction: typeof body?.customInstruction === 'string' ? body.customInstruction : null,
+      furnitureItemIds: resolvedFurnitureItemIds,
+      customInstruction: readOptionalTrimmedString(body, 'customInstruction'),
       furnitureFallbacks: Array.isArray(body?.furnitureFallbacks)
         ? body.furnitureFallbacks
             .filter(
-              (item: unknown): item is {
-                storagePath: string;
-                mimeType: string;
-                name?: string;
-                category?: string;
-              } =>
-                Boolean(
-                  item &&
-                    typeof item === 'object' &&
-                    typeof (item as { storagePath?: string }).storagePath === 'string' &&
-                    typeof (item as { mimeType?: string }).mimeType === 'string'
-                )
+              (item: unknown): item is FurnitureFallbackInput => isFurnitureFallbackInput(item)
             )
-            .map((item: {
-              storagePath: string;
-              mimeType: string;
-              name?: string;
-              category?: string;
-            }) => ({
+            .map((item) => ({
               storagePath: item.storagePath,
               mimeType: item.mimeType,
               name: item.name,
               category: item.category,
             }))
-        : body?.furnitureFallback?.storagePath && body?.furnitureFallback?.mimeType
+        : isFurnitureFallbackInput(body.furnitureFallback)
           ? [{
               storagePath: body.furnitureFallback.storagePath,
               mimeType: body.furnitureFallback.mimeType,
@@ -97,6 +103,6 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ item }, { status: 201 });
   } catch (error) {
-    return errorResponse(error, 'Failed to generate room visualization.');
+    return errorResponse(error, 'Failed to generate room visualization.', 500);
   }
 }

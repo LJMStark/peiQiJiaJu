@@ -1,14 +1,15 @@
 import { NextResponse } from 'next/server';
 import { redeemCode } from '@/app/actions/user';
-import { actionErrorResponse, badRequest, readJsonBody } from '@/lib/server/api-utils';
+import { actionErrorResponse, badRequest } from '@/lib/server/api-utils';
+import { parseJsonObject, readTrimmedString } from '@/lib/server/http/request-parsers';
 
 export async function POST(request: Request) {
-  const body = await readJsonBody<{ code?: unknown }>(request);
-  if (!body) {
-    return badRequest('请求体格式不正确。');
-  }
+  const body = await parseJsonObject(request);
+  const code = readTrimmedString(body, 'code');
 
-  const code = typeof body.code === 'string' ? body.code : '';
+  if (!code) {
+    return badRequest('请输入兑换码。', 'INVALID_REDEMPTION_CODE');
+  }
 
   try {
     const result = await redeemCode(code);
