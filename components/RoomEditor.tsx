@@ -8,6 +8,7 @@ import { readJson, type RoomsResponse, type RoomMutationResponse, type HistoryRe
 import { formatBeijingTime } from '@/lib/beijing-time';
 import { type FurnitureItem, type HistoryItem, type PlacedFurniture, type RoomImage } from '@/lib/dashboard-types';
 import { getGenerationAccessState } from '@/lib/generation-access';
+import { loadRoomEditorBootstrapState } from '@/lib/room-editor-bootstrap';
 import { shouldBypassImageOptimization } from '@/lib/remote-images';
 import { inferAspectRatio } from '@/lib/client/image-utils';
 import { findDuplicateFurnitureGroups } from '@/lib/room-visualization';
@@ -87,19 +88,27 @@ export function RoomEditor({ catalog, onUploadFiles, user }: RoomEditorProps) {
   useEffect(() => {
     const loadPersistedAssets = async () => {
       try {
-        const [roomsResponse, historyResponse] = await Promise.all([
-          fetch('/api/rooms', { cache: 'no-store' }),
-          fetch('/api/history', { cache: 'no-store' }),
-        ]);
+        const nextState = await loadRoomEditorBootstrapState({
+          loadRooms: async () => {
+            const response = await fetch('/api/rooms', { cache: 'no-store' });
+            const payload = await readJson<RoomsResponse>(response);
+            return payload.items;
+          },
+          loadHistory: async () => {
+            const response = await fetch('/api/history', { cache: 'no-store' });
+            const payload = await readJson<HistoryResponse>(response);
+            return payload.items;
+          },
+        });
 
-        const roomsPayload = await readJson<RoomsResponse>(roomsResponse);
-        const historyPayload = await readJson<HistoryResponse>(historyResponse);
-
-        setRoomImages(roomsPayload.items);
-        setActiveRoomId(roomsPayload.items[0]?.id ?? null);
-        setHistory(historyPayload.items);
+        setRoomImages(nextState.roomImages);
+        setActiveRoomId(nextState.activeRoomId);
+        setHistory(nextState.history);
+        setError(nextState.error);
+        setErrorDetails(nextState.errorDetails);
       } catch (loadError) {
         setError(loadError instanceof Error ? loadError.message : '加载编辑器资源失败，请刷新页面重试。');
+        setErrorDetails([]);
       } finally {
         setIsBootstrapping(false);
       }
@@ -124,6 +133,7 @@ export function RoomEditor({ catalog, onUploadFiles, user }: RoomEditorProps) {
   const handleFurnitureUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
       setError(null);
+      setErrorDetails([]);
       setIsUploadingFurniture(true);
       try {
         const availableSlots = Math.max(0, MAX_SELECTED_FURNITURES - selectedFurnitures.length);
@@ -143,6 +153,7 @@ export function RoomEditor({ catalog, onUploadFiles, user }: RoomEditorProps) {
         }
       } catch (uploadError) {
         setError(uploadError instanceof Error ? uploadError.message : '上传家具图片失败，请稍后重试。');
+        setErrorDetails([]);
       } finally {
         e.currentTarget.value = '';
         setIsUploadingFurniture(false);
@@ -153,6 +164,7 @@ export function RoomEditor({ catalog, onUploadFiles, user }: RoomEditorProps) {
   const handleRoomUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
       setError(null);
+      setErrorDetails([]);
       setIsUploadingRooms(true);
 
       try {
@@ -176,6 +188,7 @@ export function RoomEditor({ catalog, onUploadFiles, user }: RoomEditorProps) {
         setActiveRoomId(payload.item.id);
       } catch (uploadError) {
         setError(uploadError instanceof Error ? uploadError.message : '上传室内图失败，请稍后重试。');
+        setErrorDetails([]);
       } finally {
         e.currentTarget.value = '';
         setIsUploadingRooms(false);
@@ -201,6 +214,7 @@ export function RoomEditor({ catalog, onUploadFiles, user }: RoomEditorProps) {
     };
 
     setError(null);
+    setErrorDetails([]);
     deletingRoomIdsRef.current.add(id);
     setDeletingRoomIds((current) => (current.includes(id) ? current : [...current, id]));
 
@@ -219,6 +233,7 @@ export function RoomEditor({ catalog, onUploadFiles, user }: RoomEditorProps) {
       }
 
       setError(message || '删除室内图失败，请稍后重试。');
+      setErrorDetails([]);
     } finally {
       deletingRoomIdsRef.current.delete(id);
       setDeletingRoomIds((current) => current.filter((roomId) => roomId !== id));
@@ -234,10 +249,12 @@ export function RoomEditor({ catalog, onUploadFiles, user }: RoomEditorProps) {
 
       if (prev.length >= MAX_SELECTED_FURNITURES) {
         setError(`室内编辑器一次最多只能选择 ${MAX_SELECTED_FURNITURES} 张家具图，请先移除一张。`);
+        setErrorDetails([]);
         return prev;
       }
 
       setError(null);
+      setErrorDetails([]);
       return [...prev, item];
     });
   };

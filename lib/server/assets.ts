@@ -6,6 +6,7 @@ import { db, query } from '@/lib/db';
 import type { FurnitureItem, HistoryItem, RoomAspectRatio, RoomImage } from '@/lib/dashboard-types';
 import { runWithRoomCleanupRecovery } from '@/lib/room-image-cleanup';
 import { createRoomImageCleanupPlan } from '@/lib/room-image-policy';
+import { collectSettledResults } from '@/lib/settled-results';
 import {
   getGenerationHistoryCountByFurnitureQuery,
   getGenerationHistoryInsertQuery,
@@ -514,7 +515,15 @@ export async function listHistoryItems(userId: string) {
     legacy: () => query<HistoryRow>(getGenerationHistorySelectQuery('legacy'), [userId]),
   });
 
-  return Promise.all(result.rows.map(serializeHistory));
+  const serializedResults = await Promise.allSettled(result.rows.map(serializeHistory));
+  const { values: items, errors } = collectSettledResults(serializedResults);
+
+  errors.forEach(({ index, reason }) => {
+    const row = result.rows[index];
+    console.error('[history] Failed to serialize history item:', row?.id ?? '(unknown)', reason);
+  });
+
+  return items;
 }
 
 export async function createHistoryItem(
