@@ -1,0 +1,38 @@
+{
+  "date": "2026-03-21",
+  "url": "http://localhost:3000",
+  "designScore": "B",
+  "aiSlopScore": "A",
+  "categoryGrades": {
+    "hierarchy": "B",
+    "typography": "B",
+    "spacing": "B",
+    "color": "B",
+    "interaction": "B",
+    "responsive": "B",
+    "content": "B",
+    "aiSlop": "A",
+    "motion": "C",
+    "performance": "B"
+  },
+  "findings": [
+    {
+      "id": "FINDING-001",
+      "title": "Improve mobile header touch targets",
+      "impact": "high",
+      "category": "responsive"
+    },
+    {
+      "id": "FINDING-002",
+      "title": "Improve Invite Center failure state",
+      "impact": "high",
+      "category": "content"
+    },
+    {
+      "id": "FINDING-003",
+      "title": "Strengthen editor empty state hierarchy",
+      "impact": "medium",
+      "category": "hierarchy"
+    }
+  ]
+}
