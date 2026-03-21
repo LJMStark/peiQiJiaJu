@@ -55,10 +55,6 @@ export type GenerationServiceDeps<THistoryItem = unknown> = {
   ) => Promise<THistoryItem>;
 };
 
-type CountRow = {
-  count: number;
-};
-
 type RoomSourceRow = {
   id: string;
   name: string;
@@ -200,20 +196,16 @@ export async function generateRoomVisualizationForUser<THistoryItem>(
 }
 
 async function createDefaultGenerationServiceDeps() {
-  const [{ query }, { createHistoryItem }, { generateRoomVisualization }] = await Promise.all([
+  const [{ query }, { countUserGenerationHistory }, { createHistoryItem }, { generateRoomVisualization }] = await Promise.all([
     import('../../db.ts'),
+    import('../repositories/history-repository.ts'),
     import('../assets.ts'),
     import('../gemini.ts'),
   ]);
 
   const deps: GenerationServiceDeps = {
     async getGenerationCount(userId) {
-      const countResult = await query<CountRow>(
-        `SELECT COUNT(*)::int AS count FROM generation_history WHERE user_id = $1`,
-        [userId]
-      );
-
-      return countResult.rows[0]?.count ?? 0;
+      return countUserGenerationHistory(userId);
     },
     async getOwnedRoomImage(userId, roomImageId) {
       const roomResult = await query<RoomSourceRow>(

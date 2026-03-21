@@ -7,7 +7,6 @@ import type { FurnitureItem, HistoryItem, RoomAspectRatio, RoomImage } from '@/l
 import { runWithRoomCleanupRecovery } from '@/lib/room-image-cleanup';
 import { createRoomImageCleanupPlan } from '@/lib/room-image-policy';
 import { inferRoomAspectRatioFromDimensions } from '@/lib/room-aspect-ratio';
-import { collectSettledResults } from '@/lib/settled-results';
 import {
   getGenerationHistoryCountByFurnitureQuery,
   getGenerationHistoryInsertQuery,
@@ -520,15 +519,7 @@ export async function listHistoryItems(userId: string) {
     legacy: () => query<HistoryRow>(getGenerationHistorySelectQuery('legacy'), [userId]),
   });
 
-  const serializedResults = await Promise.allSettled(result.rows.map(serializeHistory));
-  const { values: items, errors } = collectSettledResults(serializedResults);
-
-  errors.forEach(({ index, reason }) => {
-    const row = result.rows[index];
-    console.error('[history] Failed to serialize history item:', row?.id ?? '(unknown)', reason);
-  });
-
-  return items;
+  return Promise.all(result.rows.map(serializeHistory));
 }
 
 export async function createHistoryItem(
