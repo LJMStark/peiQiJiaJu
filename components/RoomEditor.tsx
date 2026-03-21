@@ -549,18 +549,28 @@ export function RoomEditor({ catalog, onUploadFiles, user }: RoomEditorProps) {
                     </motion.div>
                   ))}
                 </AnimatePresence>
-                <label
-                  htmlFor={furnitureUploadInputId}
-                  aria-disabled={isUploadingFurniture}
+                <button
+                  type="button"
+                  onClick={() => setIsDrawerOpen(true)}
+                  disabled={isUploadingFurniture}
                   className={`w-20 h-20 border-2 border-dashed rounded-lg flex flex-col items-center justify-center transition-colors ${
                     isUploadingFurniture
                       ? 'border-zinc-200 bg-zinc-50 text-zinc-400 cursor-not-allowed'
                       : 'border-zinc-200 text-zinc-500 hover:bg-zinc-50 hover:border-zinc-300 cursor-pointer'
                   }`}
                 >
-                  <Upload size={16} className="mb-1 text-zinc-400" />
-                  <span className="text-[10px] font-medium">继续添加</span>
-                </label>
+                  {isUploadingFurniture ? (
+                    <>
+                      <Loader2 size={16} className="mb-1 text-indigo-500 animate-spin" />
+                      <span className="text-[10px] font-medium text-indigo-500">识别中...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Layers size={16} className="mb-1 text-zinc-400" />
+                      <span className="text-[10px] font-medium">继续选择</span>
+                    </>
+                  )}
+                </button>
               </div>
             )}
             <input 
