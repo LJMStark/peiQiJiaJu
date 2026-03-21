@@ -13,6 +13,7 @@ type CatalogProps = {
   onDelete: (id: string) => Promise<void>;
   onUpdate: (id: string, updates: Partial<FurnitureItem>) => Promise<void>;
   isUploading: boolean;
+  deletingItemId?: string | null;
   isLoading?: boolean;
   error?: string | null;
 };
@@ -23,6 +24,7 @@ export function Catalog({
   onDelete,
   onUpdate,
   isUploading,
+  deletingItemId = null,
   isLoading = false,
   error = null,
 }: CatalogProps) {
@@ -30,6 +32,7 @@ export function Catalog({
   const [isDragging, setIsDragging] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState('');
+  const isDeleteDisabled = deletingItemId !== null;
 
   const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     if (event.target.files && event.target.files.length > 0) {
@@ -114,81 +117,87 @@ export function Catalog({
         </div>
       ) : catalog.length > 0 ? (
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-          {catalog.map((item) => (
-            <motion.div
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              key={item.id}
-              className="group relative bg-white border border-zinc-200 rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-all flex flex-col"
-            >
-              <div className="aspect-square relative bg-zinc-100 flex items-center justify-center overflow-hidden">
-                <Image
-                  src={item.imageUrl}
-                  alt={item.name}
-                  fill
-                  className="object-contain p-4"
-                  sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 20vw"
-                  unoptimized={shouldBypassImageOptimization(item.imageUrl)}
-                />
-                <button
-                  onClick={() => void onDelete(item.id)}
-                  className="absolute top-2 right-2 w-8 h-8 bg-white/90 backdrop-blur-sm text-red-500 rounded-lg flex items-center justify-center opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity hover:bg-red-50 shadow-sm"
-                  title="删除项目"
-                >
-                  <Trash2 size={16} />
-                </button>
-              </div>
-              <div className="p-3 border-t border-zinc-100 flex-1 flex flex-col justify-between gap-2">
-                {editingId === item.id ? (
-                  <input
-                    type="text"
-                    value={editingName}
-                    onChange={(e) => setEditingName(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        e.currentTarget.blur();
-                      } else if (e.key === 'Escape') {
-                        setEditingId(null);
-                      }
-                    }}
-                    onBlur={() => {
-                      if (editingId === item.id && editingName.trim() && editingName.trim() !== item.name) {
-                        void onUpdate(item.id, { name: editingName.trim() });
-                      }
-                      setEditingId(null);
-                    }}
-                    autoFocus
-                    className="text-sm font-medium text-zinc-900 w-full px-1 py-0.5 border border-indigo-300 rounded focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                    onClick={(e) => e.stopPropagation()}
+          {catalog.map((item) => {
+            const isDeletingItem = deletingItemId === item.id;
+
+            return (
+              <motion.div
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                key={item.id}
+                className="group relative bg-white border border-zinc-200 rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-all flex flex-col"
+              >
+                <div className="aspect-square relative bg-zinc-100 flex items-center justify-center overflow-hidden">
+                  <Image
+                    src={item.imageUrl}
+                    alt={item.name}
+                    fill
+                    className="object-contain p-4"
+                    sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 20vw"
+                    unoptimized={shouldBypassImageOptimization(item.imageUrl)}
                   />
-                ) : (
-                  <p
-                    className="text-sm font-medium text-zinc-900 truncate cursor-pointer hover:text-indigo-600 transition-colors"
-                    title={`${item.name} (点击编辑)`}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setEditingId(item.id);
-                      setEditingName(item.name);
-                    }}
+                  <button
+                    onClick={() => void onDelete(item.id)}
+                    disabled={isDeleteDisabled}
+                    className="absolute top-2 right-2 w-8 h-8 bg-white/90 backdrop-blur-sm text-red-500 rounded-lg flex items-center justify-center opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity hover:bg-red-50 shadow-sm"
+                    title="删除项目"
                   >
-                    {item.name}
-                  </p>
-                )}
-                <select
-                  value={item.category || '其他'}
-                  onChange={(event) => void onUpdate(item.id, { category: event.target.value })}
-                  className="text-xs border border-zinc-200 rounded-md px-2 py-1 bg-zinc-50 text-zinc-600 focus:outline-none focus:ring-1 focus:ring-zinc-900 w-full"
-                  onClick={(event) => event.stopPropagation()}
-                >
-                  {FURNITURE_CATEGORIES.filter((category) => category !== '全部').map((category) => (
-                    <option key={category} value={category}>
-                      {category}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </motion.div>
-          ))}
+                    {isDeletingItem ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
+                  </button>
+                </div>
+                <div className="p-3 border-t border-zinc-100 flex-1 flex flex-col justify-between gap-2">
+                  {editingId === item.id ? (
+                    <input
+                      type="text"
+                      value={editingName}
+                      onChange={(e) => setEditingName(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.currentTarget.blur();
+                        } else if (e.key === 'Escape') {
+                          setEditingId(null);
+                        }
+                      }}
+                      onBlur={() => {
+                        if (editingId === item.id && editingName.trim() && editingName.trim() !== item.name) {
+                          void onUpdate(item.id, { name: editingName.trim() });
+                        }
+                        setEditingId(null);
+                      }}
+                      autoFocus
+                      className="text-sm font-medium text-zinc-900 w-full px-1 py-0.5 border border-indigo-300 rounded focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                      onClick={(e) => e.stopPropagation()}
+                    />
+                  ) : (
+                    <p
+                      className="text-sm font-medium text-zinc-900 truncate cursor-pointer hover:text-indigo-600 transition-colors"
+                      title={`${item.name} (点击编辑)`}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setEditingId(item.id);
+                        setEditingName(item.name);
+                      }}
+                    >
+                      {item.name}
+                    </p>
+                  )}
+                  <select
+                    value={item.category || '其他'}
+                    onChange={(event) => void onUpdate(item.id, { category: event.target.value })}
+                    disabled={isDeleteDisabled}
+                    className="text-xs border border-zinc-200 rounded-md px-2 py-1 bg-zinc-50 text-zinc-600 focus:outline-none focus:ring-1 focus:ring-zinc-900 w-full"
+                    onClick={(event) => event.stopPropagation()}
+                  >
+                    {FURNITURE_CATEGORIES.filter((category) => category !== '全部').map((category) => (
+                      <option key={category} value={category}>
+                        {category}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </motion.div>
+            );
+          })}
         </div>
       ) : (
         <div className="text-center py-12 bg-white border border-zinc-200 rounded-2xl border-dashed">

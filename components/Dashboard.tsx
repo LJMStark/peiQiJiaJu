@@ -1,7 +1,7 @@
 'use client';
 
 import type { LucideIcon } from 'lucide-react';
-import { useEffect, useState, useTransition } from 'react';
+import { useEffect, useRef, useState, useTransition } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { LayoutGrid, Loader2, LogOut, Sofa, Sparkles, Crown, ShieldAlert, PencilLine, Check, X, UserPlus } from 'lucide-react';
 import { Catalog } from './Catalog';
@@ -17,6 +17,7 @@ import {
   MAX_COMPANY_NAME_LENGTH,
   normalizeCompanyNameInput,
 } from '@/lib/company-name';
+import { startCatalogDelete } from '@/lib/catalog-state';
 import { updateUser } from '@/lib/auth-client';
 import type { FurnitureItem } from '@/lib/dashboard-types';
 import { INVITE_DASHBOARD_TAB } from '@/lib/invitations';
@@ -130,7 +131,9 @@ export function Dashboard({ companyName, user, onLogout }: DashboardProps) {
   const [companyNameDraft, setCompanyNameDraft] = useState(companyName);
   const [isEditingCompanyName, setIsEditingCompanyName] = useState(false);
   const [companyNameError, setCompanyNameError] = useState('');
+  const [pendingCatalogDeletionId, setPendingCatalogDeletionId] = useState<string | null>(null);
   const [isSavingCompanyName, startSavingCompanyName] = useTransition();
+  const pendingCatalogDeletionIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     setActiveTab(requestedTab);
@@ -219,10 +222,34 @@ export function Dashboard({ companyName, user, onLogout }: DashboardProps) {
   };
 
   const handleDeleteFurniture = async (id: string) => {
-    await requestJson<{ success: true }>(`/api/catalog/${id}`, {
-      method: 'DELETE',
-    });
-    setCatalog((current) => current.filter((item) => item.id !== id));
+    const deletion = startCatalogDelete(catalog, pendingCatalogDeletionIdRef.current, id);
+    if (!deletion.didStart) {
+      return;
+    }
+
+    const previousCatalog = [...catalog];
+    pendingCatalogDeletionIdRef.current = deletion.deletingItemId;
+    setPendingCatalogDeletionId(deletion.deletingItemId);
+    setCatalogError(null);
+    setCatalog(deletion.nextCatalog);
+
+    try {
+      await requestJson<{ success: true }>(`/api/catalog/${id}`, {
+        method: 'DELETE',
+      });
+    } catch (error) {
+      try {
+        const payload = await requestJson<CatalogResponse>('/api/catalog', { cache: 'no-store' });
+        setCatalog(payload.items);
+      } catch {
+        setCatalog(previousCatalog);
+      }
+
+      setCatalogError(error instanceof Error ? error.message : 'Failed to delete furniture item.');
+    } finally {
+      pendingCatalogDeletionIdRef.current = null;
+      setPendingCatalogDeletionId(null);
+    }
   };
 
   const handleStartEditingCompanyName = () => {
@@ -417,6 +444,7 @@ export function Dashboard({ companyName, user, onLogout }: DashboardProps) {
             onDelete={handleDeleteFurniture}
             onUpdate={handleUpdateFurniture}
             isUploading={isUploading}
+            deletingItemId={pendingCatalogDeletionId}
             isLoading={isCatalogLoading}
             error={catalogError}
           />
