@@ -53,7 +53,7 @@ export async function GET(
   const session = await getRequestSession(request);
 
   if (!session) {
-    const response = redirectResponse(request, '/signup?invited=1');
+    const response = redirectResponse(request, `/signup?invited=1&code=${encodeURIComponent(inviteCode)}`);
     setInviteCookie(response, inviteCode);
     return response;
   }

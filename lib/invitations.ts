@@ -3,13 +3,30 @@ export const INVITE_CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 export const INVITE_COOKIE_NAME = 'peiqi_invite';
 export const INVITE_COOKIE_VERSION = 'v1';
 export const INVITE_DASHBOARD_TAB = 'invite';
-export const INVITE_DASHBOARD_PATH = `/?tab=${INVITE_DASHBOARD_TAB}`;
+export const VIP_DASHBOARD_TAB = 'vip';
+export const VIP_CENTER_DEFAULT_SECTION = 'overview';
+export const VIP_CENTER_INVITE_SECTION = 'invite';
+export const INVITE_LEGACY_DASHBOARD_PATH = `/?tab=${INVITE_DASHBOARD_TAB}`;
+export const INVITE_DASHBOARD_PATH = `/?tab=${VIP_DASHBOARD_TAB}&section=${VIP_CENTER_INVITE_SECTION}`;
 
 export const INVITE_ATTRIBUTION_WINDOW_DAYS = 7;
 export const INVITE_LATE_CLAIM_WINDOW_HOURS = 24;
 
 export function normalizeInviteCode(input: string): string {
   return input.replace(/[\s-]+/g, '').toUpperCase();
+}
+
+export function resolveSignupInviteCode(input: {
+  requestInviteCode?: string | null | undefined;
+  cookieInviteCode?: string | null | undefined;
+}): string | null {
+  const requestInviteCode = normalizeInviteCode(input.requestInviteCode ?? '');
+  if (requestInviteCode) {
+    return requestInviteCode;
+  }
+
+  const cookieInviteCode = normalizeInviteCode(input.cookieInviteCode ?? '');
+  return cookieInviteCode || null;
 }
 
 export function generateInviteCode(): string {

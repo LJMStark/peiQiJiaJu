@@ -1,15 +1,20 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
+import { buildDashboardPath, resolveDashboardLocation } from '../lib/dashboard-navigation.ts';
 import {
   INVITE_ATTRIBUTION_WINDOW_DAYS,
   INVITE_DASHBOARD_PATH,
   INVITE_DASHBOARD_TAB,
+  INVITE_LEGACY_DASHBOARD_PATH,
   INVITE_COOKIE_NAME,
   INVITE_COOKIE_VERSION,
   INVITE_CODE_ALPHABET,
   INVITE_CODE_LENGTH,
   INVITE_LATE_CLAIM_WINDOW_HOURS,
+  resolveSignupInviteCode,
+  VIP_CENTER_DEFAULT_SECTION,
+  VIP_CENTER_INVITE_SECTION,
   buildInviteUrl,
   decodeInviteCookie,
   encodeInviteCookie,
@@ -73,5 +78,53 @@ test('invite timing windows match the product rules', () => {
   assert.equal(getInviteCookieMaxAgeSeconds(), 7 * 24 * 60 * 60);
   assert.equal(INVITE_COOKIE_NAME, 'peiqi_invite');
   assert.equal(INVITE_DASHBOARD_TAB, 'invite');
-  assert.equal(INVITE_DASHBOARD_PATH, '/?tab=invite');
+  assert.equal(INVITE_LEGACY_DASHBOARD_PATH, '/?tab=invite');
+  assert.equal(INVITE_DASHBOARD_PATH, '/?tab=vip&section=invite');
+});
+
+test('resolveSignupInviteCode prefers the submitted form value before the cookie fallback', () => {
+  assert.equal(
+    resolveSignupInviteCode({
+      requestInviteCode: ' abcd-1234 ',
+      cookieInviteCode: 'WXYZ9999',
+    }),
+    'ABCD1234'
+  );
+
+  assert.equal(
+    resolveSignupInviteCode({
+      requestInviteCode: '   ',
+      cookieInviteCode: 'invite-000001',
+    }),
+    'INVITE000001'
+  );
+
+  assert.equal(
+    resolveSignupInviteCode({
+      requestInviteCode: null,
+      cookieInviteCode: null,
+    }),
+    null
+  );
+});
+
+test('resolveDashboardLocation maps the legacy invite tab to the vip invite section', () => {
+  assert.deepEqual(resolveDashboardLocation(INVITE_DASHBOARD_TAB, null), {
+    activeTab: 'vip',
+    vipSection: VIP_CENTER_INVITE_SECTION,
+    canonicalPath: '/?tab=vip&section=invite',
+  });
+});
+
+test('dashboard navigation helpers build canonical vip paths without keeping invalid sections', () => {
+  assert.equal(buildDashboardPath('catalog'), '/');
+  assert.equal(buildDashboardPath('editor'), '/?tab=editor');
+  assert.equal(buildDashboardPath('vip'), '/?tab=vip');
+  assert.equal(buildDashboardPath('vip', { vipSection: VIP_CENTER_INVITE_SECTION }), '/?tab=vip&section=invite');
+
+  assert.deepEqual(resolveDashboardLocation('vip', 'unknown'), {
+    activeTab: 'vip',
+    vipSection: VIP_CENTER_DEFAULT_SECTION,
+    canonicalPath: '/?tab=vip',
+  });
 });

@@ -2,16 +2,17 @@ import { redirect } from 'next/navigation';
 import { AuthShell } from '@/components/auth/AuthShell';
 import { SignUpForm } from '@/components/auth/SignUpForm';
 import { getServerSession, isSessionEmailVerified } from '@/lib/auth';
-import { INVITE_DASHBOARD_PATH } from '@/lib/invitations';
+import { INVITE_DASHBOARD_PATH, normalizeInviteCode } from '@/lib/invitations';
 
 export default async function SignUpPage({
   searchParams,
 }: {
-  searchParams: Promise<{ invited?: string }>;
+  searchParams: Promise<{ invited?: string; code?: string }>;
 }) {
   const session = await getServerSession();
   const resolvedSearchParams = await searchParams;
-  const isInvitedSignup = resolvedSearchParams.invited === '1';
+  const inviteCode = normalizeInviteCode(resolvedSearchParams.code ?? '');
+  const isInvitedSignup = resolvedSearchParams.invited === '1' || Boolean(inviteCode);
 
   if (session) {
     if (!isSessionEmailVerified(session)) {

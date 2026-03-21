@@ -1,7 +1,12 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { getCompanyNameValidationError, normalizeCompanyNameInput } from '@/lib/company-name';
-import { INVITE_DASHBOARD_PATH, readInviteCodeFromCookieHeader } from '@/lib/invitations';
+import {
+  INVITE_DASHBOARD_PATH,
+  normalizeInviteCode,
+  readInviteCodeFromCookieHeader,
+  resolveSignupInviteCode,
+} from '@/lib/invitations';
 import { readJsonBody } from '@/lib/server/api-utils';
 import { createInvitationRepository, withInvitationTransaction } from '@/lib/server/invitation-store';
 import { recordInviteSignup } from '@/lib/server/invitation-service';
@@ -10,6 +15,7 @@ import { db } from '@/lib/db';
 type SignUpRequestBody = {
   name?: unknown;
   email?: unknown;
+  inviteCode?: unknown;
   password?: unknown;
   confirmPassword?: unknown;
 };
@@ -45,6 +51,7 @@ export async function POST(request: Request) {
 
   const nameInput = readStringField(body.name);
   const emailInput = readStringField(body.email);
+  const inviteCodeInput = readStringField(body.inviteCode);
   const password = readStringField(body.password);
   const confirmPassword = readStringField(body.confirmPassword);
 
@@ -67,8 +74,19 @@ export async function POST(request: Request) {
 
   const normalizedName = normalizeCompanyNameInput(nameInput);
   const normalizedEmail = emailInput.trim().toLowerCase();
-  const inviteCode = readInviteCodeFromCookieHeader(request.headers.get('cookie'));
+  const requestedInviteCode = normalizeInviteCode(inviteCodeInput);
   const invitationRepo = createInvitationRepository(db);
+  if (requestedInviteCode) {
+    const inviteLink = await invitationRepo.getInviteLinkByCode(requestedInviteCode);
+    if (!inviteLink || inviteLink.status !== 'active') {
+      return jsonError('邀请码无效或已失效，请检查后重新输入。', 'INVALID_INVITE_CODE');
+    }
+  }
+
+  const inviteCode = resolveSignupInviteCode({
+    requestInviteCode: requestedInviteCode,
+    cookieInviteCode: readInviteCodeFromCookieHeader(request.headers.get('cookie')),
+  });
   const existingUserBefore = await invitationRepo.getUserByEmail(normalizedEmail);
 
   const authResponse = await auth.api.signUpEmail({

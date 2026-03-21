@@ -2,12 +2,11 @@
 
 import type { LucideIcon } from 'lucide-react';
 import { useEffect, useRef, useState, useTransition } from 'react';
-import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { LayoutGrid, Loader2, LogOut, Sofa, Sparkles, Crown, ShieldAlert, PencilLine, Check, X, UserPlus } from 'lucide-react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { LayoutGrid, Loader2, LogOut, Sofa, Sparkles, Crown, ShieldAlert, PencilLine, Check, X } from 'lucide-react';
 import { Catalog } from './Catalog';
 import { RoomEditor } from './RoomEditor';
 import { VipCenter } from './VipCenter';
-import { InviteCenter } from './InviteCenter';
 import { ContactQrCode } from './ContactQrCode';
 import { WelcomeGuideModal } from './WelcomeGuideModal';
 import { readJson, requestJson, type CatalogResponse, type CatalogMutationResponse } from '@/lib/client/api';
@@ -19,8 +18,9 @@ import {
 } from '@/lib/company-name';
 import { startCatalogDelete } from '@/lib/catalog-state';
 import { updateUser } from '@/lib/auth-client';
+import { buildDashboardPath, resolveDashboardLocation, type DashboardTab, type VipCenterSection } from '@/lib/dashboard-navigation';
 import type { FurnitureItem } from '@/lib/dashboard-types';
-import { INVITE_DASHBOARD_TAB } from '@/lib/invitations';
+import { VIP_CENTER_DEFAULT_SECTION } from '@/lib/invitations';
 
 type DashboardProps = {
   companyName: string;
@@ -32,7 +32,6 @@ type DashboardProps = {
   onLogout: () => void;
 };
 
-type DashboardTab = 'catalog' | 'editor' | 'vip' | typeof INVITE_DASHBOARD_TAB;
 type DashboardTabVariant = 'desktop' | 'mobile';
 type DashboardTabConfig = {
   value: DashboardTab;
@@ -64,15 +63,6 @@ const DASHBOARD_TABS: DashboardTabConfig[] = [
     mobileInactiveClassName: 'text-zinc-500',
   },
   {
-    value: INVITE_DASHBOARD_TAB,
-    label: '邀请中心',
-    icon: UserPlus,
-    desktopActiveClassName: 'bg-white text-zinc-900 shadow-sm',
-    desktopInactiveClassName: 'text-zinc-500 hover:text-zinc-900',
-    mobileActiveClassName: 'bg-zinc-100 text-zinc-900',
-    mobileInactiveClassName: 'text-zinc-500',
-  },
-  {
     value: 'vip',
     label: '会员中心',
     icon: Crown,
@@ -82,14 +72,6 @@ const DASHBOARD_TABS: DashboardTabConfig[] = [
     mobileInactiveClassName: 'text-amber-600',
   },
 ];
-
-function normalizeDashboardTab(tab: string | null): DashboardTab {
-  if (tab === 'editor' || tab === 'vip' || tab === INVITE_DASHBOARD_TAB) {
-    return tab;
-  }
-
-  return 'catalog';
-}
 
 function getGuideStorageKey(userId: string): string {
   return `has_seen_onboarding_${userId}`;
@@ -118,10 +100,10 @@ function getDashboardTabClassName(
 
 export function Dashboard({ companyName, user, onLogout }: DashboardProps) {
   const router = useRouter();
-  const pathname = usePathname();
   const searchParams = useSearchParams();
-  const requestedTab = normalizeDashboardTab(searchParams.get('tab'));
-  const [activeTab, setActiveTab] = useState<DashboardTab>(requestedTab);
+  const requestedLocation = resolveDashboardLocation(searchParams.get('tab'), searchParams.get('section'));
+  const [activeTab, setActiveTab] = useState<DashboardTab>(requestedLocation.activeTab);
+  const [activeVipSection, setActiveVipSection] = useState<VipCenterSection>(requestedLocation.vipSection);
   const [catalog, setCatalog] = useState<FurnitureItem[]>([]);
   const [isUploading, setIsUploading] = useState(false);
   const [isCatalogLoading, setIsCatalogLoading] = useState(true);
@@ -136,8 +118,15 @@ export function Dashboard({ companyName, user, onLogout }: DashboardProps) {
   const pendingCatalogDeletionIdRef = useRef<string | null>(null);
 
   useEffect(() => {
-    setActiveTab(requestedTab);
-  }, [requestedTab]);
+    setActiveTab(requestedLocation.activeTab);
+    setActiveVipSection(requestedLocation.vipSection);
+  }, [requestedLocation.activeTab, requestedLocation.vipSection]);
+
+  useEffect(() => {
+    if (requestedLocation.canonicalPath) {
+      router.replace(requestedLocation.canonicalPath, { scroll: false });
+    }
+  }, [requestedLocation.canonicalPath, router]);
 
   useEffect(() => {
     const guideKey = getGuideStorageKey(user.id);
@@ -299,16 +288,14 @@ export function Dashboard({ companyName, user, onLogout }: DashboardProps) {
 
   const handleTabChange = (nextTab: DashboardTab) => {
     setActiveTab(nextTab);
+    setActiveVipSection(nextTab === 'vip' ? VIP_CENTER_DEFAULT_SECTION : activeVipSection);
+    router.replace(buildDashboardPath(nextTab), { scroll: false });
+  };
 
-    const nextSearchParams = new URLSearchParams(searchParams.toString());
-    if (nextTab === 'catalog') {
-      nextSearchParams.delete('tab');
-    } else {
-      nextSearchParams.set('tab', nextTab);
-    }
-
-    const nextQuery = nextSearchParams.toString();
-    router.replace(nextQuery ? `${pathname}?${nextQuery}` : pathname, { scroll: false });
+  const handleVipSectionChange = (nextSection: VipCenterSection) => {
+    setActiveTab('vip');
+    setActiveVipSection(nextSection);
+    router.replace(buildDashboardPath('vip', { vipSection: nextSection }), { scroll: false });
   };
 
   return (
@@ -458,10 +445,12 @@ export function Dashboard({ companyName, user, onLogout }: DashboardProps) {
             isLoading={isCatalogLoading}
             error={catalogError}
           />
-        ) : activeTab === INVITE_DASHBOARD_TAB ? (
-          <InviteCenter />
         ) : activeTab === 'vip' ? (
-          <VipCenter user={user} />
+          <VipCenter
+            user={user}
+            section={activeVipSection}
+            onSectionChange={handleVipSectionChange}
+          />
         ) : isCatalogLoading ? (
           <div className="bg-white border border-zinc-200 rounded-2xl p-10 flex items-center justify-center gap-3 text-zinc-500">
             <Loader2 size={20} className="animate-spin" />

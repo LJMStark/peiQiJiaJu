@@ -58,7 +58,7 @@ function VerifyEmailContent() {
             请点击邮件中的链接完成验证。
           </p>
           {cameFromInvite ? (
-            <p className="mt-3 text-sm text-indigo-600">验证完成后会自动跳回邀请中心。</p>
+            <p className="mt-3 text-sm text-indigo-600">验证完成后会自动跳回会员中心中的邀请链接页。</p>
           ) : null}
         </div>
 

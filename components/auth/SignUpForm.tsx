@@ -2,28 +2,34 @@
 
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useState, useTransition } from 'react';
-import { ArrowRight, Building2, Eye, EyeOff, Lock, Mail } from 'lucide-react';
+import { useEffect, useState, useTransition } from 'react';
+import { ArrowRight, Building2, Eye, EyeOff, Link2, Lock, Mail } from 'lucide-react';
 import { getAuthErrorMessage } from '@/lib/auth-errors';
 import {
   getCompanyNameValidationError,
   MAX_COMPANY_NAME_LENGTH,
   normalizeCompanyNameInput,
 } from '@/lib/company-name';
-import { INVITE_DASHBOARD_PATH } from '@/lib/invitations';
+import { INVITE_CODE_LENGTH, INVITE_DASHBOARD_PATH, normalizeInviteCode } from '@/lib/invitations';
 
 export function SignUpForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [isPending, startTransition] = useTransition();
+  const inviteCodeFromQuery = normalizeInviteCode(searchParams.get('code') ?? '');
+  const isInvitedSignup = searchParams.get('invited') === '1' || Boolean(inviteCodeFromQuery);
   const [companyName, setCompanyName] = useState('');
   const [email, setEmail] = useState('');
+  const [inviteCode, setInviteCode] = useState(inviteCodeFromQuery);
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const isInvitedSignup = searchParams.get('invited') === '1';
+
+  useEffect(() => {
+    setInviteCode(inviteCodeFromQuery);
+  }, [inviteCodeFromQuery]);
 
   const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -36,6 +42,7 @@ export function SignUpForm() {
     }
 
     const normalizedCompanyName = normalizeCompanyNameInput(companyName);
+    const normalizedInviteCode = normalizeInviteCode(inviteCode);
 
     if (password.length < 8) {
       setError('密码至少需要 8 位。');
@@ -57,6 +64,7 @@ export function SignUpForm() {
         body: JSON.stringify({
           name: normalizedCompanyName,
           email: normalizedEmail,
+          inviteCode: normalizedInviteCode,
           password,
           confirmPassword,
         }),
@@ -69,7 +77,7 @@ export function SignUpForm() {
         return;
       }
 
-      const callbackQuery = isInvitedSignup ? `&callbackURL=${encodeURIComponent(INVITE_DASHBOARD_PATH)}` : '';
+      const callbackQuery = normalizedInviteCode ? `&callbackURL=${encodeURIComponent(INVITE_DASHBOARD_PATH)}` : '';
       router.push(`/verify-email?email=${encodeURIComponent(normalizedEmail)}${callbackQuery}`);
     });
   };
@@ -78,7 +86,7 @@ export function SignUpForm() {
     <form onSubmit={handleSubmit} className="space-y-5">
       {isInvitedSignup ? (
         <div className="rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-3 text-sm text-indigo-700">
-          这是一个邀请注册入口。完成邮箱验证后，会自动回到邀请中心并完成归因。
+          这是一个邀请注册链接，邀请码已自动填写。完成邮箱验证后，会自动回到会员中心中的邀请链接页面。
         </div>
       ) : null}
 
@@ -121,6 +129,27 @@ export function SignUpForm() {
             required
           />
         </div>
+      </div>
+
+      <div>
+        <label htmlFor="inviteCode" className="block text-sm font-medium text-zinc-700 mb-2">
+          {isInvitedSignup ? '邀请码' : '邀请码（选填）'}
+        </label>
+        <div className="relative">
+          <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+            <Link2 size={18} className="text-zinc-400" />
+          </div>
+          <input
+            id="inviteCode"
+            type="text"
+            value={inviteCode}
+            onChange={(event) => setInviteCode(normalizeInviteCode(event.target.value))}
+            maxLength={INVITE_CODE_LENGTH * 2}
+            placeholder={isInvitedSignup ? '邀请码已自动带入' : '如有邀请码可填写'}
+            className="w-full pl-11 pr-4 py-3.5 rounded-xl border border-zinc-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all bg-white font-mono uppercase tracking-[0.18em]"
+          />
+        </div>
+        <p className="mt-1.5 text-xs text-zinc-500">支持直接粘贴带空格或横杠的邀请码，系统会自动整理格式。</p>
       </div>
 
       <div>

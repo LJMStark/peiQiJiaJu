@@ -2,7 +2,7 @@
 
 import type { JSX } from 'react';
 import { useEffect, useState, useTransition } from 'react';
-import { AlertTriangle, CheckCircle2, Clock3, Copy, Link2, Loader2, RefreshCcw, Users } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Clock3, Copy, Link2, Loader2, RefreshCcw } from 'lucide-react';
 import { postJson, requestJson } from '@/lib/client/api';
 import { resolveInviteCenterErrorState } from '@/lib/invite-center-error-state';
 
@@ -166,7 +166,7 @@ export function InviteCenter(): JSX.Element {
     return (
       <div className="bg-white border border-zinc-200 rounded-2xl p-10 flex items-center justify-center gap-3 text-zinc-500">
         <Loader2 size={20} className="animate-spin" />
-        正在载入邀请中心...
+        正在载入邀请数据...
       </div>
     );
   }
@@ -180,7 +180,7 @@ export function InviteCenter(): JSX.Element {
           <div className="mb-5 flex h-16 w-16 items-center justify-center rounded-2xl bg-rose-50 text-rose-500 shadow-sm">
             <AlertTriangle size={28} />
           </div>
-          <p className="text-sm font-medium uppercase tracking-[0.18em] text-rose-500">Invite Center</p>
+          <p className="text-sm font-medium tracking-[0.18em] text-rose-500">邀请链接</p>
           <h2 className="mt-3 text-2xl font-bold text-zinc-900">{errorState.title}</h2>
           <p className="mt-3 text-sm leading-7 text-zinc-600 sm:text-base">
             {errorState.message}
@@ -237,8 +237,8 @@ export function InviteCenter(): JSX.Element {
         <div className="bg-gradient-to-r from-sky-600 via-cyan-500 to-emerald-500 px-8 py-8 text-white">
           <div className="max-w-3xl space-y-2">
             <h2 className="text-3xl font-bold flex items-center gap-3">
-              <Users size={30} />
-              邀请中心
+              <Link2 size={30} />
+              邀请链接
             </h2>
             <p className="text-white/90 leading-7">
               分享你的专属邀请链接，新用户注册后会自动归因到你的账号下。完成邮箱验证后，记录会更新为有效转化。

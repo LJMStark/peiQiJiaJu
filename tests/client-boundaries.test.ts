@@ -6,6 +6,7 @@ import test from 'node:test';
 const projectRoot = '/Users/demon/vibecoding/peiqijiaju';
 
 const CLIENT_COMPONENTS_THAT_TRIGGER_MUTATIONS = [
+  'components/InviteCenter.tsx',
   'components/VipCenter.tsx',
   'components/admin/AdminInviteUserTable.tsx',
   'app/admin/codes/page.tsx',
