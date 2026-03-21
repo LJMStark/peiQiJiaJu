@@ -2,8 +2,9 @@
 
 import type { JSX } from 'react';
 import { useEffect, useState, useTransition } from 'react';
-import { CheckCircle2, Clock3, Copy, Link2, Loader2, RefreshCcw, Users } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Clock3, Copy, Link2, Loader2, RefreshCcw, Users } from 'lucide-react';
 import { postJson, requestJson } from '@/lib/client/api';
+import { resolveInviteCenterErrorState } from '@/lib/invite-center-error-state';
 
 type InviteCenterResponse = {
   inviteUrl: string;
@@ -65,10 +66,6 @@ function getNoticeClassName(tone: NoticeTone): string {
   return 'border border-rose-200 bg-rose-50 text-rose-700';
 }
 
-function getInviteCenterErrorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : '邀请中心加载失败，请稍后重试。';
-}
-
 async function requestInviteCenterData(): Promise<InviteCenterResponse> {
   return requestJson<InviteCenterResponse>('/api/invitations/me', { cache: 'no-store' });
 }
@@ -95,7 +92,7 @@ export function InviteCenter(): JSX.Element {
         }
       } catch (loadError) {
         if (!isCancelled) {
-          setError(getInviteCenterErrorMessage(loadError));
+          setError(loadError instanceof Error ? loadError.message : '邀请中心加载失败，请稍后重试。');
         }
       } finally {
         if (!isCancelled) {
@@ -119,7 +116,7 @@ export function InviteCenter(): JSX.Element {
       const payload = await requestInviteCenterData();
       setData(payload);
     } catch (loadError) {
-      setError(getInviteCenterErrorMessage(loadError));
+      setError(loadError instanceof Error ? loadError.message : '邀请中心加载失败，请稍后重试。');
     } finally {
       setIsLoading(false);
     }
@@ -175,19 +172,40 @@ export function InviteCenter(): JSX.Element {
   }
 
   if (error || !data) {
+    const errorState = resolveInviteCenterErrorState(error);
+
     return (
-      <div className="bg-white border border-zinc-200 rounded-2xl p-8 space-y-4">
-        <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
-          {error || '邀请中心暂时不可用。'}
+      <div className="rounded-3xl border border-zinc-200 bg-white px-6 py-12 shadow-sm sm:px-10">
+        <div className="mx-auto flex max-w-xl flex-col items-center text-center">
+          <div className="mb-5 flex h-16 w-16 items-center justify-center rounded-2xl bg-rose-50 text-rose-500 shadow-sm">
+            <AlertTriangle size={28} />
+          </div>
+          <p className="text-sm font-medium uppercase tracking-[0.18em] text-rose-500">Invite Center</p>
+          <h2 className="mt-3 text-2xl font-bold text-zinc-900">{errorState.title}</h2>
+          <p className="mt-3 text-sm leading-7 text-zinc-600 sm:text-base">
+            {errorState.message}
+          </p>
+
+          <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
+            <button
+              type="button"
+              onClick={() => void handleReload()}
+              className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-zinc-900 px-5 py-3 text-sm font-medium text-white transition hover:bg-zinc-800"
+            >
+              <RefreshCcw size={16} />
+              重新加载
+            </button>
+          </div>
+
+          {errorState.details ? (
+            <details className="mt-6 w-full rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-left">
+              <summary className="cursor-pointer text-sm font-medium text-zinc-700">
+                查看技术细节
+              </summary>
+              <p className="mt-3 break-words text-xs leading-6 text-zinc-500">{errorState.details}</p>
+            </details>
+          ) : null}
         </div>
-        <button
-          type="button"
-          onClick={() => void handleReload()}
-          className="inline-flex items-center gap-2 rounded-xl border border-zinc-200 px-4 py-2 text-sm font-medium text-zinc-700 transition hover:bg-zinc-50"
-        >
-          <RefreshCcw size={16} />
-          重新加载
-        </button>
       </div>
     );
   }
