@@ -1,4 +1,9 @@
+import { RouteError, createRouteError } from './http/error-envelope.ts';
+
 export type GenerationHistoryQueryMode = 'modern' | 'legacy';
+
+const GENERATION_HISTORY_MIGRATION_REQUIRED_CODE = 'GENERATION_HISTORY_SCHEMA_MIGRATION_REQUIRED';
+const GENERATION_HISTORY_MIGRATION_COMMAND = 'npm run storage:migrate';
 
 const OPTIONAL_GENERATION_HISTORY_COLUMNS = [
   'selected_furniture_item_ids',
@@ -68,6 +73,22 @@ export function isMissingGenerationHistorySelectionColumnError(error: unknown) {
 
   const message = getErrorMessage(error);
   return OPTIONAL_GENERATION_HISTORY_COLUMNS.some((column) => message.includes(`"${column}"`));
+}
+
+export function createGenerationHistorySchemaError(error: unknown) {
+  if (!isMissingGenerationHistorySelectionColumnError(error)) {
+    return error;
+  }
+
+  return createRouteError({
+    status: 500,
+    code: GENERATION_HISTORY_MIGRATION_REQUIRED_CODE,
+    message: `Generation history schema is out of date. Run ${GENERATION_HISTORY_MIGRATION_COMMAND} before serving requests.`,
+  });
+}
+
+export function isGenerationHistorySchemaError(error: unknown): error is RouteError {
+  return error instanceof RouteError && error.code === GENERATION_HISTORY_MIGRATION_REQUIRED_CODE;
 }
 
 export function getGenerationHistorySelectQuery(mode: GenerationHistoryQueryMode = 'modern') {
