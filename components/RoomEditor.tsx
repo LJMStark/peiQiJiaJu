@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useId, useRef, useState } from 'react';
-import { Upload, Sparkles, Image as ImageIcon, Loader2, Download, History, Clock, X, Layers, MessageSquareText, Lightbulb, Sofa, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Upload, Sparkles, Image as ImageIcon, Loader2, Download, History, Clock, X, Layers, MessageSquareText, Lightbulb, Sofa, ChevronLeft, ChevronRight, CheckCircle2, CircleDashed } from 'lucide-react';
 import Image from 'next/image';
 import { motion, AnimatePresence } from 'motion/react';
 import { readJson, type RoomsResponse, type RoomMutationResponse, type HistoryResponse, type HistoryMutationResponse } from '@/lib/client/api';
@@ -378,6 +378,21 @@ export function RoomEditor({ catalog, onUploadFiles, user }: RoomEditorProps) {
   const currentSessionResults = generationSessionId
       ? history.filter((item) => (item as HistoryItem & { sessionId?: string }).sessionId === generationSessionId)
       : [];
+  const generationChecklist = [
+    {
+      label: '当前室内图',
+      description: activeRoom ? '已选定当前场景，可直接用于生成。' : '先上传 1 张室内图，确定这次要生成的空间。',
+      ready: Boolean(activeRoom),
+    },
+    {
+      label: '家具选择',
+      description:
+        selectedFurnitures.length > 0
+          ? `已选择 ${selectedFurnitures.length} 件家具，生成时会一起融合到当前房间。`
+          : `从图册中选择 1-${MAX_SELECTED_FURNITURES} 件家具，告诉 AI 这次要放进去什么。`,
+      ready: selectedFurnitures.length > 0,
+    },
+  ];
 
   const handleResultPrev = () => {
     if (currentSessionResults.length <= 1) return;
@@ -701,7 +716,11 @@ export function RoomEditor({ catalog, onUploadFiles, user }: RoomEditorProps) {
             )}
           </div>
           
-          <div className="flex-1 p-4 sm:p-6 flex flex-col items-center justify-center min-h-[300px] sm:min-h-[400px] bg-zinc-50/30 relative">
+          <div
+            className={`relative flex min-h-[300px] flex-1 flex-col items-center justify-center p-4 sm:min-h-[400px] sm:p-6 ${
+              currentGeneratedImage ? 'bg-zinc-50/30' : 'bg-gradient-to-br from-zinc-50 via-white to-indigo-50/60'
+            }`}
+          >
             <AnimatePresence>
               {isGenerating && (
                 <motion.div 
@@ -897,15 +916,54 @@ export function RoomEditor({ catalog, onUploadFiles, user }: RoomEditorProps) {
               <motion.div 
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="text-center max-w-sm"
+                className="w-full max-w-xl"
               >
-                <div className="w-20 h-20 bg-zinc-100 rounded-full flex items-center justify-center mx-auto mb-4 relative before:absolute before:inset-0 before:bg-indigo-100/50 before:rounded-full before:animate-ping before:duration-1000">
-                  <Layers size={32} className="text-zinc-400 relative z-10" />
+                <div className="rounded-[28px] border border-zinc-200 bg-white/95 p-6 text-center shadow-[0_24px_60px_-32px_rgba(24,24,27,0.35)] backdrop-blur sm:p-8">
+                  <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-zinc-900 text-white shadow-lg shadow-zinc-900/10">
+                    <Layers size={28} />
+                  </div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.24em] text-indigo-500">Ready To Generate</p>
+                  <h4 className="mt-3 text-2xl font-bold text-zinc-900">准备生成当前房间效果</h4>
+                  <p className="mt-3 text-sm leading-7 text-zinc-600 sm:text-base">
+                    把左侧关键素材准备好后，新的空间效果图会直接出现在这里，方便你继续预览、下载和反馈。
+                  </p>
+
+                  <div className="mt-6 grid gap-3 text-left">
+                    {generationChecklist.map((item) => (
+                      <div
+                        key={item.label}
+                        className={`rounded-2xl border px-4 py-4 ${
+                          item.ready
+                            ? 'border-emerald-200 bg-emerald-50/80'
+                            : 'border-zinc-200 bg-zinc-50'
+                        }`}
+                      >
+                        <div className="flex items-start gap-3">
+                          <div
+                            className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${
+                              item.ready ? 'bg-emerald-100 text-emerald-600' : 'bg-white text-zinc-400'
+                            }`}
+                          >
+                            {item.ready ? <CheckCircle2 size={18} /> : <CircleDashed size={18} />}
+                          </div>
+                          <div className="min-w-0">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <p className="font-medium text-zinc-900">{item.label}</p>
+                              <span
+                                className={`rounded-full px-2.5 py-1 text-xs font-medium ${
+                                  item.ready ? 'bg-emerald-100 text-emerald-700' : 'bg-white text-zinc-500'
+                                }`}
+                              >
+                                {item.ready ? '已就绪' : '待完成'}
+                              </span>
+                            </div>
+                            <p className="mt-1 text-sm leading-6 text-zinc-600">{item.description}</p>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-                <h4 className="text-lg font-medium text-zinc-900 mb-2">准备生成当前房间效果</h4>
-                <p className="text-zinc-500 text-sm">
-                  选择 1 张当前室内图与要融合的家具，AI 会将它们一次性放进同一张空间效果图中。
-                </p>
               </motion.div>
             )}
           </div>
