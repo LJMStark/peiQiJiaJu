@@ -9,6 +9,8 @@ coverage/
 !.env.example
 AI Studio做好的前端，如何低成本商业化？（上：出海篇）.md
 .local-admin-access.md
+*.tsbuildinfo
 .gstack/browse.json
 .gstack/design-reports/.design-review-session-id
 .gstack/design-reports/.design-review-tel-start
+.gstack/
