@@ -7,7 +7,7 @@
     "build": "cross-env NODE_ENV=production next build",
     "start": "node scripts/start-next.mjs",
     "lint": "eslint .",
-    "clean": "rm -rf .next",
+    "clean": "rm -rf .next .next-dev",
     "auth:migrate": "node --env-file=.env scripts/migrate-better-auth.mjs",
     "storage:migrate": "node --env-file=.env scripts/migrate-storage-assets.mjs",
     "invite:migrate": "node --env-file=.env scripts/migrate-invite-system.mjs"
