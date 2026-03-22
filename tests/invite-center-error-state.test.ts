@@ -1,7 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { resolveInviteCenterErrorState } from '../lib/invite-center-error-state.ts';
+import {
+  resolveAdminInvitationErrorState,
+  resolveInviteCenterErrorState,
+} from '../lib/invite-center-error-state.ts';
 
 test('resolveInviteCenterErrorState maps missing invite tables to a setup message', () => {
   const state = resolveInviteCenterErrorState(new Error('relation "invite_links" does not exist'));
@@ -17,4 +20,25 @@ test('resolveInviteCenterErrorState preserves generic details behind a friendly 
   assert.equal(state.title, '邀请中心暂时不可用');
   assert.equal(state.message, '邀请数据暂时无法加载，请稍后重试；如果问题持续存在，请联系管理员协助排查。');
   assert.equal(state.details, 'network timeout');
+});
+
+test('resolveAdminInvitationErrorState maps missing invite tables to a migration hint', () => {
+  const state = resolveAdminInvitationErrorState(new Error('relation "invite_links" does not exist'));
+
+  assert.equal(state.title, '邀请功能尚未初始化');
+  assert.equal(
+    state.message,
+    '当前环境缺少邀请系统数据表，请先运行 `npm run invite:migrate` 完成初始化，然后重新部署或重启服务。'
+  );
+  assert.equal(state.details, 'relation "invite_links" does not exist');
+  assert.equal(state.setupCommand, 'npm run invite:migrate');
+});
+
+test('resolveAdminInvitationErrorState preserves generic details behind an admin fallback', () => {
+  const state = resolveAdminInvitationErrorState(new Error('network timeout'));
+
+  assert.equal(state.title, '邀请管理暂时不可用');
+  assert.equal(state.message, '邀请汇总加载失败，请稍后重试；如果问题持续存在，请检查数据库和部署日志。');
+  assert.equal(state.details, 'network timeout');
+  assert.equal(state.setupCommand, null);
 });
