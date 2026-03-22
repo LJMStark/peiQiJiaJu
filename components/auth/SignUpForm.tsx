@@ -177,7 +177,7 @@ export function SignUpForm() {
           />
           <button
             type="button"
-            tabIndex={-1}
+            aria-label={showPassword ? '隐藏密码' : '显示密码'}
             onClick={() => setShowPassword((prev) => !prev)}
             className="absolute inset-y-0 right-0 pr-4 flex items-center text-zinc-400 hover:text-zinc-600 transition-colors"
           >
@@ -205,7 +205,7 @@ export function SignUpForm() {
           />
           <button
             type="button"
-            tabIndex={-1}
+            aria-label={showConfirmPassword ? '隐藏确认密码' : '显示确认密码'}
             onClick={() => setShowConfirmPassword((prev) => !prev)}
             className="absolute inset-y-0 right-0 pr-4 flex items-center text-zinc-400 hover:text-zinc-600 transition-colors"
           >

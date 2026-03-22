@@ -101,7 +101,7 @@ export function SignInForm() {
           <label htmlFor="password" className="block text-sm font-medium text-zinc-700">
             密码
           </label>
-          <Link href="/forgot-password" tabIndex={-1} className="text-sm font-medium text-indigo-600 hover:text-indigo-500 transition-colors">
+          <Link href="/forgot-password" className="text-sm font-medium text-indigo-600 hover:text-indigo-500 transition-colors">
             忘记密码？
           </Link>
         </div>
@@ -120,7 +120,7 @@ export function SignInForm() {
           />
           <button
             type="button"
-            tabIndex={-1}
+            aria-label={showPassword ? '隐藏密码' : '显示密码'}
             onClick={() => setShowPassword((prev) => !prev)}
             className="absolute inset-y-0 right-0 pr-4 flex items-center text-zinc-400 hover:text-zinc-600 transition-colors"
           >
