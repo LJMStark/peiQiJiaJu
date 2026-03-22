@@ -6,13 +6,16 @@ import Image from 'next/image';
 import { motion, AnimatePresence } from 'motion/react';
 import { readJson, type RoomsResponse, type RoomMutationResponse, type HistoryResponse, type HistoryMutationResponse } from '@/lib/client/api';
 import { formatBeijingTime } from '@/lib/beijing-time';
-import { type FurnitureItem, type HistoryItem, type PlacedFurniture, type RoomImage } from '@/lib/dashboard-types';
+import { type FurnitureItem, type HistoryItem, type PlacedFurniture } from '@/lib/dashboard-types';
 import { getGenerationAccessState } from '@/lib/generation-access';
 import { loadRoomEditorBootstrapState } from '@/lib/room-editor-bootstrap';
 import { shouldBypassImageOptimization } from '@/lib/remote-images';
 import { getFileInputSelection } from '@/lib/client/file-input';
 import { findDuplicateFurnitureGroups } from '@/lib/room-visualization';
-import { resolveHistoryRestoreRoomId } from '@/lib/room-editor-history-state';
+import {
+  restoreHistoryRoomState,
+  type RestoredHistoryRoomImage,
+} from '@/lib/room-editor-history-state';
 import { removeRoomFromState } from '@/lib/room-editor-room-state';
 import { FurniturePreviewModal } from './room-editor/FurniturePreviewModal';
 import { FurnitureDrawer } from './room-editor/FurnitureDrawer';
@@ -50,7 +53,7 @@ function getErrorMessage(error: unknown): string {
 }
 
 export function RoomEditor({ catalog, onUploadFiles, user }: RoomEditorProps) {
-  const [roomImages, setRoomImages] = useState<RoomImage[]>([]);
+  const [roomImages, setRoomImages] = useState<RestoredHistoryRoomImage[]>([]);
   const [activeRoomId, setActiveRoomId] = useState<string | null>(null);
   const [selectedFurnitures, setSelectedFurnitures] = useState<FurnitureItem[]>([]);
   const [customInstruction, setCustomInstruction] = useState('');
@@ -80,6 +83,11 @@ export function RoomEditor({ catalog, onUploadFiles, user }: RoomEditorProps) {
   const deletingRoomIdsRef = useRef<Set<string>>(new Set());
   const activeRoom = roomImages.find((room) => room.id === activeRoomId) ?? roomImages[0] ?? null;
   const hasDuplicateFurnitureTypes = findDuplicateFurnitureGroups(selectedFurnitures).length > 0;
+  const roomStatusLabel = isBootstrapping
+    ? '同步中...'
+    : roomImages.length > 0
+      ? `可选 ${roomImages.length} 张`
+      : '未上传';
 
   useEffect(() => {
     activeRoomIdRef.current = activeRoomId;
@@ -297,6 +305,7 @@ export function RoomEditor({ catalog, onUploadFiles, user }: RoomEditorProps) {
         },
         body: JSON.stringify({
           roomImageId: activeRoom.id,
+          historyItemId: activeRoom.restoreHistoryItemId ?? null,
           furnitureItemIds: selectedFurnitures.map((furniture) => furniture.id),
           customInstruction: effectiveInstruction.trim() ? effectiveInstruction : null,
         }),
@@ -334,13 +343,15 @@ export function RoomEditor({ catalog, onUploadFiles, user }: RoomEditorProps) {
   };
 
   const loadHistoryItem = (item: HistoryItem) => {
-    setActiveRoomId((currentActiveRoomId) =>
-      resolveHistoryRestoreRoomId({
-        currentRooms: roomImages,
-        currentActiveRoomId,
-        historyRoomId: item.roomImage.id,
-      })
-    );
+    setRoomImages((currentRooms) => {
+      const nextState = restoreHistoryRoomState({
+        currentRooms,
+        historyItemId: item.id,
+        historyRoom: item.roomImage,
+      });
+      setActiveRoomId(nextState.activeRoomId);
+      return nextState.rooms;
+    });
     setSelectedFurnitures(item.furnitures.length > 0 ? item.furnitures : [item.furniture]);
     setCurrentGeneratedImage(item.generatedImage);
     setCustomInstruction(item.customInstruction || '');
@@ -406,7 +417,7 @@ export function RoomEditor({ catalog, onUploadFiles, user }: RoomEditorProps) {
     <div className="space-y-8">
       <div>
         <h2 className="text-2xl font-bold text-zinc-900 mb-1">室内编辑器</h2>
-        <p className="text-zinc-500">选择 1 张当前室内图，并将已选家具一次性融合到同一张效果图中。</p>
+        <p className="text-zinc-500">选择当前室内图，并将已选家具一次性融合到同一张效果图中。</p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 lg:gap-8 lg:h-[calc(100vh-180px)]">
@@ -420,7 +431,7 @@ export function RoomEditor({ catalog, onUploadFiles, user }: RoomEditorProps) {
                 <h3 className="font-medium text-zinc-900">上传室内图</h3>
               </div>
               <span className="text-xs font-medium bg-zinc-100 text-zinc-600 px-2 py-1 rounded-md">
-                {isBootstrapping ? '同步中...' : activeRoom ? '当前 1 张' : '未上传'}
+                {roomStatusLabel}
               </span>
             </div>
             

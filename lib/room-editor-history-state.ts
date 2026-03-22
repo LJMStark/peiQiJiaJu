@@ -1,23 +1,35 @@
 import type { RoomImage } from '@/lib/dashboard-types';
 
-type ResolveHistoryRestoreRoomParams = {
-  currentRooms: readonly RoomImage[];
-  currentActiveRoomId: string | null;
-  historyRoomId: string;
+export type RestoredHistoryRoomImage = RoomImage & {
+  restoreHistoryItemId?: string;
 };
 
-export function resolveHistoryRestoreRoomId({
+type RestoreHistoryRoomStateInput = {
+  currentRooms: readonly RestoredHistoryRoomImage[];
+  historyItemId: string;
+  historyRoom: RoomImage;
+};
+
+export function restoreHistoryRoomState({
   currentRooms,
-  currentActiveRoomId,
-  historyRoomId,
-}: ResolveHistoryRestoreRoomParams) {
-  if (currentRooms.some((room) => room.id === historyRoomId)) {
-    return historyRoomId;
+  historyItemId,
+  historyRoom,
+}: RestoreHistoryRoomStateInput) {
+  if (currentRooms.some((room) => room.id === historyRoom.id)) {
+    return {
+      rooms: [...currentRooms],
+      activeRoomId: historyRoom.id,
+    };
   }
 
-  if (currentActiveRoomId && currentRooms.some((room) => room.id === currentActiveRoomId)) {
-    return currentActiveRoomId;
-  }
-
-  return currentRooms[0]?.id ?? null;
+  return {
+    rooms: [
+      {
+        ...historyRoom,
+        restoreHistoryItemId: historyItemId,
+      },
+      ...currentRooms,
+    ],
+    activeRoomId: historyRoom.id,
+  };
 }

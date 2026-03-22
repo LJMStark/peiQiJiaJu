@@ -1,7 +1,7 @@
 import type { RoomImage } from '@/lib/dashboard-types';
 
-export function removeRoomFromState(input: {
-  currentRooms: readonly RoomImage[];
+export function removeRoomFromState<TRoom extends RoomImage>(input: {
+  currentRooms: readonly TRoom[];
   currentActiveRoomId: string | null;
   removedRoomId: string;
 }) {

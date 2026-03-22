@@ -4,6 +4,7 @@ import { randomUUID } from 'node:crypto';
 import type { PoolClient } from 'pg';
 import { db, query } from '@/lib/db';
 import type { FurnitureItem, HistoryItem, RoomAspectRatio, RoomImage } from '@/lib/dashboard-types';
+import { buildHistorySnapshotRoomId } from '@/lib/history-room-snapshot';
 import { runWithRoomCleanupRecovery } from '@/lib/room-image-cleanup';
 import { createRoomImageCleanupPlan } from '@/lib/room-image-policy';
 import { inferRoomAspectRatioFromDimensions } from '@/lib/room-aspect-ratio';
@@ -220,7 +221,10 @@ async function serializeHistory(row: HistoryRow): Promise<HistoryItem> {
   return {
     id: row.id,
     roomImage: {
-      id: row.room_image_id ?? `${row.id}:room`,
+      id: buildHistorySnapshotRoomId({
+        historyItemId: row.id,
+        roomImageId: row.room_image_id,
+      }),
       name: row.room_name_snapshot,
       storagePath: row.room_storage_path_snapshot,
       imageUrl: await createSignedImageUrl('room', row.room_storage_path_snapshot),
@@ -483,7 +487,14 @@ export async function listHistoryItems(userId: string) {
 export async function createHistoryItem(
   userId: string,
   input: {
-    roomImageId: string;
+    roomImageId: string | null;
+    roomFallback?: {
+      name: string;
+      storagePath: string;
+      mimeType: string;
+      fileSize: number;
+      aspectRatio: string | null;
+    };
     furnitureItemIds: string[];
     generatedDataUrl: string;
     customInstruction?: string | null;
@@ -497,12 +508,14 @@ export async function createHistoryItem(
   }
 ) {
   const [roomResult, furnitureResult] = await Promise.all([
-    query<RoomRow>(
-      `select id, name, storage_path, mime_type, file_size, aspect_ratio, created_at, updated_at
-       from room_images
-       where id = $1 and user_id = $2`,
-      [input.roomImageId, userId]
-    ),
+    input.roomImageId
+      ? query<RoomRow>(
+          `select id, name, storage_path, mime_type, file_size, aspect_ratio, created_at, updated_at
+           from room_images
+           where id = $1 and user_id = $2`,
+          [input.roomImageId, userId]
+        )
+      : Promise.resolve({ rows: [] as RoomRow[] }),
     query<FurnitureRow>(
       `select id, name, category, storage_path, mime_type, file_size, created_at, updated_at
        from furniture_items
@@ -512,6 +525,23 @@ export async function createHistoryItem(
   ]);
 
   const room = roomResult.rows[0];
+  const resolvedRoomSource = room
+    ? {
+        name: room.name,
+        storagePath: room.storage_path,
+        mimeType: room.mime_type,
+        fileSize: room.file_size,
+        aspectRatio: room.aspect_ratio,
+      }
+    : input.roomFallback
+      ? {
+          name: input.roomFallback.name,
+          storagePath: input.roomFallback.storagePath,
+          mimeType: input.roomFallback.mimeType,
+          fileSize: input.roomFallback.fileSize,
+          aspectRatio: input.roomFallback.aspectRatio,
+        }
+      : null;
   const furnitureRowsById = new Map(furnitureResult.rows.map((row) => [row.id, row]));
 
   const resolvedFurnitureSelection = resolveHistoryFurnitureSelection({
@@ -532,7 +562,7 @@ export async function createHistoryItem(
     furnitureFallbacks: input.furnitureFallbacks,
   });
 
-  if (!room) {
+  if (!resolvedRoomSource) {
     throw new Error('Room image not found.');
   }
 
@@ -541,17 +571,17 @@ export async function createHistoryItem(
   }
 
   const roomSnapshotUpload = await copyStoredImage(userId, 'room', {
-    sourcePath: room.storage_path,
-    mimeType: room.mime_type,
-    fileName: buildRoomHistorySnapshotName(room.name),
+    sourcePath: resolvedRoomSource.storagePath,
+    mimeType: resolvedRoomSource.mimeType,
+    fileName: buildRoomHistorySnapshotName(resolvedRoomSource.name),
   });
   const roomSnapshot = {
     id: null,
-    name: room.name,
+    name: resolvedRoomSource.name,
     storagePath: roomSnapshotUpload.storagePath,
-    mimeType: room.mime_type,
+    mimeType: resolvedRoomSource.mimeType,
     fileSize: roomSnapshotUpload.fileSize,
-    aspectRatio: room.aspect_ratio,
+    aspectRatio: resolvedRoomSource.aspectRatio,
   };
   const resolvedFurnitureSnapshots = resolvedFurnitureSelection.snapshots;
   const primaryFurnitureSnapshot = resolvedFurnitureSnapshots[0]!;

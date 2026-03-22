@@ -1,10 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { resolveHistoryRestoreRoomId } from '../lib/room-editor-history-state.ts';
+import { restoreHistoryRoomState } from '../lib/room-editor-history-state.ts';
 
-test('resolveHistoryRestoreRoomId keeps the current room when the history room is no longer current', () => {
-  const roomId = resolveHistoryRestoreRoomId({
+test('restoreHistoryRoomState injects the history room snapshot when it is no longer current', () => {
+  const nextState = restoreHistoryRoomState({
     currentRooms: [
       {
         id: 'current-room',
@@ -15,15 +15,38 @@ test('resolveHistoryRestoreRoomId keeps the current room when the history room i
         fileSize: 123,
       },
     ],
-    currentActiveRoomId: 'current-room',
-    historyRoomId: 'history-room',
+    historyItemId: 'history-1',
+    historyRoom: {
+      id: 'history-room',
+      name: 'History room',
+      storagePath: 'room/history.webp',
+      imageUrl: 'https://example.com/history.webp',
+      mimeType: 'image/webp',
+      fileSize: 456,
+    },
   });
 
-  assert.equal(roomId, 'current-room');
+  assert.equal(nextState.activeRoomId, 'history-room');
+  assert.deepEqual(
+    nextState.rooms.map((room) => ({
+      id: room.id,
+      restoreHistoryItemId: room.restoreHistoryItemId ?? null,
+    })),
+    [
+      {
+        id: 'history-room',
+        restoreHistoryItemId: 'history-1',
+      },
+      {
+        id: 'current-room',
+        restoreHistoryItemId: null,
+      },
+    ]
+  );
 });
 
-test('resolveHistoryRestoreRoomId reuses the matching room when the history room is still current', () => {
-  const roomId = resolveHistoryRestoreRoomId({
+test('restoreHistoryRoomState reuses the matching current room without duplicating it', () => {
+  const nextState = restoreHistoryRoomState({
     currentRooms: [
       {
         id: 'room-a',
@@ -42,19 +65,35 @@ test('resolveHistoryRestoreRoomId reuses the matching room when the history room
         fileSize: 456,
       },
     ],
-    currentActiveRoomId: 'room-a',
-    historyRoomId: 'room-b',
+    historyItemId: 'history-2',
+    historyRoom: {
+      id: 'room-b',
+      name: 'Room B snapshot',
+      storagePath: 'room/b-history.webp',
+      imageUrl: 'https://example.com/b-history.webp',
+      mimeType: 'image/webp',
+      fileSize: 789,
+    },
   });
 
-  assert.equal(roomId, 'room-b');
+  assert.equal(nextState.activeRoomId, 'room-b');
+  assert.deepEqual(nextState.rooms.map((room) => room.id), ['room-a', 'room-b']);
 });
 
-test('resolveHistoryRestoreRoomId returns null when there is no current room', () => {
-  const roomId = resolveHistoryRestoreRoomId({
+test('restoreHistoryRoomState restores the history room even when there is no current room', () => {
+  const nextState = restoreHistoryRoomState({
     currentRooms: [],
-    currentActiveRoomId: null,
-    historyRoomId: 'history-room',
+    historyItemId: 'history-3',
+    historyRoom: {
+      id: 'history-room',
+      name: 'History room',
+      storagePath: 'room/history.webp',
+      imageUrl: 'https://example.com/history.webp',
+      mimeType: 'image/webp',
+      fileSize: 123,
+    },
   });
 
-  assert.equal(roomId, null);
+  assert.equal(nextState.activeRoomId, 'history-room');
+  assert.deepEqual(nextState.rooms.map((room) => room.id), ['history-room']);
 });

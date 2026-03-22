@@ -49,6 +49,7 @@ function createGenerationDepsWithCallCounters(generationCount: number) {
   const calls = {
     getGenerationCount: 0,
     getOwnedRoomImage: 0,
+    getHistoryRoomSnapshot: 0,
     getOwnedFurnitureItems: 0,
     generateVisualization: 0,
     createHistoryItem: 0,
@@ -68,8 +69,13 @@ function createGenerationDepsWithCallCounters(generationCount: number) {
           name: '客厅',
           storagePath: 'room/path.png',
           mimeType: 'image/png',
+          fileSize: 1024,
           aspectRatio: '4:3',
         };
+      },
+      async getHistoryRoomSnapshot() {
+        calls.getHistoryRoomSnapshot += 1;
+        return null;
       },
       async getOwnedFurnitureItems() {
         calls.getOwnedFurnitureItems += 1;
@@ -108,6 +114,7 @@ test('generateRoomVisualizationForUser blocks expired memberships before loading
         },
         {
           roomImageId: 'room-1',
+          historyItemId: null,
           furnitureItemIds: ['furniture-1'],
           customInstruction: null,
         },
@@ -141,6 +148,7 @@ test('generateRoomVisualizationForUser blocks free-limit users before loading an
         },
         {
           roomImageId: 'room-1',
+          historyItemId: null,
           furnitureItemIds: ['furniture-1'],
           customInstruction: null,
         },

@@ -1,8 +1,10 @@
 import { FREE_GENERATION_LIMIT, getGenerationAccessState } from '../../generation-access.ts';
+import { buildHistorySnapshotRoomId } from '../../history-room-snapshot.ts';
 import { createRouteError } from '../http/error-envelope.ts';
 
 export type GenerateRoomRequest = {
   roomImageId: string;
+  historyItemId: string | null;
   furnitureItemIds: string[];
   customInstruction: string | null;
 };
@@ -18,6 +20,7 @@ export type OwnedRoomImageSource = {
   name: string;
   storagePath: string;
   mimeType: string;
+  fileSize: number;
   aspectRatio: string | null;
 };
 
@@ -35,6 +38,11 @@ export type GenerationServiceDeps<THistoryItem = unknown> = {
     userId: string,
     roomImageId: string
   ) => Promise<OwnedRoomImageSource | null>;
+  getHistoryRoomSnapshot: (
+    userId: string,
+    historyItemId: string,
+    roomImageId: string
+  ) => Promise<OwnedRoomImageSource | null>;
   getOwnedFurnitureItems: (
     userId: string,
     furnitureItemIds: readonly string[]
@@ -47,7 +55,8 @@ export type GenerationServiceDeps<THistoryItem = unknown> = {
   createHistoryItem: (
     userId: string,
     input: {
-      roomImageId: string;
+      roomImageId: string | null;
+      roomFallback?: OwnedRoomImageSource | null;
       furnitureItemIds: readonly string[];
       generatedDataUrl: string;
       customInstruction: string | null;
@@ -60,6 +69,7 @@ type RoomSourceRow = {
   name: string;
   storage_path: string;
   mime_type: string;
+  file_size: number;
   aspect_ratio: string | null;
 };
 
@@ -69,6 +79,16 @@ type FurnitureSourceRow = {
   category: string;
   storage_path: string;
   mime_type: string;
+};
+
+type HistoryRoomSnapshotRow = {
+  id: string;
+  room_image_id: string | null;
+  room_name_snapshot: string;
+  room_storage_path_snapshot: string;
+  room_mime_type_snapshot: string;
+  room_file_size_snapshot: number;
+  room_aspect_ratio_snapshot: string | null;
 };
 
 function readTrimmedStringField(body: Record<string, unknown>, key: string): string {
@@ -122,9 +142,11 @@ export function parseGenerateRequest(body: Record<string, unknown>): GenerateRoo
   }
 
   const customInstruction = readTrimmedStringField(body, 'customInstruction');
+  const historyItemId = readTrimmedStringField(body, 'historyItemId');
 
   return {
     roomImageId,
+    historyItemId: historyItemId || null,
     furnitureItemIds: resolvedFurnitureItemIds,
     customInstruction: customInstruction || null,
   };
@@ -158,7 +180,11 @@ export async function generateRoomVisualizationForUser<THistoryItem>(
     });
   }
 
-  const roomImage = await deps.getOwnedRoomImage(user.id, input.roomImageId);
+  const ownedRoomImage = await deps.getOwnedRoomImage(user.id, input.roomImageId);
+  const historyRoomSnapshot = !ownedRoomImage && input.historyItemId
+    ? await deps.getHistoryRoomSnapshot(user.id, input.historyItemId, input.roomImageId)
+    : null;
+  const roomImage = ownedRoomImage ?? historyRoomSnapshot;
   if (!roomImage) {
     throw createRouteError({
       status: 404,
@@ -188,7 +214,8 @@ export async function generateRoomVisualizationForUser<THistoryItem>(
   });
 
   return deps.createHistoryItem(user.id, {
-    roomImageId: roomImage.id,
+    roomImageId: ownedRoomImage?.id ?? null,
+    roomFallback: historyRoomSnapshot,
     furnitureItemIds: orderedFurnitureItems.map((item) => item.id),
     generatedDataUrl,
     customInstruction: input.customInstruction,
@@ -209,7 +236,7 @@ async function createDefaultGenerationServiceDeps() {
     },
     async getOwnedRoomImage(userId, roomImageId) {
       const roomResult = await query<RoomSourceRow>(
-        `select id, name, storage_path, mime_type, aspect_ratio
+        `select id, name, storage_path, mime_type, file_size, aspect_ratio
          from room_images
          where id = $1 and user_id = $2`,
         [roomImageId, userId]
@@ -225,7 +252,45 @@ async function createDefaultGenerationServiceDeps() {
         name: row.name,
         storagePath: row.storage_path,
         mimeType: row.mime_type,
+        fileSize: row.file_size,
         aspectRatio: row.aspect_ratio,
+      };
+    },
+    async getHistoryRoomSnapshot(userId, historyItemId, roomImageId) {
+      const historyResult = await query<HistoryRoomSnapshotRow>(
+        `select
+           id,
+           room_image_id,
+           room_name_snapshot,
+           room_storage_path_snapshot,
+           room_mime_type_snapshot,
+           room_file_size_snapshot,
+           room_aspect_ratio_snapshot
+         from generation_history
+         where id = $1 and user_id = $2`,
+        [historyItemId, userId]
+      );
+
+      const row = historyResult.rows[0];
+      if (!row) {
+        return null;
+      }
+
+      const expectedRoomId = buildHistorySnapshotRoomId({
+        historyItemId: row.id,
+        roomImageId: row.room_image_id,
+      });
+      if (expectedRoomId !== roomImageId) {
+        return null;
+      }
+
+      return {
+        id: expectedRoomId,
+        name: row.room_name_snapshot,
+        storagePath: row.room_storage_path_snapshot,
+        mimeType: row.room_mime_type_snapshot,
+        fileSize: row.room_file_size_snapshot,
+        aspectRatio: row.room_aspect_ratio_snapshot,
       };
     },
     async getOwnedFurnitureItems(userId, furnitureItemIds) {
@@ -251,6 +316,7 @@ async function createDefaultGenerationServiceDeps() {
     async createHistoryItem(userId, input) {
       return createHistoryItem(userId, {
         roomImageId: input.roomImageId,
+        roomFallback: input.roomFallback ?? undefined,
         furnitureItemIds: [...input.furnitureItemIds],
         generatedDataUrl: input.generatedDataUrl,
         customInstruction: input.customInstruction,

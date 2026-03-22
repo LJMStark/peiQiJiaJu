@@ -34,11 +34,12 @@ test('generation service is the only history write entrypoint', async () => {
       role: 'user',
       vipExpiresAt: null,
     },
-    {
-      roomImageId: 'room-1',
-      furnitureItemIds: ['furniture-1'],
-      customInstruction: '保留原有采光',
-    },
+        {
+          roomImageId: 'room-1',
+          historyItemId: null,
+          furnitureItemIds: ['furniture-1'],
+          customInstruction: '保留原有采光',
+        },
     {
       async getGenerationCount() {
         return 0;
@@ -49,8 +50,12 @@ test('generation service is the only history write entrypoint', async () => {
           name: '客厅',
           storagePath: 'room/path.png',
           mimeType: 'image/png',
+          fileSize: 1024,
           aspectRatio: '4:3',
         };
+      },
+      async getHistoryRoomSnapshot() {
+        return null;
       },
       async getOwnedFurnitureItems() {
         return [
