@@ -11,6 +11,7 @@ import {
   claimInviteFromLink,
   ensureInviteLinkForUser,
   finalizeInviteAfterVerification,
+  getInviteLinkForUser,
   recordInviteSignup,
   rotateInviteLinkForUser,
 } from '../lib/server/invitation-service.ts';
@@ -120,6 +121,26 @@ test('ensureInviteLinkForUser creates a single active link for verified users', 
   assert.equal(firstLink.code, 'INVITE000001');
   assert.equal(secondLink.code, 'INVITE000001');
   assert.equal(repo.referrals.length, 0);
+});
+
+test('getInviteLinkForUser returns null until a link is explicitly created', async () => {
+  const repo = createMemoryRepo([
+    {
+      id: 'inviter',
+      email: 'inviter@example.com',
+      name: '佩奇家具',
+      emailVerified: true,
+      createdAt: new Date('2026-03-21T00:00:00.000Z'),
+    },
+  ]);
+
+  const inviteLink = await getInviteLinkForUser({
+    repo,
+    inviterUserId: 'inviter',
+    baseUrl: 'https://peiqi.example.com',
+  });
+
+  assert.equal(inviteLink, null);
 });
 
 test('claimInviteFromLink rejects self-invites and older accounts', async () => {

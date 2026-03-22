@@ -7,8 +7,10 @@ import { postJson, requestJson } from '@/lib/client/api';
 import { resolveInviteCenterErrorState } from '@/lib/invite-center-error-state';
 
 type InviteCenterResponse = {
-  inviteUrl: string;
-  code: string;
+  inviteLink: {
+    inviteUrl: string;
+    code: string;
+  } | null;
   stats: {
     registered: number;
     pending: number;
@@ -76,6 +78,7 @@ export function InviteCenter(): JSX.Element {
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [noticeTone, setNoticeTone] = useState<NoticeTone>('success');
+  const [isCreatePending, startCreateTransition] = useTransition();
   const [isResetPending, startResetTransition] = useTransition();
 
   useEffect(() => {
@@ -123,18 +126,45 @@ export function InviteCenter(): JSX.Element {
   };
 
   const handleCopy = async () => {
-    if (!data) {
+    if (!data?.inviteLink) {
       return;
     }
 
     try {
-      await navigator.clipboard.writeText(data.inviteUrl);
+      await navigator.clipboard.writeText(data.inviteLink.inviteUrl);
       setNotice('邀请链接已复制，可以直接发给客户或合作伙伴。');
       setNoticeTone('success');
     } catch {
       setNotice('当前环境不支持自动复制，请手动复制上方链接。');
       setNoticeTone('error');
     }
+  };
+
+  const handleCreate = () => {
+    setNotice('');
+
+    startCreateTransition(async () => {
+      try {
+        const payload = await postJson<InviteLinkResetResponse>('/api/invitations/me');
+
+        setData((current) =>
+          current
+            ? {
+                ...current,
+                inviteLink: {
+                  inviteUrl: payload.inviteUrl,
+                  code: payload.code,
+                },
+              }
+            : current
+        );
+        setNotice('邀请链接已生成，现在可以复制并发送给新用户。');
+        setNoticeTone('success');
+      } catch (createError) {
+        setNotice(createError instanceof Error ? createError.message : '邀请链接生成失败，请稍后再试。');
+        setNoticeTone('error');
+      }
+    });
   };
 
   const handleReset = () => {
@@ -148,8 +178,10 @@ export function InviteCenter(): JSX.Element {
           current
             ? {
                 ...current,
-                inviteUrl: payload.inviteUrl,
-                code: payload.code,
+                inviteLink: {
+                  inviteUrl: payload.inviteUrl,
+                  code: payload.code,
+                },
               }
             : current
         );
@@ -234,57 +266,90 @@ export function InviteCenter(): JSX.Element {
   return (
     <div className="max-w-5xl mx-auto space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
       <section className="bg-white rounded-2xl shadow-sm border border-zinc-200 overflow-hidden">
-        <div className="bg-gradient-to-r from-sky-600 via-cyan-500 to-emerald-500 px-8 py-8 text-white">
-          <div className="max-w-3xl space-y-2">
-            <h2 className="text-3xl font-bold flex items-center gap-3">
-              <Link2 size={30} />
-              邀请链接
-            </h2>
-            <p className="text-white/90 leading-7">
-              分享你的专属邀请链接，新用户注册后会自动归因到你的账号下。完成邮箱验证后，记录会更新为有效转化。
+        <div className="px-6 py-5 border-b border-zinc-200">
+          <div className="space-y-1">
+            <h3 className="text-lg font-semibold text-zinc-900 flex items-center gap-2">
+              <Link2 size={18} className="text-sky-600" />
+              邀请系统
+            </h3>
+            <p className="text-sm leading-6 text-zinc-500">
+              需要邀请客户时再生成专属链接，避免无效链接长期暴露。新用户注册后会自动归因到你的账号下，完成邮箱验证后记为有效转化。
             </p>
           </div>
         </div>
 
-        <div className="p-8 space-y-6">
-          <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-5 space-y-4">
-            <div className="flex flex-wrap items-start justify-between gap-4">
-              <div className="space-y-2 min-w-0">
-                <p className="text-sm font-medium text-zinc-500">我的邀请链接</p>
-                <div className="flex items-center gap-2 text-zinc-900">
-                  <Link2 size={18} className="text-sky-600 shrink-0" />
-                  <p className="font-medium break-all">{data.inviteUrl}</p>
+        <div className="p-6 space-y-6">
+          {data.inviteLink ? (
+            <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-5 space-y-4">
+              <div className="flex flex-wrap items-start justify-between gap-4">
+                <div className="space-y-2 min-w-0">
+                  <p className="text-sm font-medium text-zinc-500">当前邀请链接</p>
+                  <div className="flex items-center gap-2 text-zinc-900">
+                    <Link2 size={18} className="text-sky-600 shrink-0" />
+                    <p className="font-medium break-all">{data.inviteLink.inviteUrl}</p>
+                  </div>
+                  <p className="text-xs text-zinc-500">邀请码：{data.inviteLink.code}</p>
                 </div>
-                <p className="text-xs text-zinc-500">邀请码：{data.code}</p>
+
+                <div className="flex flex-wrap gap-3">
+                  <button
+                    type="button"
+                    onClick={handleCopy}
+                    className="inline-flex items-center gap-2 rounded-xl bg-zinc-900 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-zinc-800"
+                  >
+                    <Copy size={16} />
+                    复制链接
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleReset}
+                    disabled={isResetPending}
+                    className="inline-flex items-center gap-2 rounded-xl border border-zinc-200 bg-white px-4 py-2.5 text-sm font-medium text-zinc-700 transition hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {isResetPending ? <Loader2 size={16} className="animate-spin" /> : <RefreshCcw size={16} />}
+                    重新生成
+                  </button>
+                </div>
               </div>
 
-              <div className="flex flex-wrap gap-3">
-                <button
-                  type="button"
-                  onClick={handleCopy}
-                  className="inline-flex items-center gap-2 rounded-xl bg-zinc-900 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-zinc-800"
-                >
-                  <Copy size={16} />
-                  复制链接
-                </button>
-                <button
-                  type="button"
-                  onClick={handleReset}
-                  disabled={isResetPending}
-                  className="inline-flex items-center gap-2 rounded-xl border border-zinc-200 bg-white px-4 py-2.5 text-sm font-medium text-zinc-700 transition hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  {isResetPending ? <Loader2 size={16} className="animate-spin" /> : <RefreshCcw size={16} />}
-                  重置链接
-                </button>
-              </div>
+              <p className="text-xs leading-6 text-zinc-500">
+                重新生成后，旧链接和旧邀请码会立即失效，适合在分享范围失控或需要更换渠道时使用。
+              </p>
+
+              {notice ? (
+                <div className={`rounded-xl px-4 py-3 text-sm ${getNoticeClassName(noticeTone)}`}>
+                  {notice}
+                </div>
+              ) : null}
             </div>
+          ) : (
+            <div className="rounded-2xl border border-dashed border-zinc-300 bg-zinc-50/70 p-6">
+              <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                <div className="space-y-2">
+                  <h4 className="text-base font-semibold text-zinc-900">还没有邀请链接</h4>
+                  <p className="max-w-2xl text-sm leading-6 text-zinc-500">
+                    平台不会默认生成邀请链接。只有在你准备开始邀请时，才创建一条唯一有效的邀请码和注册链接。
+                  </p>
+                </div>
 
-            {notice ? (
-              <div className={`rounded-xl px-4 py-3 text-sm ${getNoticeClassName(noticeTone)}`}>
-                {notice}
+                <button
+                  type="button"
+                  onClick={handleCreate}
+                  disabled={isCreatePending}
+                  className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-zinc-900 px-5 py-3 text-sm font-medium text-white transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {isCreatePending ? <Loader2 size={16} className="animate-spin" /> : <Link2 size={16} />}
+                  生成邀请链接
+                </button>
               </div>
-            ) : null}
-          </div>
+
+              {notice ? (
+                <div className={`mt-4 rounded-xl px-4 py-3 text-sm ${getNoticeClassName(noticeTone)}`}>
+                  {notice}
+                </div>
+              ) : null}
+            </div>
+          )}
 
           <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
             {statsCards.map((card) => (
@@ -308,7 +373,9 @@ export function InviteCenter(): JSX.Element {
 
         {data.recentReferrals.length === 0 ? (
           <div className="px-6 py-12 text-center text-zinc-500">
-            还没有邀请记录。复制上方链接后分享给需要注册的新用户即可开始累计数据。
+            {data.inviteLink
+              ? '还没有邀请记录。复制上方链接后分享给需要注册的新用户即可开始累计数据。'
+              : '生成邀请链接后分享给新用户，这里会开始累计你的邀请数据。'}
           </div>
         ) : (
           <div className="divide-y divide-zinc-100">

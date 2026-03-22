@@ -92,7 +92,7 @@ export function SignUpForm() {
     <form onSubmit={handleSubmit} className="space-y-5">
       {isInvitedSignup ? (
         <div className="rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-3 text-sm text-indigo-700">
-          这是一个邀请注册链接，邀请码已自动填写。完成邮箱验证后，会自动回到会员中心中的邀请链接页面。
+          这是一个邀请注册链接，邀请码已自动填写。完成邮箱验证后，会自动回到会员中心。
         </div>
       ) : null}
 

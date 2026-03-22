@@ -7,7 +7,7 @@ export const VIP_DASHBOARD_TAB = 'vip';
 export const VIP_CENTER_DEFAULT_SECTION = 'overview';
 export const VIP_CENTER_INVITE_SECTION = 'invite';
 export const INVITE_LEGACY_DASHBOARD_PATH = `/?tab=${INVITE_DASHBOARD_TAB}`;
-export const INVITE_DASHBOARD_PATH = `/?tab=${VIP_DASHBOARD_TAB}&section=${VIP_CENTER_INVITE_SECTION}`;
+export const INVITE_DASHBOARD_PATH = `/?tab=${VIP_DASHBOARD_TAB}`;
 
 export const INVITE_ATTRIBUTION_WINDOW_DAYS = 7;
 export const INVITE_LATE_CLAIM_WINDOW_HOURS = 24;

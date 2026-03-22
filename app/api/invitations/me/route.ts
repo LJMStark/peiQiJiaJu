@@ -1,8 +1,9 @@
 import { NextResponse } from 'next/server';
 import { requireVerifiedRequestSession } from '@/lib/auth-session';
-import { ensureInviteLinkForUser } from '@/lib/server/invitation-service';
-import { getInviteCenterData, withInvitationTransaction } from '@/lib/server/invitation-store';
 import { generateInviteCode } from '@/lib/invitations';
+import { getSiteBaseUrl } from '@/lib/site-url';
+import { ensureInviteLinkForUser, getInviteLinkForUser } from '@/lib/server/invitation-service';
+import { getInviteCenterData, withInvitationTransaction } from '@/lib/server/invitation-store';
 
 export async function GET(request: Request) {
   const authState = await requireVerifiedRequestSession(request);
@@ -10,7 +11,41 @@ export async function GET(request: Request) {
     return authState.response;
   }
 
-  const baseUrl = new URL(request.url).origin;
+  const baseUrl = getSiteBaseUrl({ requestUrl: request.url });
+
+  try {
+    const inviteLink = await withInvitationTransaction(async (repo) => {
+      return getInviteLinkForUser({
+        repo,
+        inviterUserId: authState.session.user.id,
+        baseUrl,
+      });
+    });
+    const inviteCenter = await getInviteCenterData(authState.session.user.id);
+
+    return NextResponse.json({
+      inviteLink: inviteLink
+        ? {
+            inviteUrl: inviteLink.inviteUrl,
+            code: inviteLink.code,
+          }
+        : null,
+      stats: inviteCenter.stats,
+      recentReferrals: inviteCenter.recentReferrals,
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Failed to load invite center.';
+    return NextResponse.json({ error: message }, { status: 400 });
+  }
+}
+
+export async function POST(request: Request) {
+  const authState = await requireVerifiedRequestSession(request);
+  if (authState.response) {
+    return authState.response;
+  }
+
+  const baseUrl = getSiteBaseUrl({ requestUrl: request.url });
 
   try {
     const inviteLink = await withInvitationTransaction(async (repo) => {
@@ -22,16 +57,13 @@ export async function GET(request: Request) {
         codeGenerator: generateInviteCode,
       });
     });
-    const inviteCenter = await getInviteCenterData(authState.session.user.id);
 
     return NextResponse.json({
       inviteUrl: inviteLink.inviteUrl,
       code: inviteLink.code,
-      stats: inviteCenter.stats,
-      recentReferrals: inviteCenter.recentReferrals,
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Failed to load invite center.';
+    const message = error instanceof Error ? error.message : 'Failed to create invite link.';
     return NextResponse.json({ error: message }, { status: 400 });
   }
 }

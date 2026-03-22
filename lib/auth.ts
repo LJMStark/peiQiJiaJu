@@ -7,6 +7,7 @@ import { Pool } from 'pg';
 import { shouldIgnorePgPoolError } from './db-error';
 import { sendEmail } from './send-email';
 import { readInviteCodeFromCookieHeader } from './invitations';
+import { getSiteBaseUrl } from './site-url';
 import { withInvitationTransaction } from './server/invitation-store';
 import { finalizeInviteAfterVerification } from './server/invitation-service';
 
@@ -20,7 +21,7 @@ const globalForAuth = globalThis as typeof globalThis & {
 };
 
 function getBaseUrl() {
-  return process.env.NEXT_PUBLIC_BASE_URL ?? process.env.APP_URL ?? 'http://localhost:3000';
+  return getSiteBaseUrl();
 }
 
 function getAuthSecret() {

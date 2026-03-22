@@ -79,7 +79,7 @@ test('invite timing windows match the product rules', () => {
   assert.equal(INVITE_COOKIE_NAME, 'peiqi_invite');
   assert.equal(INVITE_DASHBOARD_TAB, 'invite');
   assert.equal(INVITE_LEGACY_DASHBOARD_PATH, '/?tab=invite');
-  assert.equal(INVITE_DASHBOARD_PATH, '/?tab=vip&section=invite');
+  assert.equal(INVITE_DASHBOARD_PATH, '/?tab=vip');
 });
 
 test('resolveSignupInviteCode prefers the submitted form value before the cookie fallback', () => {
@@ -111,18 +111,23 @@ test('resolveSignupInviteCode prefers the submitted form value before the cookie
 test('resolveDashboardLocation maps the legacy invite tab to the vip invite section', () => {
   assert.deepEqual(resolveDashboardLocation(INVITE_DASHBOARD_TAB, null), {
     activeTab: 'vip',
-    vipSection: VIP_CENTER_INVITE_SECTION,
-    canonicalPath: '/?tab=vip&section=invite',
+    vipSection: VIP_CENTER_DEFAULT_SECTION,
+    canonicalPath: '/?tab=vip',
   });
 });
 
-test('dashboard navigation helpers build canonical vip paths without keeping invalid sections', () => {
+test('dashboard navigation helpers keep vip center on a single canonical page', () => {
   assert.equal(buildDashboardPath('catalog'), '/');
   assert.equal(buildDashboardPath('editor'), '/?tab=editor');
   assert.equal(buildDashboardPath('vip'), '/?tab=vip');
-  assert.equal(buildDashboardPath('vip', { vipSection: VIP_CENTER_INVITE_SECTION }), '/?tab=vip&section=invite');
 
   assert.deepEqual(resolveDashboardLocation('vip', 'unknown'), {
+    activeTab: 'vip',
+    vipSection: VIP_CENTER_DEFAULT_SECTION,
+    canonicalPath: '/?tab=vip',
+  });
+
+  assert.deepEqual(resolveDashboardLocation('vip', VIP_CENTER_INVITE_SECTION), {
     activeTab: 'vip',
     vipSection: VIP_CENTER_DEFAULT_SECTION,
     canonicalPath: '/?tab=vip',

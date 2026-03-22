@@ -18,9 +18,8 @@ import {
 } from '@/lib/company-name';
 import { startCatalogDelete } from '@/lib/catalog-state';
 import { updateUser } from '@/lib/auth-client';
-import { buildDashboardPath, resolveDashboardLocation, type DashboardTab, type VipCenterSection } from '@/lib/dashboard-navigation';
+import { buildDashboardPath, resolveDashboardLocation, type DashboardTab } from '@/lib/dashboard-navigation';
 import type { FurnitureItem } from '@/lib/dashboard-types';
-import { VIP_CENTER_DEFAULT_SECTION } from '@/lib/invitations';
 
 type DashboardProps = {
   companyName: string;
@@ -101,7 +100,6 @@ export function Dashboard({ companyName, user, onLogout }: DashboardProps) {
   const searchParams = useSearchParams();
   const requestedLocation = resolveDashboardLocation(searchParams.get('tab'), searchParams.get('section'));
   const activeTab = requestedLocation.activeTab;
-  const activeVipSection = requestedLocation.vipSection;
   const [catalog, setCatalog] = useState<FurnitureItem[]>([]);
   const [isUploading, setIsUploading] = useState(false);
   const [isCatalogLoading, setIsCatalogLoading] = useState(true);
@@ -280,12 +278,7 @@ export function Dashboard({ companyName, user, onLogout }: DashboardProps) {
   };
 
   const handleTabChange = (nextTab: DashboardTab) => {
-    const nextVipSection = nextTab === 'vip' ? VIP_CENTER_DEFAULT_SECTION : activeVipSection;
-    router.replace(buildDashboardPath(nextTab, { vipSection: nextVipSection }), { scroll: false });
-  };
-
-  const handleVipSectionChange = (nextSection: VipCenterSection) => {
-    router.replace(buildDashboardPath('vip', { vipSection: nextSection }), { scroll: false });
+    router.replace(buildDashboardPath(nextTab), { scroll: false });
   };
 
   return (
@@ -436,11 +429,7 @@ export function Dashboard({ companyName, user, onLogout }: DashboardProps) {
             error={catalogError}
           />
         ) : activeTab === 'vip' ? (
-          <VipCenter
-            user={user}
-            section={activeVipSection}
-            onSectionChange={handleVipSectionChange}
-          />
+          <VipCenter user={user} />
         ) : isCatalogLoading ? (
           <div className="bg-white border border-zinc-200 rounded-2xl p-10 flex items-center justify-center gap-3 text-zinc-500">
             <Loader2 size={20} className="animate-spin" />

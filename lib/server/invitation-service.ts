@@ -296,6 +296,20 @@ export async function ensureInviteLinkForUser(input: EnsureInviteLinkForUserInpu
   return buildInviteLinkResult(baseUrl, inviteLink);
 }
 
+export async function getInviteLinkForUser(input: {
+  repo: InvitationRepository;
+  inviterUserId: string;
+  baseUrl: string;
+}): Promise<InviteLinkResult | null> {
+  const existingLink = await input.repo.getActiveInviteLinkByInviterId(input.inviterUserId);
+
+  if (!existingLink) {
+    return null;
+  }
+
+  return buildInviteLinkResult(input.baseUrl, existingLink);
+}
+
 export async function claimInviteFromLink(input: ClaimInviteFromLinkInput): Promise<InviteReferralRecord> {
   const { repo, inviteCode, inviteeUserId, now } = input;
   const inviteLink = await getValidatedInviteLink(repo, inviteCode);

@@ -5,6 +5,7 @@ import { getServerSession } from '@/lib/auth';
 import { getShanghaiDayRange, isAdminRole } from '@/app/admin/admin-shared';
 import { generateRedemptionCode } from '@/lib/redemption-codes';
 import { generateInviteCode } from '@/lib/invitations';
+import { getSiteBaseUrl } from '@/lib/site-url';
 import { getAdminInvitationSummary as getAdminInvitationSummaryFromStore, withInvitationTransaction } from '@/lib/server/invitation-store';
 import { rotateInviteLinkForUser } from '@/lib/server/invitation-service';
 
@@ -155,7 +156,7 @@ export async function forceResetInviteLinkForUser(targetUserId: string) {
     throw new Error('Unauthorized');
   }
 
-  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? process.env.APP_URL ?? 'http://localhost:3000';
+  const baseUrl = getSiteBaseUrl();
 
   return withInvitationTransaction(async (repo) => {
     return rotateInviteLinkForUser({

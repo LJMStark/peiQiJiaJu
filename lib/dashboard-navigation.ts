@@ -1,13 +1,11 @@
 import {
-  INVITE_DASHBOARD_PATH,
   INVITE_DASHBOARD_TAB,
   VIP_CENTER_DEFAULT_SECTION,
-  VIP_CENTER_INVITE_SECTION,
   VIP_DASHBOARD_TAB,
 } from './invitations.ts';
 
 export type DashboardTab = 'catalog' | 'editor' | typeof VIP_DASHBOARD_TAB;
-export type VipCenterSection = typeof VIP_CENTER_DEFAULT_SECTION | typeof VIP_CENTER_INVITE_SECTION;
+export type VipCenterSection = typeof VIP_CENTER_DEFAULT_SECTION;
 
 type DashboardLocation = {
   activeTab: DashboardTab;
@@ -16,10 +14,7 @@ type DashboardLocation = {
 };
 
 export function buildDashboardPath(
-  tab: DashboardTab,
-  options?: {
-    vipSection?: VipCenterSection;
-  }
+  tab: DashboardTab
 ): string {
   if (tab === 'catalog') {
     return '/';
@@ -29,18 +24,10 @@ export function buildDashboardPath(
     return '/?tab=editor';
   }
 
-  if (options?.vipSection === VIP_CENTER_INVITE_SECTION) {
-    return INVITE_DASHBOARD_PATH;
-  }
-
   return `/?tab=${VIP_DASHBOARD_TAB}`;
 }
 
 export function normalizeVipCenterSection(section: string | null | undefined): VipCenterSection {
-  if (section === VIP_CENTER_INVITE_SECTION) {
-    return VIP_CENTER_INVITE_SECTION;
-  }
-
   return VIP_CENTER_DEFAULT_SECTION;
 }
 
@@ -48,8 +35,8 @@ export function resolveDashboardLocation(tab: string | null, section: string | n
   if (tab === INVITE_DASHBOARD_TAB) {
     return {
       activeTab: VIP_DASHBOARD_TAB,
-      vipSection: VIP_CENTER_INVITE_SECTION,
-      canonicalPath: INVITE_DASHBOARD_PATH,
+      vipSection: VIP_CENTER_DEFAULT_SECTION,
+      canonicalPath: buildDashboardPath(VIP_DASHBOARD_TAB),
     };
   }
 
@@ -62,18 +49,10 @@ export function resolveDashboardLocation(tab: string | null, section: string | n
   }
 
   if (tab === VIP_DASHBOARD_TAB) {
-    const vipSection = normalizeVipCenterSection(section);
-    const canonicalPath =
-      !section
-        ? null
-        : buildDashboardPath(VIP_DASHBOARD_TAB, {
-            vipSection,
-          });
-
     return {
       activeTab: VIP_DASHBOARD_TAB,
-      vipSection,
-      canonicalPath,
+      vipSection: VIP_CENTER_DEFAULT_SECTION,
+      canonicalPath: section ? buildDashboardPath(VIP_DASHBOARD_TAB) : null,
     };
   }
 

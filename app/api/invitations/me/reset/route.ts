@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { requireVerifiedRequestSession } from '@/lib/auth-session';
 import { generateInviteCode } from '@/lib/invitations';
+import { getSiteBaseUrl } from '@/lib/site-url';
 import { rotateInviteLinkForUser } from '@/lib/server/invitation-service';
 import { withInvitationTransaction } from '@/lib/server/invitation-store';
 
@@ -10,7 +11,7 @@ export async function POST(request: Request) {
     return authState.response;
   }
 
-  const baseUrl = new URL(request.url).origin;
+  const baseUrl = getSiteBaseUrl({ requestUrl: request.url });
 
   try {
     const inviteLink = await withInvitationTransaction(async (repo) => {
