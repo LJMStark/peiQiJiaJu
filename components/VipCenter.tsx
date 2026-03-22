@@ -1,5 +1,6 @@
 'use client';
 
+import type { LucideIcon } from 'lucide-react';
 import type { JSX } from 'react';
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
@@ -19,6 +20,25 @@ type VipCenterProps = {
   section: VipCenterSection;
   onSectionChange: (section: VipCenterSection) => void;
 };
+
+type VipCenterSectionItem = {
+  value: VipCenterSection;
+  label: string;
+  icon: LucideIcon;
+};
+
+const VIP_CENTER_SECTIONS: VipCenterSectionItem[] = [
+  {
+    value: 'overview',
+    label: '会员信息',
+    icon: Crown,
+  },
+  {
+    value: 'invite',
+    label: '邀请链接',
+    icon: Link2,
+  },
+];
 
 function isVipActive(vipExpiresAt: Date | string | null | undefined): boolean {
   if (!vipExpiresAt) {
@@ -71,27 +91,11 @@ export function VipCenter({ user, section, onSectionChange }: VipCenterProps): J
 
   const isVip = isVipActive(user.vipExpiresAt);
   const daysLeft = getRemainingVipDays(user.vipExpiresAt);
-  const sections: Array<{
-    value: VipCenterSection;
-    label: string;
-    icon: typeof Crown;
-  }> = [
-    {
-      value: 'overview',
-      label: '会员信息',
-      icon: Crown,
-    },
-    {
-      value: 'invite',
-      label: '邀请链接',
-      icon: Link2,
-    },
-  ];
 
   return (
     <div className="max-w-5xl mx-auto space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
       <div className="inline-flex rounded-2xl border border-zinc-200 bg-white p-2 shadow-sm">
-        {sections.map((item) => {
+        {VIP_CENTER_SECTIONS.map((item) => {
           const Icon = item.icon;
           const isActive = item.value === section;
 

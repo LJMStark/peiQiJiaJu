@@ -87,14 +87,12 @@ function getDashboardTabClassName(
       ? 'min-h-10 px-4 py-2 rounded-xl text-sm font-medium transition-all flex items-center gap-2'
       : 'min-h-11 px-4 py-2.5 rounded-xl text-sm font-medium transition-all flex items-center gap-2 whitespace-nowrap shrink-0 snap-start';
   const isActive = activeTab === tab.value;
-  let stateClassName = tab.mobileInactiveClassName;
-
   if (variant === 'desktop') {
-    stateClassName = isActive ? tab.desktopActiveClassName : tab.desktopInactiveClassName;
-  } else {
-    stateClassName = isActive ? tab.mobileActiveClassName : tab.mobileInactiveClassName;
+    const stateClassName = isActive ? tab.desktopActiveClassName : tab.desktopInactiveClassName;
+    return `${baseClassName} ${stateClassName}`;
   }
 
+  const stateClassName = isActive ? tab.mobileActiveClassName : tab.mobileInactiveClassName;
   return `${baseClassName} ${stateClassName}`;
 }
 
@@ -102,8 +100,8 @@ export function Dashboard({ companyName, user, onLogout }: DashboardProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const requestedLocation = resolveDashboardLocation(searchParams.get('tab'), searchParams.get('section'));
-  const [activeTab, setActiveTab] = useState<DashboardTab>(requestedLocation.activeTab);
-  const [activeVipSection, setActiveVipSection] = useState<VipCenterSection>(requestedLocation.vipSection);
+  const activeTab = requestedLocation.activeTab;
+  const activeVipSection = requestedLocation.vipSection;
   const [catalog, setCatalog] = useState<FurnitureItem[]>([]);
   const [isUploading, setIsUploading] = useState(false);
   const [isCatalogLoading, setIsCatalogLoading] = useState(true);
@@ -116,11 +114,6 @@ export function Dashboard({ companyName, user, onLogout }: DashboardProps) {
   const [pendingCatalogDeletionId, setPendingCatalogDeletionId] = useState<string | null>(null);
   const [isSavingCompanyName, startSavingCompanyName] = useTransition();
   const pendingCatalogDeletionIdRef = useRef<string | null>(null);
-
-  useEffect(() => {
-    setActiveTab(requestedLocation.activeTab);
-    setActiveVipSection(requestedLocation.vipSection);
-  }, [requestedLocation.activeTab, requestedLocation.vipSection]);
 
   useEffect(() => {
     if (requestedLocation.canonicalPath) {
@@ -287,14 +280,11 @@ export function Dashboard({ companyName, user, onLogout }: DashboardProps) {
   };
 
   const handleTabChange = (nextTab: DashboardTab) => {
-    setActiveTab(nextTab);
-    setActiveVipSection(nextTab === 'vip' ? VIP_CENTER_DEFAULT_SECTION : activeVipSection);
-    router.replace(buildDashboardPath(nextTab), { scroll: false });
+    const nextVipSection = nextTab === 'vip' ? VIP_CENTER_DEFAULT_SECTION : activeVipSection;
+    router.replace(buildDashboardPath(nextTab, { vipSection: nextVipSection }), { scroll: false });
   };
 
   const handleVipSectionChange = (nextSection: VipCenterSection) => {
-    setActiveTab('vip');
-    setActiveVipSection(nextSection);
     router.replace(buildDashboardPath('vip', { vipSection: nextSection }), { scroll: false });
   };
 

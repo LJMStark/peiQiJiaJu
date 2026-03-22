@@ -12,6 +12,11 @@ import {
 } from '@/lib/company-name';
 import { INVITE_CODE_LENGTH, INVITE_DASHBOARD_PATH, normalizeInviteCode } from '@/lib/invitations';
 
+function buildVerifyEmailPath(email: string, inviteCode: string): string {
+  const callbackQuery = inviteCode ? `&callbackURL=${encodeURIComponent(INVITE_DASHBOARD_PATH)}` : '';
+  return `/verify-email?email=${encodeURIComponent(email)}${callbackQuery}`;
+}
+
 export function SignUpForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -26,6 +31,8 @@ export function SignUpForm() {
   const [error, setError] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const inviteCodeLabel = isInvitedSignup ? '邀请码' : '邀请码（选填）';
+  const inviteCodePlaceholder = isInvitedSignup ? '邀请码已自动带入' : '如有邀请码可填写';
 
   useEffect(() => {
     setInviteCode(inviteCodeFromQuery);
@@ -77,8 +84,7 @@ export function SignUpForm() {
         return;
       }
 
-      const callbackQuery = normalizedInviteCode ? `&callbackURL=${encodeURIComponent(INVITE_DASHBOARD_PATH)}` : '';
-      router.push(`/verify-email?email=${encodeURIComponent(normalizedEmail)}${callbackQuery}`);
+      router.push(buildVerifyEmailPath(normalizedEmail, normalizedInviteCode));
     });
   };
 
@@ -133,7 +139,7 @@ export function SignUpForm() {
 
       <div>
         <label htmlFor="inviteCode" className="block text-sm font-medium text-zinc-700 mb-2">
-          {isInvitedSignup ? '邀请码' : '邀请码（选填）'}
+          {inviteCodeLabel}
         </label>
         <div className="relative">
           <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
@@ -145,7 +151,7 @@ export function SignUpForm() {
             value={inviteCode}
             onChange={(event) => setInviteCode(normalizeInviteCode(event.target.value))}
             maxLength={INVITE_CODE_LENGTH * 2}
-            placeholder={isInvitedSignup ? '邀请码已自动带入' : '如有邀请码可填写'}
+            placeholder={inviteCodePlaceholder}
             className="w-full pl-11 pr-4 py-3.5 rounded-xl border border-zinc-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all bg-white font-mono uppercase tracking-[0.18em]"
           />
         </div>
