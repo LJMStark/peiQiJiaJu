@@ -11,7 +11,10 @@ export async function GET(request: Request) {
     return authState.response;
   }
 
-  const baseUrl = getSiteBaseUrl({ requestUrl: request.url });
+  const baseUrl = getSiteBaseUrl({
+    requestHeaders: request.headers,
+    requestUrl: request.url,
+  });
 
   try {
     const inviteLink = await withInvitationTransaction(async (repo) => {
@@ -45,7 +48,10 @@ export async function POST(request: Request) {
     return authState.response;
   }
 
-  const baseUrl = getSiteBaseUrl({ requestUrl: request.url });
+  const baseUrl = getSiteBaseUrl({
+    requestHeaders: request.headers,
+    requestUrl: request.url,
+  });
 
   try {
     const inviteLink = await withInvitationTransaction(async (repo) => {

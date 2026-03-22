@@ -1,5 +1,6 @@
 'use server';
 
+import { headers } from 'next/headers';
 import { db, query } from '@/lib/db';
 import { getServerSession } from '@/lib/auth';
 import { getShanghaiDayRange, isAdminRole } from '@/app/admin/admin-shared';
@@ -156,7 +157,9 @@ export async function forceResetInviteLinkForUser(targetUserId: string) {
     throw new Error('Unauthorized');
   }
 
-  const baseUrl = getSiteBaseUrl();
+  const baseUrl = getSiteBaseUrl({
+    requestHeaders: await headers(),
+  });
 
   return withInvitationTransaction(async (repo) => {
     return rotateInviteLinkForUser({

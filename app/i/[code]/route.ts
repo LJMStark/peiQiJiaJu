@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getRequestSession } from '@/lib/auth-session';
+import { buildSiteUrl } from '@/lib/site-url';
 import {
   INVITE_DASHBOARD_PATH,
   INVITE_COOKIE_NAME,
@@ -26,7 +27,12 @@ function setInviteCookie(response: NextResponse, code: string) {
 }
 
 function redirectResponse(request: Request, pathname: string) {
-  return NextResponse.redirect(new URL(pathname, request.url));
+  return NextResponse.redirect(
+    buildSiteUrl(pathname, {
+      requestHeaders: request.headers,
+      requestUrl: request.url,
+    })
+  );
 }
 
 function getPostInviteTarget(email: string, emailVerified: boolean) {
