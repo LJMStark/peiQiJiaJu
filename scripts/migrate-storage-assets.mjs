@@ -107,6 +107,7 @@ create table if not exists generation_history (
   created_at timestamptz not null default now()
 );
 
+-- Required before generation history request paths can run.
 alter table generation_history
   add column if not exists selected_furniture_item_ids text[];
 

@@ -143,6 +143,19 @@ export async function uploadGeneratedImage(userId: string, dataUrl: string, file
   };
 }
 
+export async function downloadStoredImageBase64(kind: AssetUploadKind, storagePath: string) {
+  const supabase = getSupabaseAdmin();
+  const bucket = getStorageBucket(kind);
+  const { data, error } = await supabase.storage.from(bucket).download(storagePath);
+
+  if (error || !data) {
+    throw new Error(`Failed to load source image: ${error?.message ?? 'Unknown storage error'}`);
+  }
+
+  const buffer = Buffer.from(await data.arrayBuffer());
+  return buffer.toString('base64');
+}
+
 export async function copyStoredImage(
   userId: string,
   kind: AssetUploadKind,

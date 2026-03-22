@@ -1,19 +1,35 @@
 import { NextResponse } from 'next/server';
-import { redeemCode } from '@/app/actions/user';
-import { actionErrorResponse, badRequest, readJsonBody } from '@/lib/server/api-utils';
+import { requireVerifiedRequestSession } from '@/lib/auth-session';
+import { badRequest, errorResponse } from '@/lib/server/api-utils';
+import { parseJsonObject, readTrimmedString } from '@/lib/server/http/request-parsers';
+import { redeemMembershipCode } from '@/lib/server/services/membership-service';
 
 export async function POST(request: Request) {
-  const body = await readJsonBody<{ code?: unknown }>(request);
-  if (!body) {
-    return badRequest('请求体格式不正确。');
+  const authState = await requireVerifiedRequestSession(request);
+  if (authState.response) {
+    return authState.response;
   }
 
-  const code = typeof body.code === 'string' ? body.code : '';
+  let body;
+  try {
+    body = await parseJsonObject(request);
+  } catch (error) {
+    return errorResponse(error, '请求体格式不正确。', 400);
+  }
+
+  const code = readTrimmedString(body, 'code');
+
+  if (!code) {
+    return badRequest('请输入兑换码。', 'INVALID_REDEMPTION_CODE');
+  }
 
   try {
-    const result = await redeemCode(code);
+    const result = await redeemMembershipCode({
+      userId: authState.session.user.id,
+      code,
+    });
     return NextResponse.json(result);
   } catch (error) {
-    return actionErrorResponse(error, '兑换失败，请稍后重试。');
+    return errorResponse(error, '兑换失败，请稍后重试。', 400);
   }
 }

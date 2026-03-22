@@ -7,12 +7,11 @@ import type { FurnitureItem, HistoryItem, RoomAspectRatio, RoomImage } from '@/l
 import { runWithRoomCleanupRecovery } from '@/lib/room-image-cleanup';
 import { createRoomImageCleanupPlan } from '@/lib/room-image-policy';
 import { inferRoomAspectRatioFromDimensions } from '@/lib/room-aspect-ratio';
-import { collectSettledResults } from '@/lib/settled-results';
 import {
+  createGenerationHistorySchemaError,
   getGenerationHistoryCountByFurnitureQuery,
   getGenerationHistoryInsertQuery,
   getGenerationHistorySelectQuery,
-  isMissingGenerationHistorySelectionColumnError,
 } from '@/lib/server/generation-history-schema';
 import {
   normalizeHistoryFurnitureSnapshots,
@@ -78,51 +77,11 @@ type HistoryRow = {
   created_at: string;
 };
 
-const GENERATION_HISTORY_SELECTION_COLUMNS_SQL = `
-alter table generation_history
-  add column if not exists selected_furniture_item_ids text[];
-
-alter table generation_history
-  add column if not exists selected_furnitures_snapshot jsonb;
-`;
-
-let generationHistorySelectionColumnsReady: Promise<void> | null = null;
-
-async function ensureGenerationHistorySelectionColumns() {
-  if (!generationHistorySelectionColumnsReady) {
-    generationHistorySelectionColumnsReady = query(GENERATION_HISTORY_SELECTION_COLUMNS_SQL)
-      .then(() => undefined)
-      .catch((error) => {
-        generationHistorySelectionColumnsReady = null;
-        throw error;
-      });
-  }
-
-  await generationHistorySelectionColumnsReady;
-}
-
-async function withGenerationHistorySchemaFallback<T>(input: {
-  modern: () => Promise<T>;
-  legacy: () => Promise<T>;
-}) {
+async function withGenerationHistorySchemaCheck<T>(action: () => Promise<T>) {
   try {
-    return await input.modern();
+    return await action();
   } catch (error) {
-    if (!isMissingGenerationHistorySelectionColumnError(error)) {
-      throw error;
-    }
-
-    await ensureGenerationHistorySelectionColumns().catch(() => undefined);
-
-    try {
-      return await input.modern();
-    } catch (retryError) {
-      if (!isMissingGenerationHistorySelectionColumnError(retryError)) {
-        throw retryError;
-      }
-
-      return input.legacy();
-    }
+    throw createGenerationHistorySchemaError(error);
   }
 }
 
@@ -361,10 +320,9 @@ export async function deleteFurnitureItem(userId: string, id: string) {
     };
   }
 
-  const historyCount = await withGenerationHistorySchemaFallback({
-    modern: () => query<{ count: string }>(getGenerationHistoryCountByFurnitureQuery('modern'), [userId, id]),
-    legacy: () => query<{ count: string }>(getGenerationHistoryCountByFurnitureQuery('legacy'), [userId, id]),
-  });
+  const historyCount = await withGenerationHistorySchemaCheck(() =>
+    query<{ count: string }>(getGenerationHistoryCountByFurnitureQuery('modern'), [userId, id])
+  );
 
   await query(`delete from furniture_items where id = $1 and user_id = $2`, [id, userId]);
 
@@ -515,20 +473,11 @@ export async function deleteRoomImage(userId: string, id: string) {
 }
 
 export async function listHistoryItems(userId: string) {
-  const result = await withGenerationHistorySchemaFallback({
-    modern: () => query<HistoryRow>(getGenerationHistorySelectQuery('modern'), [userId]),
-    legacy: () => query<HistoryRow>(getGenerationHistorySelectQuery('legacy'), [userId]),
-  });
+  const result = await withGenerationHistorySchemaCheck(() =>
+    query<HistoryRow>(getGenerationHistorySelectQuery('modern'), [userId])
+  );
 
-  const serializedResults = await Promise.allSettled(result.rows.map(serializeHistory));
-  const { values: items, errors } = collectSettledResults(serializedResults);
-
-  errors.forEach(({ index, reason }) => {
-    const row = result.rows[index];
-    console.error('[history] Failed to serialize history item:', row?.id ?? '(unknown)', reason);
-  });
-
-  return items;
+  return Promise.all(result.rows.map(serializeHistory));
 }
 
 export async function createHistoryItem(
@@ -656,12 +605,9 @@ export async function createHistoryItem(
         normalizeInstruction(input.customInstruction),
       ] as const;
 
-      const result = await withGenerationHistorySchemaFallback({
-        modern: () =>
-          query<HistoryRow>(getGenerationHistoryInsertQuery('modern'), modernInsertValues),
-        legacy: () =>
-          query<HistoryRow>(getGenerationHistoryInsertQuery('legacy'), legacyInsertValues),
-      });
+      const result = await withGenerationHistorySchemaCheck(() =>
+        query<HistoryRow>(getGenerationHistoryInsertQuery('modern'), modernInsertValues)
+      );
 
       return serializeHistory(result.rows[0]);
     } catch (error) {
