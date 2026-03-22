@@ -1,4 +1,4 @@
-import { Pool } from 'pg';
+import { Client } from 'pg';
 
 const connectionString = process.env.DATABASE_URL ?? process.env.DIRECT_URL;
 
@@ -6,16 +6,26 @@ if (!connectionString) {
   throw new Error('DATABASE_URL or DIRECT_URL must be set before running invite:migrate.');
 }
 
-const pool = new Pool({
+const client = new Client({
   connectionString,
   ssl: {
     rejectUnauthorized: false,
   },
-  max: 1,
+});
+
+client.on('error', (error) => {
+  if (
+    error.code === 'ERR_SSL_DECRYPTION_FAILED_OR_BAD_RECORD_MAC' ||
+    error.message.includes('decryption failed or bad record mac')
+  ) {
+    return;
+  }
+
+  console.error('Postgres connection error during invite migration:', error.message);
 });
 
 async function run() {
-  const client = await pool.connect();
+  await client.connect();
 
   try {
     console.log('Starting invite system migration...');
@@ -88,8 +98,7 @@ async function run() {
     console.error('Error during invite migration:', error.message);
     throw error;
   } finally {
-    client.release();
-    await pool.end();
+    await client.end();
   }
 }
 
