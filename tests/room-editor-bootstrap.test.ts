@@ -13,6 +13,15 @@ const room = {
   createdAt: '2026-03-21T00:00:00.000Z',
 };
 
+const latestRoom = {
+  ...room,
+  id: 'room-2',
+  name: 'Room 2',
+  storagePath: 'room/2.webp',
+  imageUrl: 'https://example.com/room-2.webp',
+  createdAt: '2026-03-22T00:00:00.000Z',
+};
+
 const historyItem = {
   id: 'history-1',
   roomImage: room,
@@ -58,11 +67,40 @@ test('loadRoomEditorBootstrapState keeps rooms available when history loading fa
     },
   });
 
-  assert.deepEqual(state.roomImages, [room]);
-  assert.equal(state.activeRoomId, room.id);
+  assert.deepEqual(state.roomImages, []);
+  assert.equal(state.activeRoomId, null);
+  assert.equal(state.pendingRoomImage?.id, room.id);
   assert.deepEqual(state.history, []);
   assert.equal(state.error, '历史记录暂时加载失败，你仍可继续编辑当前房间。');
   assert.deepEqual(state.errorDetails, ['Failed to create signed URL: Bad Gateway']);
+});
+
+test('loadRoomEditorBootstrapState keeps the latest room pending instead of auto-selecting it', async () => {
+  const state = await loadRoomEditorBootstrapState({
+    loadRooms: async () => [room],
+    loadHistory: async () => [historyItem],
+  });
+
+  assert.deepEqual(state.roomImages, []);
+  assert.equal(state.activeRoomId, null);
+  assert.equal(state.pendingRoomImage?.id, room.id);
+  assert.deepEqual(state.history, [historyItem]);
+  assert.equal(state.error, null);
+  assert.deepEqual(state.errorDetails, []);
+});
+
+test('loadRoomEditorBootstrapState chooses the latest room when the rooms API returns an older room first', async () => {
+  const state = await loadRoomEditorBootstrapState({
+    loadRooms: async () => [room, latestRoom],
+    loadHistory: async () => [historyItem],
+  });
+
+  assert.deepEqual(state.roomImages, []);
+  assert.equal(state.activeRoomId, null);
+  assert.equal(state.pendingRoomImage?.id, latestRoom.id);
+  assert.deepEqual(state.history, [historyItem]);
+  assert.equal(state.error, null);
+  assert.deepEqual(state.errorDetails, []);
 });
 
 test('loadRoomEditorBootstrapState surfaces a blocking error when rooms fail to load', async () => {
@@ -75,6 +113,7 @@ test('loadRoomEditorBootstrapState surfaces a blocking error when rooms fail to 
 
   assert.deepEqual(state.roomImages, []);
   assert.equal(state.activeRoomId, null);
+  assert.equal(state.pendingRoomImage, null);
   assert.deepEqual(state.history, [historyItem]);
   assert.equal(state.error, '加载编辑器资源失败，请刷新页面重试。');
   assert.deepEqual(state.errorDetails, ['rooms failed']);

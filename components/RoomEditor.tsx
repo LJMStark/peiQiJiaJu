@@ -8,6 +8,7 @@ import { readJson, type RoomsResponse, type RoomMutationResponse, type HistoryRe
 import { formatBeijingTime } from '@/lib/beijing-time';
 import { type FurnitureItem, type HistoryItem, type PlacedFurniture } from '@/lib/dashboard-types';
 import { getGenerationAccessState } from '@/lib/generation-access';
+import { MAX_SELECTED_FURNITURES } from '@/lib/room-editor-limits';
 import { loadRoomEditorBootstrapState } from '@/lib/room-editor-bootstrap';
 import { shouldBypassImageOptimization } from '@/lib/remote-images';
 import { getFileInputSelection } from '@/lib/client/file-input';
@@ -16,16 +17,17 @@ import {
   restoreHistoryRoomState,
   type RestoredHistoryRoomImage,
 } from '@/lib/room-editor-history-state';
+import { createEmptyRoomEditorWorkspaceState } from '@/lib/room-editor-workspace-state';
 import { removeRoomFromState } from '@/lib/room-editor-room-state';
 import { FurniturePreviewModal } from './room-editor/FurniturePreviewModal';
 import { FurnitureDrawer } from './room-editor/FurnitureDrawer';
 import { FeedbackModal } from './room-editor/FeedbackModal';
 import { ImageLightbox } from './room-editor/ImageLightbox';
+import { NewProjectConfirmModal } from './room-editor/NewProjectConfirmModal';
 import { SwipeableRoomCard } from './room-editor/SwipeableRoomCard';
 import { UsageLimitModal } from './UsageLimitModal';
 
 const COMMON_FURNITURE = ['沙发', '床', '餐桌', '茶几', '椅子', '书桌', '衣柜', '电视柜'];
-const MAX_SELECTED_FURNITURES = 2;
 const RECOMMENDED_INSTRUCTIONS = [
   "请将新家具放在房间的中心位置，保持原有的光影效果。",
   "只提取参考图中的主体家具，忽略背景，替换掉房间里靠窗的旧家具。",
@@ -54,6 +56,7 @@ function getErrorMessage(error: unknown): string {
 
 export function RoomEditor({ catalog, onUploadFiles, user }: RoomEditorProps) {
   const [roomImages, setRoomImages] = useState<RestoredHistoryRoomImage[]>([]);
+  const [pendingRoomImage, setPendingRoomImage] = useState<RestoredHistoryRoomImage | null>(null);
   const [activeRoomId, setActiveRoomId] = useState<string | null>(null);
   const [selectedFurnitures, setSelectedFurnitures] = useState<FurnitureItem[]>([]);
   const [customInstruction, setCustomInstruction] = useState('');
@@ -77,17 +80,21 @@ export function RoomEditor({ catalog, onUploadFiles, user }: RoomEditorProps) {
   const [errorDetails, setErrorDetails] = useState<string[]>([]);
   const [historyDisplayCount, setHistoryDisplayCount] = useState(12);
   const [limitModalType, setLimitModalType] = useState<'free_limit' | 'vip_expired' | null>(null);
+  const [isNewProjectModalOpen, setIsNewProjectModalOpen] = useState(false);
+  const [isStartingNewProject, setIsStartingNewProject] = useState(false);
 
   const furnitureUploadInputId = useId();
   const activeRoomIdRef = useRef<string | null>(activeRoomId);
   const deletingRoomIdsRef = useRef<Set<string>>(new Set());
-  const activeRoom = roomImages.find((room) => room.id === activeRoomId) ?? roomImages[0] ?? null;
+  const activeRoom = activeRoomId ? roomImages.find((room) => room.id === activeRoomId) ?? null : null;
   const hasDuplicateFurnitureTypes = findDuplicateFurnitureGroups(selectedFurnitures).length > 0;
   const roomStatusLabel = isBootstrapping
     ? '同步中...'
-    : roomImages.length > 0
-      ? `可选 ${roomImages.length} 张`
-      : '未上传';
+    : activeRoom
+      ? '已选定'
+      : roomImages.length > 0
+        ? `可选 ${roomImages.length} 张`
+        : '未上传';
 
   useEffect(() => {
     activeRoomIdRef.current = activeRoomId;
@@ -110,6 +117,7 @@ export function RoomEditor({ catalog, onUploadFiles, user }: RoomEditorProps) {
         });
 
         setRoomImages(nextState.roomImages);
+        setPendingRoomImage(nextState.pendingRoomImage);
         setActiveRoomId(nextState.activeRoomId);
         setHistory(nextState.history);
         setError(nextState.error);
@@ -133,7 +141,7 @@ export function RoomEditor({ catalog, onUploadFiles, user }: RoomEditorProps) {
       return;
     }
 
-    if (!activeRoomId || !roomImages.some((room) => room.id === activeRoomId)) {
+    if (activeRoomId && !roomImages.some((room) => room.id === activeRoomId)) {
       setActiveRoomId(roomImages[0].id);
     }
   }, [activeRoomId, roomImages]);
@@ -193,6 +201,7 @@ export function RoomEditor({ catalog, onUploadFiles, user }: RoomEditorProps) {
         const payload = await readJson<RoomMutationResponse>(response);
 
         setRoomImages([payload.item]);
+        setPendingRoomImage(null);
         setActiveRoomId(payload.item.id);
       } catch (uploadError) {
         setError(uploadError instanceof Error ? uploadError.message : '上传室内图失败，请稍后重试。');
@@ -379,6 +388,77 @@ export function RoomEditor({ catalog, onUploadFiles, user }: RoomEditorProps) {
     void handleGenerate(feedback);
   };
 
+  const handleContinuePendingRoom = () => {
+    if (!pendingRoomImage) {
+      return;
+    }
+
+    setRoomImages((currentRooms) => {
+      if (currentRooms.some((room) => room.id === pendingRoomImage.id)) {
+        return currentRooms;
+      }
+
+      return [pendingRoomImage, ...currentRooms];
+    });
+    setActiveRoomId(pendingRoomImage.id);
+    setPendingRoomImage(null);
+    setError(null);
+    setErrorDetails([]);
+  };
+
+  const applyEmptyWorkspace = () => {
+    const nextState = createEmptyRoomEditorWorkspaceState();
+    setRoomImages(nextState.roomImages);
+    setPendingRoomImage(nextState.pendingRoomImage);
+    setActiveRoomId(nextState.activeRoomId);
+    setSelectedFurnitures(nextState.selectedFurnitures);
+    setCustomInstruction(nextState.customInstruction);
+    setCurrentGeneratedImage(nextState.currentGeneratedImage);
+    setPlacedFurnitures(nextState.placedFurnitures);
+    setGenerationSessionId(nextState.generationSessionId);
+    setCurrentResultIndex(nextState.currentResultIndex);
+    setError(nextState.error);
+    setErrorDetails(nextState.errorDetails);
+    setFeedbackText('');
+    setIsFeedbackModalOpen(false);
+    setLightboxImageUrl(null);
+    setLimitModalType(null);
+  };
+
+  const handleStartNewProject = async () => {
+    if (!activeRoom || isStartingNewProject) {
+      return;
+    }
+
+    const currentRoomId = activeRoom.id;
+
+    setIsStartingNewProject(true);
+    setError(null);
+    setErrorDetails([]);
+
+    try {
+      const response = await fetch(`/api/rooms/${currentRoomId}`, {
+        method: 'DELETE',
+      });
+
+      await readJson<{ success: true }>(response);
+      applyEmptyWorkspace();
+      setIsNewProjectModalOpen(false);
+    } catch (startError) {
+      const message = getErrorMessage(startError);
+      if (message.includes('Room image not found')) {
+        applyEmptyWorkspace();
+        setIsNewProjectModalOpen(false);
+        return;
+      }
+
+      setError(message || '新建项目失败，请稍后重试。');
+      setErrorDetails([]);
+    } finally {
+      setIsStartingNewProject(false);
+    }
+  };
+
   // Compute current session results for carousel navigation
   const currentSessionResults = generationSessionId
       ? history.filter((item) => (item as HistoryItem & { sessionId?: string }).sessionId === generationSessionId)
@@ -386,7 +466,11 @@ export function RoomEditor({ catalog, onUploadFiles, user }: RoomEditorProps) {
   const generationChecklist = [
     {
       label: '当前室内图',
-      description: activeRoom ? '已选定当前场景，可直接用于生成。' : '先上传 1 张室内图，确定这次要生成的空间。',
+      description: activeRoom
+        ? '已选定当前场景，可直接用于生成。'
+        : pendingRoomImage
+          ? '上传新的室内图，或继续上次室内图。'
+          : '先上传 1 张室内图，确定这次要生成的空间。',
       ready: Boolean(activeRoom),
     },
     {
@@ -425,14 +509,36 @@ export function RoomEditor({ catalog, onUploadFiles, user }: RoomEditorProps) {
         <div className="flex flex-col space-y-5 lg:space-y-6 lg:col-span-1 overflow-y-auto scrollbar-hide pb-2 relative rounded-2xl">
           {/* Step 1: Room Images */}
           <div className="bg-white p-4 sm:p-5 rounded-2xl border border-zinc-200 shadow-sm hover:shadow-md transition-shadow duration-300">
-            <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center justify-between mb-4 gap-3">
               <div className="flex items-center gap-3">
                 <div className="w-8 h-8 rounded-full bg-zinc-100 text-zinc-900 font-bold flex items-center justify-center text-sm">1</div>
                 <h3 className="font-medium text-zinc-900">上传室内图</h3>
               </div>
-              <span className="text-xs font-medium bg-zinc-100 text-zinc-600 px-2 py-1 rounded-md">
-                {roomStatusLabel}
-              </span>
+              <div className="flex items-center gap-2 shrink-0">
+                {activeRoom ? (
+                  <button
+                    type="button"
+                    onClick={() => setIsNewProjectModalOpen(true)}
+                    disabled={isUploadingRooms || isGenerating || isStartingNewProject}
+                    className="inline-flex items-center rounded-lg px-2.5 py-1.5 text-xs font-medium text-zinc-600 transition-colors hover:bg-zinc-100 hover:text-zinc-900 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    新建项目
+                  </button>
+                ) : pendingRoomImage ? (
+                  <button
+                    type="button"
+                    onClick={handleContinuePendingRoom}
+                    disabled={isUploadingRooms}
+                    className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-zinc-600 transition-colors hover:bg-zinc-100 hover:text-zinc-900 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    <History size={14} />
+                    继续上次室内图
+                  </button>
+                ) : null}
+                <span className="text-xs font-medium bg-zinc-100 text-zinc-600 px-2 py-1 rounded-md">
+                  {roomStatusLabel}
+                </span>
+              </div>
             </div>
             
             <div className="grid grid-cols-2 gap-2 mb-3">
@@ -632,7 +738,7 @@ export function RoomEditor({ catalog, onUploadFiles, user }: RoomEditorProps) {
             <textarea
               value={customInstruction}
               onChange={(e) => setCustomInstruction(e.target.value)}
-              placeholder="例如：第1件家具是双人沙发，第2件家具是餐椅。请把这两件家具同时放进当前房间..."
+              placeholder="例如：第1件家具是双人沙发，第2件家具是餐椅，第3件家具是落地灯。请把这些家具同时放进当前房间..."
               className="w-full px-4 py-3 rounded-xl border border-zinc-200 focus:border-zinc-900 focus:ring-1 focus:ring-zinc-900 outline-none transition-all resize-none h-24 text-sm"
             />
           </div>
@@ -1163,6 +1269,13 @@ export function RoomEditor({ catalog, onUploadFiles, user }: RoomEditorProps) {
         type={limitModalType ?? 'free_limit'}
         isOpen={limitModalType !== null}
         onClose={() => setLimitModalType(null)}
+      />
+
+      <NewProjectConfirmModal
+        isOpen={isNewProjectModalOpen}
+        isSubmitting={isStartingNewProject}
+        onClose={() => setIsNewProjectModalOpen(false)}
+        onConfirm={handleStartNewProject}
       />
     </div>
   );

@@ -24,7 +24,7 @@ export function WelcomeGuideModal({ isOpen, onClose, userName }: WelcomeGuideMod
     {
       icon: ImageIcon,
       title: '上传室内照片',
-      description: '进入「室内编辑器」，上传客户的毛坯房或真实空间照片。系统只保留 1 张当前室内图，新上传会直接替换，避免生成时串场景。',
+      description: '进入「室内编辑器」，上传客户的毛坯房或真实空间照片，为这次方案准备场景。',
       color: 'text-emerald-600',
       bgColor: 'bg-emerald-100',
     },
