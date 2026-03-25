@@ -55,6 +55,21 @@ function getErrorMessage(error: unknown): string {
   return String(error);
 }
 
+function isFetchTransportError(error: unknown): boolean {
+  if (!(error instanceof Error)) {
+    return false;
+  }
+
+  const normalizedMessage = error.message.trim().toLowerCase();
+  return error.name === 'TypeError'
+    && (
+      normalizedMessage === 'failed to fetch'
+      || normalizedMessage.includes('networkerror')
+      || normalizedMessage.includes('network request failed')
+      || normalizedMessage.includes('load failed')
+    );
+}
+
 export function RoomEditor({ catalog, onUploadFiles, user }: RoomEditorProps) {
   const [roomImages, setRoomImages] = useState<RestoredHistoryRoomImage[]>([]);
   const [pendingRoomImage, setPendingRoomImage] = useState<RestoredHistoryRoomImage | null>(null);
@@ -327,6 +342,10 @@ export function RoomEditor({ catalog, onUploadFiles, user }: RoomEditorProps) {
       setHistory((previous) => [itemWithSession, ...previous]);
     } catch (err: unknown) {
       console.error('室内图生成错误:', err);
+      if (isFetchTransportError(err)) {
+        setError('生成请求在网络层被中断了，请稍后重试；如果持续出现，请联系管理员检查 HTTPS 或反向代理超时配置。');
+        return;
+      }
       const msg = getErrorMessage(err);
       if (msg.includes('免费用户生图额度已用完') || msg.includes('FREE_LIMIT_REACHED')) {
         setLimitModalType('free_limit');

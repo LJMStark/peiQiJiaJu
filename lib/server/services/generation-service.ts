@@ -34,6 +34,10 @@ export type OwnedFurnitureItemSource = {
 };
 
 export type GenerationServiceDeps<THistoryItem = unknown> = {
+  runWithConcurrencyGuard?: <T>(
+    userId: string,
+    action: () => Promise<T>
+  ) => Promise<T>;
   getGenerationCount: (userId: string) => Promise<number>;
   getOwnedRoomImage: (
     userId: string,
@@ -170,80 +174,141 @@ export async function generateRoomVisualizationForUser<THistoryItem>(
   input: GenerateRoomRequest,
   deps: GenerationServiceDeps<THistoryItem>
 ) {
-  const generationCount = await deps.getGenerationCount(user.id);
-  const access = getGenerationAccessState({
-    role: user.role,
-    vipExpiresAt: user.vipExpiresAt,
-    generationCount,
-  });
+  const runWithConcurrencyGuard = deps.runWithConcurrencyGuard ?? (async <T>(
+    _userId: string,
+    action: () => Promise<T>
+  ) => action());
 
-  if (access.vipExpired) {
-    throw createRouteError({
-      status: 403,
-      code: 'VIP_EXPIRED',
-      message: getVipExpiredMessage(),
+  return runWithConcurrencyGuard(user.id, async () => {
+    const generationCount = await deps.getGenerationCount(user.id);
+    const access = getGenerationAccessState({
+      role: user.role,
+      vipExpiresAt: user.vipExpiresAt,
+      generationCount,
     });
-  }
 
-  if (access.freeLimitReached) {
-    throw createRouteError({
-      status: 403,
-      code: 'FREE_LIMIT_REACHED',
-      message: getFreeLimitReachedMessage(),
-    });
-  }
+    if (access.vipExpired) {
+      throw createRouteError({
+        status: 403,
+        code: 'VIP_EXPIRED',
+        message: getVipExpiredMessage(),
+      });
+    }
 
-  const ownedRoomImage = await deps.getOwnedRoomImage(user.id, input.roomImageId);
-  const historyRoomSnapshot = !ownedRoomImage && input.historyItemId
-    ? await deps.getHistoryRoomSnapshot(user.id, input.historyItemId, input.roomImageId)
-    : null;
-  const roomImage = ownedRoomImage ?? historyRoomSnapshot;
-  if (!roomImage) {
-    throw createRouteError({
-      status: 404,
-      code: 'ROOM_IMAGE_NOT_FOUND',
-      message: 'Room image not found.',
-    });
-  }
+    if (access.freeLimitReached) {
+      throw createRouteError({
+        status: 403,
+        code: 'FREE_LIMIT_REACHED',
+        message: getFreeLimitReachedMessage(),
+      });
+    }
 
-  const furnitureItems = await deps.getOwnedFurnitureItems(user.id, input.furnitureItemIds);
-  const furnitureById = new Map(furnitureItems.map((item) => [item.id, item]));
-  const orderedFurnitureItems = input.furnitureItemIds
-    .map((itemId) => furnitureById.get(itemId))
-    .filter((item): item is OwnedFurnitureItemSource => Boolean(item));
+    const ownedRoomImage = await deps.getOwnedRoomImage(user.id, input.roomImageId);
+    const historyRoomSnapshot = !ownedRoomImage && input.historyItemId
+      ? await deps.getHistoryRoomSnapshot(user.id, input.historyItemId, input.roomImageId)
+      : null;
+    const roomImage = ownedRoomImage ?? historyRoomSnapshot;
+    if (!roomImage) {
+      throw createRouteError({
+        status: 404,
+        code: 'ROOM_IMAGE_NOT_FOUND',
+        message: 'Room image not found.',
+      });
+    }
 
-  if (orderedFurnitureItems.length !== input.furnitureItemIds.length) {
-    throw createRouteError({
-      status: 404,
-      code: 'FURNITURE_ITEM_NOT_FOUND',
-      message: 'Furniture item not found.',
-    });
-  }
+    const furnitureItems = await deps.getOwnedFurnitureItems(user.id, input.furnitureItemIds);
+    const furnitureById = new Map(furnitureItems.map((item) => [item.id, item]));
+    const orderedFurnitureItems = input.furnitureItemIds
+      .map((itemId) => furnitureById.get(itemId))
+      .filter((item): item is OwnedFurnitureItemSource => Boolean(item));
 
-  const generatedDataUrl = await deps.generateVisualization({
-    roomImage,
-    furnitureItems: orderedFurnitureItems,
-    customInstruction: input.customInstruction,
-  });
+    if (orderedFurnitureItems.length !== input.furnitureItemIds.length) {
+      throw createRouteError({
+        status: 404,
+        code: 'FURNITURE_ITEM_NOT_FOUND',
+        message: 'Furniture item not found.',
+      });
+    }
 
-  return deps.createHistoryItem(user.id, {
-    roomImageId: ownedRoomImage?.id ?? null,
-    roomFallback: historyRoomSnapshot,
-    furnitureItemIds: orderedFurnitureItems.map((item) => item.id),
-    generatedDataUrl,
-    customInstruction: input.customInstruction,
+    const generationStartedAt = Date.now();
+    let generatedDataUrl: string;
+    try {
+      generatedDataUrl = await deps.generateVisualization({
+        roomImage,
+        furnitureItems: orderedFurnitureItems,
+        customInstruction: input.customInstruction,
+      });
+      console.info('[generation-service] visualization generated', {
+        userId: user.id,
+        roomImageId: roomImage.id,
+        furnitureCount: orderedFurnitureItems.length,
+        durationMs: Date.now() - generationStartedAt,
+      });
+    } catch (error) {
+      console.error(
+        '[generation-service] visualization failed',
+        {
+          userId: user.id,
+          roomImageId: roomImage.id,
+          furnitureCount: orderedFurnitureItems.length,
+          durationMs: Date.now() - generationStartedAt,
+        },
+        error
+      );
+      throw error;
+    }
+
+    const persistenceStartedAt = Date.now();
+    try {
+      const historyItem = await deps.createHistoryItem(user.id, {
+        roomImageId: ownedRoomImage?.id ?? null,
+        roomFallback: historyRoomSnapshot,
+        furnitureItemIds: orderedFurnitureItems.map((item) => item.id),
+        generatedDataUrl,
+        customInstruction: input.customInstruction,
+      });
+      console.info('[generation-service] history persisted', {
+        userId: user.id,
+        roomImageId: roomImage.id,
+        furnitureCount: orderedFurnitureItems.length,
+        durationMs: Date.now() - persistenceStartedAt,
+      });
+      return historyItem;
+    } catch (error) {
+      console.error(
+        '[generation-service] history persistence failed',
+        {
+          userId: user.id,
+          roomImageId: roomImage.id,
+          furnitureCount: orderedFurnitureItems.length,
+          durationMs: Date.now() - persistenceStartedAt,
+        },
+        error
+      );
+      throw error;
+    }
   });
 }
 
 async function createDefaultGenerationServiceDeps() {
-  const [{ query }, { countUserGenerationHistory }, { createHistoryItem }, { generateRoomVisualization }] = await Promise.all([
+  const [
+    { query },
+    { countUserGenerationHistory },
+    { createHistoryItem },
+    { generateRoomVisualization },
+    { runWithGenerationConcurrencyGuard },
+  ] = await Promise.all([
     import('../../db.ts'),
     import('../repositories/history-repository.ts'),
     import('../assets.ts'),
     import('../gemini.ts'),
+    import('../generation-concurrency.ts'),
   ]);
 
   const deps: GenerationServiceDeps = {
+    runWithConcurrencyGuard(userId, action) {
+      return runWithGenerationConcurrencyGuard(userId, action);
+    },
     async getGenerationCount(userId) {
       return countUserGenerationHistory(userId);
     },

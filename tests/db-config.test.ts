@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { resolveDatabaseConnectionString } from '../lib/db-config.ts';
+import { resolveDatabaseConnectionString, resolveDatabasePoolMax } from '../lib/db-config.ts';
 
 test('resolveDatabaseConnectionString prefers DIRECT_URL outside production', () => {
   const connectionString = resolveDatabaseConnectionString({
@@ -47,4 +47,11 @@ test('resolveDatabaseConnectionString falls back to whichever value is present',
     }),
     'postgres://pooler'
   );
+});
+
+test('resolveDatabasePoolMax falls back to the default when the env is missing or invalid', () => {
+  assert.equal(resolveDatabasePoolMax(undefined), 5);
+  assert.equal(resolveDatabasePoolMax(''), 5);
+  assert.equal(resolveDatabasePoolMax('0'), 5);
+  assert.equal(resolveDatabasePoolMax('8'), 8);
 });

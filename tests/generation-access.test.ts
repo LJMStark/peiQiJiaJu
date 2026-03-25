@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { FREE_GENERATION_LIMIT, getGenerationAccessState } from '../lib/generation-access.ts';
-import { RouteError } from '../lib/server/http/error-envelope.ts';
+import { createRouteError, RouteError } from '../lib/server/http/error-envelope.ts';
 import { generateRoomVisualizationForUser } from '../lib/server/services/generation-service.ts';
 
 test('getGenerationAccessState allows admins to generate even after the free limit', () => {
@@ -47,6 +47,7 @@ test('getGenerationAccessState enforces the free limit for regular users', () =>
 
 function createGenerationDepsWithCallCounters(generationCount: number) {
   const calls = {
+    runWithConcurrencyGuard: 0,
     getGenerationCount: 0,
     getOwnedRoomImage: 0,
     getHistoryRoomSnapshot: 0,
@@ -58,6 +59,10 @@ function createGenerationDepsWithCallCounters(generationCount: number) {
   return {
     calls,
     deps: {
+      async runWithConcurrencyGuard<T>(_userId: string, action: () => Promise<T>) {
+        calls.runWithConcurrencyGuard += 1;
+        return action();
+      },
       async getGenerationCount() {
         calls.getGenerationCount += 1;
         return generationCount;
@@ -128,6 +133,7 @@ test('generateRoomVisualizationForUser blocks expired memberships before loading
     }
   );
 
+  assert.equal(calls.runWithConcurrencyGuard, 1);
   assert.equal(calls.getGenerationCount, 1);
   assert.equal(calls.getOwnedRoomImage, 0);
   assert.equal(calls.getOwnedFurnitureItems, 0);
@@ -162,7 +168,51 @@ test('generateRoomVisualizationForUser blocks free-limit users before loading an
     }
   );
 
+  assert.equal(calls.runWithConcurrencyGuard, 1);
   assert.equal(calls.getGenerationCount, 1);
+  assert.equal(calls.getOwnedRoomImage, 0);
+  assert.equal(calls.getOwnedFurnitureItems, 0);
+  assert.equal(calls.generateVisualization, 0);
+  assert.equal(calls.createHistoryItem, 0);
+});
+
+test('generateRoomVisualizationForUser blocks concurrent requests before quota and asset work', async () => {
+  const { calls, deps } = createGenerationDepsWithCallCounters(0);
+  deps.runWithConcurrencyGuard = async <T>() => {
+    calls.runWithConcurrencyGuard += 1;
+    throw createRouteError({
+      status: 409,
+      code: 'GENERATION_ALREADY_RUNNING',
+      message: '您已有一个生成任务正在进行，请等待当前任务完成后再试。',
+    });
+  };
+
+  await assert.rejects(
+    () =>
+      generateRoomVisualizationForUser(
+        {
+          id: 'user-1',
+          role: 'user',
+          vipExpiresAt: null,
+        },
+        {
+          roomImageId: 'room-1',
+          historyItemId: null,
+          furnitureItemIds: ['furniture-1'],
+          customInstruction: null,
+        },
+        deps
+      ),
+    (error) => {
+      assert.ok(error instanceof RouteError);
+      assert.equal(error.status, 409);
+      assert.equal(error.code, 'GENERATION_ALREADY_RUNNING');
+      return true;
+    }
+  );
+
+  assert.equal(calls.runWithConcurrencyGuard, 1);
+  assert.equal(calls.getGenerationCount, 0);
   assert.equal(calls.getOwnedRoomImage, 0);
   assert.equal(calls.getOwnedFurnitureItems, 0);
   assert.equal(calls.generateVisualization, 0);
