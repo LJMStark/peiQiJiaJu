@@ -1,19 +1,70 @@
 'use client';
 
 import { AuthShell } from '@/components/auth/AuthShell';
-import { useState, useTransition, Suspense, useEffect } from 'react';
+import { useState, useTransition, Suspense } from 'react';
 import { Lock, ArrowRight, ArrowLeft, Eye, EyeOff } from 'lucide-react';
 import { authClient } from '@/lib/auth-client';
 import { getAuthErrorMessage } from '@/lib/auth-errors';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 
-function ResetPasswordForm() {
+interface PasswordInputProps {
+  id: string;
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  placeholder: string;
+  showPassword: boolean;
+  onToggleShowPassword: () => void;
+}
+
+function PasswordInput({
+  id,
+  label,
+  value,
+  onChange,
+  placeholder,
+  showPassword,
+  onToggleShowPassword,
+}: PasswordInputProps): React.ReactElement {
+  return (
+    <div>
+      <label htmlFor={id} className="block text-sm font-medium text-zinc-700 mb-2">
+        {label}
+      </label>
+      <div className="relative">
+        <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+          <Lock size={18} className="text-zinc-400" />
+        </div>
+        <input
+          id={id}
+          type={showPassword ? 'text' : 'password'}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder={placeholder}
+          className="w-full pl-11 pr-11 py-3.5 rounded-xl border border-zinc-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all bg-white"
+          required
+          minLength={8}
+        />
+        <button
+          type="button"
+          aria-label={showPassword ? `隐藏${label}` : `显示${label}`}
+          onClick={onToggleShowPassword}
+          className="absolute inset-y-0 right-0 pr-4 flex items-center text-zinc-400 hover:text-zinc-600 transition-colors"
+        >
+          {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function ResetPasswordForm(): React.ReactElement | null {
   const router = useRouter();
   const searchParams = useSearchParams();
   const token = searchParams.get('token');
   const queryError = searchParams.get('error');
-  
+
   const [isPending, startTransition] = useTransition();
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -71,63 +122,25 @@ function ResetPasswordForm() {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-5">
-      <div>
-        <label htmlFor="newPassword" className="block text-sm font-medium text-zinc-700 mb-2">
-          新密码
-        </label>
-        <div className="relative">
-          <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-            <Lock size={18} className="text-zinc-400" />
-          </div>
-          <input
-            id="newPassword"
-            type={showPassword ? 'text' : 'password'}
-            value={newPassword}
-            onChange={(event) => setNewPassword(event.target.value)}
-            placeholder="至少 8 位"
-            className="w-full pl-11 pr-11 py-3.5 rounded-xl border border-zinc-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all bg-white"
-            required
-            minLength={8}
-          />
-          <button
-            type="button"
-            aria-label={showPassword ? '隐藏密码' : '显示密码'}
-            onClick={() => setShowPassword((prev) => !prev)}
-            className="absolute inset-y-0 right-0 pr-4 flex items-center text-zinc-400 hover:text-zinc-600 transition-colors"
-          >
-            {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-          </button>
-        </div>
-      </div>
+      <PasswordInput
+        id="newPassword"
+        label="新密码"
+        value={newPassword}
+        onChange={setNewPassword}
+        placeholder="至少 8 位"
+        showPassword={showPassword}
+        onToggleShowPassword={() => setShowPassword((prev) => !prev)}
+      />
 
-      <div>
-        <label htmlFor="confirmPassword" className="block text-sm font-medium text-zinc-700 mb-2">
-          确认新密码
-        </label>
-        <div className="relative">
-          <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-            <Lock size={18} className="text-zinc-400" />
-          </div>
-          <input
-            id="confirmPassword"
-            type={showConfirmPassword ? 'text' : 'password'}
-            value={confirmPassword}
-            onChange={(event) => setConfirmPassword(event.target.value)}
-            placeholder="请再次填写新密码"
-            className="w-full pl-11 pr-11 py-3.5 rounded-xl border border-zinc-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all bg-white"
-            required
-            minLength={8}
-          />
-          <button
-            type="button"
-            aria-label={showConfirmPassword ? '隐藏确认密码' : '显示确认密码'}
-            onClick={() => setShowConfirmPassword((prev) => !prev)}
-            className="absolute inset-y-0 right-0 pr-4 flex items-center text-zinc-400 hover:text-zinc-600 transition-colors"
-          >
-            {showConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-          </button>
-        </div>
-      </div>
+      <PasswordInput
+        id="confirmPassword"
+        label="确认新密码"
+        value={confirmPassword}
+        onChange={setConfirmPassword}
+        placeholder="请再次填写新密码"
+        showPassword={showConfirmPassword}
+        onToggleShowPassword={() => setShowConfirmPassword((prev) => !prev)}
+      />
 
       {error ? (
         <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-pretty text-rose-700">
@@ -160,7 +173,7 @@ function ResetPasswordForm() {
   );
 }
 
-export default function ResetPasswordPage() {
+export default function ResetPasswordPage(): React.ReactElement {
   return (
     <AuthShell
       badge="安全设置"
