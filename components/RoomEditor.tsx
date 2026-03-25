@@ -17,6 +17,7 @@ import {
   restoreHistoryRoomState,
   type RestoredHistoryRoomImage,
 } from '@/lib/room-editor-history-state';
+import { getRoomIdToDeleteForNewProject } from '@/lib/room-editor-project-state';
 import { createEmptyRoomEditorWorkspaceState } from '@/lib/room-editor-workspace-state';
 import { removeRoomFromState } from '@/lib/room-editor-room-state';
 import { FurniturePreviewModal } from './room-editor/FurniturePreviewModal';
@@ -430,18 +431,24 @@ export function RoomEditor({ catalog, onUploadFiles, user }: RoomEditorProps) {
       return;
     }
 
-    const currentRoomId = activeRoom.id;
+    const roomIdToDelete = getRoomIdToDeleteForNewProject({
+      roomImages,
+      pendingRoomImage,
+    });
 
     setIsStartingNewProject(true);
     setError(null);
     setErrorDetails([]);
 
     try {
-      const response = await fetch(`/api/rooms/${currentRoomId}`, {
-        method: 'DELETE',
-      });
+      if (roomIdToDelete) {
+        const response = await fetch(`/api/rooms/${roomIdToDelete}`, {
+          method: 'DELETE',
+        });
 
-      await readJson<{ success: true }>(response);
+        await readJson<{ success: true }>(response);
+      }
+
       applyEmptyWorkspace();
       setIsNewProjectModalOpen(false);
     } catch (startError) {
