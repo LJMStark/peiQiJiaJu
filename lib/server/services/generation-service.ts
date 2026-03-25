@@ -1,5 +1,6 @@
 import { FREE_GENERATION_LIMIT, getGenerationAccessState } from '../../generation-access.ts';
 import { buildHistorySnapshotRoomId } from '../../history-room-snapshot.ts';
+import { MAX_SELECTED_FURNITURES } from '../../room-editor-limits.ts';
 import { createRouteError } from '../http/error-envelope.ts';
 
 export type GenerateRoomRequest = {
@@ -115,6 +116,10 @@ function getFreeLimitReachedMessage() {
   return `免费用户生图额度已用完（共 ${FREE_GENERATION_LIMIT} 张），请联系客服咨询购买会员套餐。`;
 }
 
+function getTooManyFurnitureItemsMessage() {
+  return `一次最多只能选择 ${MAX_SELECTED_FURNITURES} 张家具图。`;
+}
+
 export function parseGenerateRequest(body: Record<string, unknown>): GenerateRoomRequest {
   if ('furnitureFallbacks' in body || 'furnitureFallback' in body || 'storagePath' in body) {
     throw createRouteError({
@@ -138,6 +143,14 @@ export function parseGenerateRequest(body: Record<string, unknown>): GenerateRoo
       status: 400,
       code: 'INVALID_GENERATION_REQUEST',
       message: 'Room image and at least one furniture item are required.',
+    });
+  }
+
+  if (resolvedFurnitureItemIds.length > MAX_SELECTED_FURNITURES) {
+    throw createRouteError({
+      status: 400,
+      code: 'TOO_MANY_FURNITURE_ITEMS',
+      message: getTooManyFurnitureItemsMessage(),
     });
   }
 

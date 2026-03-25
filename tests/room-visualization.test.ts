@@ -42,6 +42,21 @@ test('buildVisualizationPrompt numbers every image and requires all furniture in
   assert.match(prompt, /第1件家具是双人沙发，第2件家具是餐椅。/);
 });
 
+test('buildVisualizationPrompt supports three furniture references in order', () => {
+  const prompt = buildVisualizationPrompt(
+    [
+      { id: 'a', name: '奶油双人沙发', category: '沙发' },
+      { id: 'b', name: '胡桃木餐椅', category: '椅子' },
+      { id: 'c', name: '中古落地灯', category: '灯具' },
+    ],
+    '第1件家具是双人沙发，第2件家具是餐椅，第3件家具是落地灯。'
+  );
+
+  assert.match(prompt, /\[图片 4\]：第3件目标家具参考图/);
+  assert.match(prompt, /第1件家具是双人沙发，第2件家具是餐椅，第3件家具是落地灯。/);
+  assert.match(prompt, /所有已选家具必须同时出现在同一张输出图中/);
+});
+
 test('normalizeHistoryFurnitureSnapshots prefers array snapshots when present', () => {
   const furnitures = normalizeHistoryFurnitureSnapshots({
     legacyFurniture: {

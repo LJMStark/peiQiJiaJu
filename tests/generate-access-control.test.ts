@@ -101,6 +101,23 @@ test('parseGenerateRequest accepts a history item id for restored room snapshots
   });
 });
 
+test('parseGenerateRequest rejects requests with more than three furniture items', () => {
+  assert.throws(
+    () =>
+      parseGenerateRequest({
+        roomImageId: 'room-1',
+        furnitureItemIds: ['furniture-1', 'furniture-2', 'furniture-3', 'furniture-4'],
+      }),
+    (error) => {
+      assert.ok(error instanceof RouteError);
+      assert.equal(error.status, 400);
+      assert.equal(error.code, 'TOO_MANY_FURNITURE_ITEMS');
+      assert.equal(error.message, '一次最多只能选择 3 张家具图。');
+      return true;
+    }
+  );
+});
+
 test('generateRoomVisualizationForUser rejects furniture outside the caller ownership scope', async () => {
   const { calls, deps } = createGenerationDeps({
     async getOwnedFurnitureItems() {
