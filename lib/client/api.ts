@@ -1,5 +1,4 @@
 import type { FurnitureItem, HistoryItem, RoomImage } from '@/lib/dashboard-types';
-import type { HistoryPageCursor } from '@/lib/history-page';
 
 export async function readJson<T>(response: Response): Promise<T> {
   const payload = (await response.json()) as T & { error?: string };
@@ -57,8 +56,6 @@ export type RoomMutationResponse = {
 
 export type HistoryResponse = {
   items: HistoryItem[];
-  hasMore: boolean;
-  nextCursor: HistoryPageCursor | null;
   error?: string;
 };
 

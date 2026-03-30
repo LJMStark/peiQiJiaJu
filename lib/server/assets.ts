@@ -4,7 +4,6 @@ import { randomUUID } from 'node:crypto';
 import type { PoolClient } from 'pg';
 import { db, query } from '@/lib/db';
 import type { FurnitureItem, HistoryItem, RoomAspectRatio, RoomImage } from '@/lib/dashboard-types';
-import type { HistoryPageCursor } from '@/lib/history-page';
 import { buildHistorySnapshotRoomId } from '@/lib/history-room-snapshot';
 import { runWithRoomCleanupRecovery } from '@/lib/room-image-cleanup';
 import { createRoomImageCleanupPlan } from '@/lib/room-image-policy';
@@ -23,7 +22,6 @@ import {
 import {
   copyStoredImage,
   createSignedImageUrl,
-  createSignedImageUrlMap,
   removeImage,
   removeImages,
   uploadGeneratedImage,
@@ -78,33 +76,7 @@ type HistoryRow = {
   generated_file_size: number;
   custom_instruction: string | null;
   created_at: string;
-  created_at_cursor: string;
 };
-
-type PreparedHistoryRow = {
-  row: HistoryRow;
-  furnitureSnapshots: HistoryFurnitureSnapshotData[];
-};
-
-type HistorySignedUrlMaps = {
-  furniture: ReadonlyMap<string, string>;
-  room: ReadonlyMap<string, string>;
-  generated: ReadonlyMap<string, string>;
-};
-
-export type HistoryItemsPage = {
-  items: HistoryItem[];
-  hasMore: boolean;
-  nextCursor: HistoryPageCursor | null;
-};
-
-type ListHistoryItemsOptions = {
-  limit?: number;
-  cursor?: HistoryPageCursor;
-};
-
-const DEFAULT_HISTORY_PAGE_SIZE = 12;
-const MAX_HISTORY_PAGE_SIZE = 12;
 
 async function withGenerationHistorySchemaCheck<T>(action: () => Promise<T>) {
   try {
@@ -212,19 +184,26 @@ async function cleanupRoomImageStoragePaths(storagePaths: readonly string[]): Pr
   await removeImages('room', storagePaths);
 }
 
-function getRequiredSignedUrl(signedUrlMap: ReadonlyMap<string, string>, storagePath: string) {
-  const signedUrl = signedUrlMap.get(storagePath);
-  if (!signedUrl) {
-    throw new Error(`Failed to create signed URL: Missing signed URL for ${storagePath}`);
-  }
-
-  return signedUrl;
+async function serializeHistoryFurnitureSnapshot(
+  snapshot: HistoryFurnitureSnapshotData,
+  fallbackId: string,
+  createdAt: string
+): Promise<FurnitureItem> {
+  return {
+    id: snapshot.id ?? fallbackId,
+    name: snapshot.name,
+    category: snapshot.category || '其他',
+    storagePath: snapshot.storagePath,
+    imageUrl: await createSignedImageUrl('furniture', snapshot.storagePath),
+    mimeType: snapshot.mimeType,
+    fileSize: snapshot.fileSize,
+    createdAt,
+  };
 }
 
-function prepareHistoryRow(row: HistoryRow): PreparedHistoryRow {
-  return {
-    row,
-    furnitureSnapshots: normalizeHistoryFurnitureSnapshots({
+async function serializeHistory(row: HistoryRow): Promise<HistoryItem> {
+  const furnitures = await Promise.all(
+    normalizeHistoryFurnitureSnapshots({
       legacyFurniture: {
         id: row.furniture_item_id,
         name: row.furniture_name_snapshot,
@@ -234,66 +213,8 @@ function prepareHistoryRow(row: HistoryRow): PreparedHistoryRow {
         fileSize: row.furniture_file_size_snapshot,
       },
       selectedFurnituresSnapshot: row.selected_furnitures_snapshot,
-    }),
-  };
-}
-
-async function createHistorySignedUrlMaps(
-  preparedRows: readonly PreparedHistoryRow[]
-): Promise<HistorySignedUrlMaps> {
-  const [furniture, room, generated] = await Promise.all([
-    createSignedImageUrlMap(
-      'furniture',
-      preparedRows.flatMap(({ furnitureSnapshots }) =>
-        furnitureSnapshots.map((snapshot) => snapshot.storagePath)
-      )
-    ),
-    createSignedImageUrlMap(
-      'room',
-      preparedRows.map(({ row }) => row.room_storage_path_snapshot)
-    ),
-    createSignedImageUrlMap(
-      'generated',
-      preparedRows.map(({ row }) => row.generated_storage_path)
-    ),
-  ]);
-
-  return {
-    furniture,
-    room,
-    generated,
-  };
-}
-
-function serializeHistoryFurnitureSnapshot(
-  snapshot: HistoryFurnitureSnapshotData,
-  fallbackId: string,
-  createdAt: string,
-  signedUrlMap: ReadonlyMap<string, string>
-): FurnitureItem {
-  return {
-    id: snapshot.id ?? fallbackId,
-    name: snapshot.name,
-    category: snapshot.category || '其他',
-    storagePath: snapshot.storagePath,
-    imageUrl: getRequiredSignedUrl(signedUrlMap, snapshot.storagePath),
-    mimeType: snapshot.mimeType,
-    fileSize: snapshot.fileSize,
-    createdAt,
-  };
-}
-
-function serializeHistory(
-  preparedRow: PreparedHistoryRow,
-  signedUrlMaps: HistorySignedUrlMaps
-): HistoryItem {
-  const { row, furnitureSnapshots } = preparedRow;
-  const furnitures = furnitureSnapshots.map((snapshot, index) =>
-    serializeHistoryFurnitureSnapshot(
-      snapshot,
-      `${row.id}:furniture:${index}`,
-      row.created_at_cursor,
-      signedUrlMaps.furniture
+    }).map((snapshot, index) =>
+      serializeHistoryFurnitureSnapshot(snapshot, `${row.id}:furniture:${index}`, row.created_at)
     )
   );
 
@@ -306,11 +227,11 @@ function serializeHistory(
       }),
       name: row.room_name_snapshot,
       storagePath: row.room_storage_path_snapshot,
-      imageUrl: getRequiredSignedUrl(signedUrlMaps.room, row.room_storage_path_snapshot),
+      imageUrl: await createSignedImageUrl('room', row.room_storage_path_snapshot),
       mimeType: row.room_mime_type_snapshot,
       fileSize: row.room_file_size_snapshot,
       aspectRatio: (row.room_aspect_ratio_snapshot as RoomAspectRatio | null) ?? undefined,
-      createdAt: row.created_at_cursor,
+      createdAt: row.created_at,
     },
     furniture: furnitures[0]!,
     furnitures,
@@ -318,13 +239,13 @@ function serializeHistory(
       id: `${row.id}:generated`,
       name: row.generated_name,
       storagePath: row.generated_storage_path,
-      imageUrl: getRequiredSignedUrl(signedUrlMaps.generated, row.generated_storage_path),
+      imageUrl: await createSignedImageUrl('generated', row.generated_storage_path),
       mimeType: row.generated_mime_type,
       fileSize: row.generated_file_size,
-      createdAt: row.created_at_cursor,
+      createdAt: row.created_at,
     },
     customInstruction: row.custom_instruction ?? undefined,
-    createdAt: row.created_at_cursor,
+    createdAt: row.created_at,
   };
 }
 
@@ -555,79 +476,12 @@ export async function deleteRoomImage(userId: string, id: string) {
   };
 }
 
-function normalizeHistoryPageSize(limit: number | undefined) {
-  if (!Number.isFinite(limit)) {
-    return DEFAULT_HISTORY_PAGE_SIZE;
-  }
-
-  return Math.min(
-    MAX_HISTORY_PAGE_SIZE,
-    Math.max(1, Math.trunc(limit ?? DEFAULT_HISTORY_PAGE_SIZE))
-  );
-}
-
-function buildHistoryPageQuery(
-  userId: string,
-  limit: number,
-  cursor?: HistoryPageCursor
-): { text: string; values: unknown[] } {
-  const pageSize = limit + 1;
-
-  if (!cursor) {
-    return {
-      text: `${getGenerationHistorySelectQuery('modern')}
-           limit $2`,
-      values: [userId, pageSize],
-    };
-  }
-
-  return {
-    text: `select *
-           from (${getGenerationHistorySelectQuery('modern')}) as history_page
-           where history_page.created_at < $2::timestamptz
-              or (history_page.created_at = $2::timestamptz and history_page.id < $3)
-           order by history_page.created_at desc, history_page.id desc
-           limit $4`,
-    values: [userId, cursor.createdAt, cursor.id, pageSize],
-  };
-}
-
-function getNextHistoryCursor(
-  preparedRow: PreparedHistoryRow | null,
-  hasMore: boolean
-): HistoryPageCursor | null {
-  if (!hasMore || !preparedRow) {
-    return null;
-  }
-
-  return {
-    createdAt: preparedRow.row.created_at_cursor,
-    id: preparedRow.row.id,
-  };
-}
-
-export async function listHistoryItems(
-  userId: string,
-  options: ListHistoryItemsOptions = {}
-): Promise<HistoryItemsPage> {
-  const limit = normalizeHistoryPageSize(options.limit);
-  const historyPageQuery = buildHistoryPageQuery(userId, limit, options.cursor);
+export async function listHistoryItems(userId: string) {
   const result = await withGenerationHistorySchemaCheck(() =>
-    query<HistoryRow>(historyPageQuery.text, historyPageQuery.values)
+    query<HistoryRow>(getGenerationHistorySelectQuery('modern'), [userId])
   );
 
-  const hasMore = result.rows.length > limit;
-  const currentRows = result.rows.slice(0, limit);
-  const preparedRows = currentRows.map(prepareHistoryRow);
-  const signedUrlMaps = await createHistorySignedUrlMaps(preparedRows);
-  const items = preparedRows.map((preparedRow) => serializeHistory(preparedRow, signedUrlMaps));
-  const lastPreparedRow = preparedRows[preparedRows.length - 1] ?? null;
-
-  return {
-    items,
-    hasMore,
-    nextCursor: getNextHistoryCursor(lastPreparedRow, hasMore),
-  };
+  return Promise.all(result.rows.map(serializeHistory));
 }
 
 export async function createHistoryItem(
@@ -785,10 +639,7 @@ export async function createHistoryItem(
         query<HistoryRow>(getGenerationHistoryInsertQuery('modern'), modernInsertValues)
       );
 
-      const preparedRow = prepareHistoryRow(result.rows[0]);
-      const signedUrlMaps = await createHistorySignedUrlMaps([preparedRow]);
-
-      return serializeHistory(preparedRow, signedUrlMaps);
+      return serializeHistory(result.rows[0]);
     } catch (error) {
       await removeImage('generated', uploaded.storagePath).catch(() => undefined);
       throw error;

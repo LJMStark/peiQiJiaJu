@@ -1,15 +1,8 @@
 import type { HistoryItem, RoomImage } from '@/lib/dashboard-types';
-import type { HistoryPageCursor } from '@/lib/history-page';
-
-type LoadHistoryResult = {
-  items: HistoryItem[];
-  hasMore: boolean;
-  nextCursor: HistoryPageCursor | null;
-};
 
 type LoadRoomEditorBootstrapStateInput = {
   loadRooms: () => Promise<RoomImage[]>;
-  loadHistory: () => Promise<LoadHistoryResult>;
+  loadHistory: () => Promise<HistoryItem[]>;
 };
 
 export type RoomEditorBootstrapState = {
@@ -17,7 +10,6 @@ export type RoomEditorBootstrapState = {
   pendingRoomImage: RoomImage | null;
   activeRoomId: string | null;
   history: HistoryItem[];
-  historyNextCursor: HistoryPageCursor | null;
   error: string | null;
   errorDetails: string[];
 };
@@ -65,11 +57,7 @@ export async function loadRoomEditorBootstrapState({
   const [roomsResult, historyResult] = await Promise.allSettled([loadRooms(), loadHistory()]);
   const roomImages = roomsResult.status === 'fulfilled' ? roomsResult.value : [];
   const pendingRoomImage = getLatestRoomImage(roomImages);
-  const historyPage = historyResult.status === 'fulfilled'
-    ? historyResult.value
-    : { items: [], hasMore: false, nextCursor: null };
-  const history = historyPage.items;
-  const historyNextCursor = historyPage.nextCursor;
+  const history = historyResult.status === 'fulfilled' ? historyResult.value : [];
 
   if (roomsResult.status === 'rejected') {
     return {
@@ -77,7 +65,6 @@ export async function loadRoomEditorBootstrapState({
       pendingRoomImage: null,
       activeRoomId: null,
       history,
-      historyNextCursor,
       error: '加载编辑器资源失败，请刷新页面重试。',
       errorDetails: [
         getReasonMessage(roomsResult.reason, '加载室内图失败。'),
@@ -94,7 +81,6 @@ export async function loadRoomEditorBootstrapState({
       pendingRoomImage,
       activeRoomId: null,
       history: [],
-      historyNextCursor: null,
       error: '历史记录暂时加载失败，你仍可继续编辑当前房间。',
       errorDetails: [getReasonMessage(historyResult.reason, '加载历史记录失败。')],
     };
@@ -105,7 +91,6 @@ export async function loadRoomEditorBootstrapState({
     pendingRoomImage,
     activeRoomId: null,
     history,
-    historyNextCursor,
     error: null,
     errorDetails: [],
   };

@@ -51,16 +51,6 @@ test('legacy generation history queries project null compatibility columns and o
   assert.match(countSql, /where user_id = \$1 and furniture_item_id = \$2/i);
 });
 
-test('modern generation history queries expose cursor timestamps with stable keyset ordering', () => {
-  const selectSql = getGenerationHistorySelectQuery('modern');
-
-  assert.match(
-    selectSql,
-    /to_char\(\s*created_at at time zone 'UTC',\s*'YYYY-MM-DD"T"HH24:MI:SS\.US"Z"'\s*\)\s+as created_at_cursor/i
-  );
-  assert.match(selectSql, /order by created_at desc,\s*id desc/i);
-});
-
 test('missing history-selection columns require an explicit storage migration', () => {
   const error = createGenerationHistorySchemaError({
     code: '42703',

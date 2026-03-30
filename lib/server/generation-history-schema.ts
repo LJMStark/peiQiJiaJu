@@ -63,11 +63,7 @@ function getReturningProjection(mode: GenerationHistoryQueryMode) {
         generated_mime_type,
         generated_file_size,
         custom_instruction,
-        created_at,
-        to_char(
-          created_at AT TIME ZONE 'UTC',
-          'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'
-        ) as created_at_cursor`;
+        created_at`;
 }
 
 export function isMissingGenerationHistorySelectionColumnError(error: unknown) {
@@ -100,7 +96,7 @@ export function getGenerationHistorySelectQuery(mode: GenerationHistoryQueryMode
         ${getReturningProjection(mode)}
       from generation_history
       where user_id = $1
-      order by created_at desc, id desc`;
+      order by created_at desc`;
 }
 
 export function getGenerationHistoryCountByFurnitureQuery(mode: GenerationHistoryQueryMode = 'modern') {

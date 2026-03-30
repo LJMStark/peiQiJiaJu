@@ -8,7 +8,6 @@ import { readJson, type RoomsResponse, type RoomMutationResponse, type HistoryRe
 import { formatBeijingTime } from '@/lib/beijing-time';
 import { type FurnitureItem, type HistoryItem, type PlacedFurniture } from '@/lib/dashboard-types';
 import { getGenerationAccessState } from '@/lib/generation-access';
-import { buildHistoryPageSearchParams, type HistoryPageCursor } from '@/lib/history-page';
 import { MAX_SELECTED_FURNITURES } from '@/lib/room-editor-limits';
 import { loadRoomEditorBootstrapState } from '@/lib/room-editor-bootstrap';
 import { shouldBypassImageOptimization } from '@/lib/remote-images';
@@ -30,7 +29,6 @@ import { SwipeableRoomCard } from './room-editor/SwipeableRoomCard';
 import { UsageLimitModal } from './UsageLimitModal';
 
 const COMMON_FURNITURE = ['沙发', '床', '餐桌', '茶几', '椅子', '书桌', '衣柜', '电视柜'];
-const HISTORY_PAGE_SIZE = 12;
 const RECOMMENDED_INSTRUCTIONS = [
   "请将新家具放在房间的中心位置，保持原有的光影效果。",
   "只提取参考图中的主体家具，忽略背景，替换掉房间里靠窗的旧家具。",
@@ -72,36 +70,6 @@ function isFetchTransportError(error: unknown): boolean {
     );
 }
 
-function buildHistoryPageUrl(cursor?: HistoryPageCursor | null) {
-  const searchParams = buildHistoryPageSearchParams({
-    limit: HISTORY_PAGE_SIZE,
-    cursor: cursor ?? undefined,
-  });
-  const query = searchParams.toString();
-  return query ? `/api/history?${query}` : '/api/history';
-}
-
-async function fetchHistoryPage(cursor?: HistoryPageCursor | null) {
-  const response = await fetch(buildHistoryPageUrl(cursor), { cache: 'no-store' });
-  return readJson<HistoryResponse>(response);
-}
-
-function mergeHistoryItems(currentHistory: readonly HistoryItem[], nextItems: readonly HistoryItem[]) {
-  const seenHistoryIds = new Set(currentHistory.map((item) => item.id));
-  const mergedHistory = [...currentHistory];
-
-  for (const item of nextItems) {
-    if (seenHistoryIds.has(item.id)) {
-      continue;
-    }
-
-    seenHistoryIds.add(item.id);
-    mergedHistory.push(item);
-  }
-
-  return mergedHistory;
-}
-
 export function RoomEditor({ catalog, onUploadFiles, user }: RoomEditorProps) {
   const [roomImages, setRoomImages] = useState<RestoredHistoryRoomImage[]>([]);
   const [pendingRoomImage, setPendingRoomImage] = useState<RestoredHistoryRoomImage | null>(null);
@@ -126,8 +94,7 @@ export function RoomEditor({ catalog, onUploadFiles, user }: RoomEditorProps) {
   const [feedbackText, setFeedbackText] = useState('');
   const [lightboxImageUrl, setLightboxImageUrl] = useState<string | null>(null);
   const [errorDetails, setErrorDetails] = useState<string[]>([]);
-  const [historyNextCursor, setHistoryNextCursor] = useState<HistoryPageCursor | null>(null);
-  const [isLoadingMoreHistory, setIsLoadingMoreHistory] = useState(false);
+  const [historyDisplayCount, setHistoryDisplayCount] = useState(12);
   const [limitModalType, setLimitModalType] = useState<'free_limit' | 'vip_expired' | null>(null);
   const [isNewProjectModalOpen, setIsNewProjectModalOpen] = useState(false);
   const [isStartingNewProject, setIsStartingNewProject] = useState(false);
@@ -158,19 +125,21 @@ export function RoomEditor({ catalog, onUploadFiles, user }: RoomEditorProps) {
             const payload = await readJson<RoomsResponse>(response);
             return payload.items;
           },
-          loadHistory: () => fetchHistoryPage(),
+          loadHistory: async () => {
+            const response = await fetch('/api/history', { cache: 'no-store' });
+            const payload = await readJson<HistoryResponse>(response);
+            return payload.items;
+          },
         });
 
         setRoomImages(nextState.roomImages);
         setPendingRoomImage(nextState.pendingRoomImage);
         setActiveRoomId(nextState.activeRoomId);
         setHistory(nextState.history);
-        setHistoryNextCursor(nextState.historyNextCursor);
         setError(nextState.error);
         setErrorDetails(nextState.errorDetails);
       } catch (loadError) {
         setError(loadError instanceof Error ? loadError.message : '加载编辑器资源失败，请刷新页面重试。');
-        setHistoryNextCursor(null);
         setErrorDetails([]);
       } finally {
         setIsBootstrapping(false);
@@ -402,25 +371,6 @@ export function RoomEditor({ catalog, onUploadFiles, user }: RoomEditorProps) {
     }
   };
 
-  const handleLoadMoreHistory = async () => {
-    if (!historyNextCursor || isLoadingMoreHistory) {
-      return;
-    }
-
-    setIsLoadingMoreHistory(true);
-
-    try {
-      const payload = await fetchHistoryPage(historyNextCursor);
-      setHistory((currentHistory) => mergeHistoryItems(currentHistory, payload.items));
-      setHistoryNextCursor(payload.nextCursor);
-    } catch (loadError) {
-      setError('加载更多历史记录失败，请稍后重试。');
-      setErrorDetails([getErrorMessage(loadError)]);
-    } finally {
-      setIsLoadingMoreHistory(false);
-    }
-  };
-
   const loadHistoryItem = (item: HistoryItem) => {
     setRoomImages((currentRooms) => {
       const nextState = restoreHistoryRoomState({
@@ -539,8 +489,6 @@ export function RoomEditor({ catalog, onUploadFiles, user }: RoomEditorProps) {
   const currentSessionResults = generationSessionId
       ? history.filter((item) => (item as HistoryItem & { sessionId?: string }).sessionId === generationSessionId)
       : [];
-  const hasMoreHistory = historyNextCursor !== null;
-  const historyCountLabel = hasMoreHistory ? `${history.length}+` : String(history.length);
   const generationChecklist = [
     {
       label: '当前室内图',
@@ -1181,7 +1129,7 @@ export function RoomEditor({ catalog, onUploadFiles, user }: RoomEditorProps) {
                 <h3 className="text-xl font-bold text-zinc-900 flex items-center gap-2">
                   生成历史
                   <span className="bg-zinc-900 text-white text-xs font-bold px-2 py-0.5 rounded-full">
-                    {historyCountLabel}
+                    {history.length}
                   </span>
                 </h3>
                 <p className="text-sm text-zinc-500 mt-1">点击任意卡片即可恢复家具、指令与结果预览</p>
@@ -1192,7 +1140,7 @@ export function RoomEditor({ catalog, onUploadFiles, user }: RoomEditorProps) {
           
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
             <AnimatePresence>
-              {history.map((item, index) => {
+              {history.slice(0, historyDisplayCount).map((item, index) => {
                 const historyFurnitures = item.furnitures.length > 0 ? item.furnitures : [item.furniture];
 
                 return (
@@ -1293,15 +1241,13 @@ export function RoomEditor({ catalog, onUploadFiles, user }: RoomEditorProps) {
             </AnimatePresence>
           </div>
 
-          {hasMoreHistory && (
+          {history.length > historyDisplayCount && (
             <div className="flex justify-center mt-6">
               <button
-                type="button"
-                onClick={() => void handleLoadMoreHistory()}
-                disabled={isLoadingMoreHistory}
-                className="px-6 py-2 bg-white border border-zinc-200 rounded-xl text-sm font-medium text-zinc-700 hover:bg-zinc-50 hover:border-zinc-300 transition-colors shadow-sm disabled:cursor-not-allowed disabled:opacity-60"
+                onClick={() => setHistoryDisplayCount(prev => prev + 12)}
+                className="px-6 py-2 bg-white border border-zinc-200 rounded-xl text-sm font-medium text-zinc-700 hover:bg-zinc-50 hover:border-zinc-300 transition-colors shadow-sm"
               >
-                {isLoadingMoreHistory ? '正在加载更多历史记录...' : '加载更多历史记录'}
+                加载更多 ({Math.max(0, history.length - historyDisplayCount)} 条剩余)
               </button>
             </div>
           )}

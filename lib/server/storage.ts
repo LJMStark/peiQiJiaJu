@@ -11,12 +11,6 @@ import {
 } from '@/lib/storage-config';
 import type { AssetUploadKind } from '@/lib/dashboard-types';
 
-type SignedUrlBatchEntry = {
-  path: string | null;
-  signedUrl: string | null;
-  error: string | null;
-};
-
 function sanitizeSegment(value: string) {
   return value
     .toLowerCase()
@@ -208,85 +202,8 @@ async function createSignedUrl(bucket: string, storagePath: string): Promise<str
   return data.signedUrl;
 }
 
-function getUniqueStoragePaths(storagePaths: readonly string[]) {
-  const uniqueStoragePaths: string[] = [];
-  const seenStoragePaths = new Set<string>();
-
-  for (const storagePath of storagePaths) {
-    const normalizedStoragePath = storagePath.trim();
-    if (!normalizedStoragePath || seenStoragePaths.has(normalizedStoragePath)) {
-      continue;
-    }
-
-    seenStoragePaths.add(normalizedStoragePath);
-    uniqueStoragePaths.push(normalizedStoragePath);
-  }
-
-  return uniqueStoragePaths;
-}
-
-async function createSignedUrls(
-  bucket: string,
-  storagePaths: readonly string[]
-): Promise<readonly SignedUrlBatchEntry[]> {
-  const supabase = getSupabaseAdmin();
-  const { data, error } = await supabase.storage
-    .from(bucket)
-    .createSignedUrls([...storagePaths], SIGNED_URL_TTL_SECONDS);
-
-  if (error || !data) {
-    throw new Error(`Failed to create signed URL: ${error?.message ?? 'Unknown error'}`);
-  }
-
-  return data.map((entry) => ({
-    path: entry.path,
-    signedUrl: entry.signedUrl,
-    error: typeof entry.error === 'string' ? entry.error : entry.error ? String(entry.error) : null,
-  }));
-}
-
 export async function createSignedImageUrl(kind: AssetUploadKind, storagePath: string): Promise<string> {
   return createSignedUrl(getStorageBucket(kind), storagePath);
-}
-
-export async function createSignedImageUrlMap(
-  kind: AssetUploadKind,
-  storagePaths: readonly string[]
-): Promise<Map<string, string>> {
-  const uniqueStoragePaths = getUniqueStoragePaths(storagePaths);
-  if (uniqueStoragePaths.length === 0) {
-    return new Map();
-  }
-
-  const signedEntries = await createSignedUrls(getStorageBucket(kind), uniqueStoragePaths);
-  const expectedStoragePaths = new Set(uniqueStoragePaths);
-  const signedUrlMap = new Map<string, string>();
-
-  for (const entry of signedEntries) {
-    const storagePath = entry.path?.trim();
-    if (!storagePath || !expectedStoragePaths.has(storagePath)) {
-      throw new Error('Failed to create signed URL: Batch response contained an unexpected storage path.');
-    }
-
-    if (entry.error) {
-      throw new Error(`Failed to create signed URL: ${entry.error}`);
-    }
-
-    const signedUrl = entry.signedUrl?.trim();
-    if (!signedUrl) {
-      throw new Error(`Failed to create signed URL: Missing signed URL for ${storagePath}`);
-    }
-
-    signedUrlMap.set(storagePath, signedUrl);
-  }
-
-  for (const storagePath of uniqueStoragePaths) {
-    if (!signedUrlMap.has(storagePath)) {
-      throw new Error(`Failed to create signed URL: Missing signed URL for ${storagePath}`);
-    }
-  }
-
-  return signedUrlMap;
 }
 
 export async function removeImage(kind: AssetUploadKind, storagePath: string) {
