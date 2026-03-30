@@ -8,6 +8,7 @@ import {
 } from '@/lib/server/services/generation-service';
 
 export const runtime = 'nodejs';
+export const maxDuration = 300;
 
 export const POST = createGenerateRouteHandler({
   requireVerifiedRequestSession,
