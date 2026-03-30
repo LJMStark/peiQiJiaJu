@@ -408,6 +408,10 @@ export function RoomEditor({ catalog, onUploadFiles, user }: RoomEditorProps) {
     void handleGenerate(feedback);
   };
 
+  const handleEnhanceVibe = () => {
+    void handleGenerate('增加必要的软装搭配和灯光，营造出极致的氛围感，不要改变里面原有的家具、柜体、吊顶等元素');
+  };
+
   const handleContinuePendingRoom = () => {
     if (!pendingRoomImage) {
       return;
@@ -1049,7 +1053,15 @@ export function RoomEditor({ catalog, onUploadFiles, user }: RoomEditorProps) {
                 ))}
                 </AnimatePresence>
                 
-                <div className="absolute bottom-4 left-1/2 -translate-x-1/2 sm:left-auto sm:translate-x-0 sm:right-4 z-30 flex items-center gap-2">
+                <div className="absolute bottom-4 left-1/2 -translate-x-1/2 sm:left-auto sm:translate-x-0 sm:right-4 z-30 flex items-center gap-2 w-max max-w-full">
+                  <button
+                    onClick={handleEnhanceVibe}
+                    disabled={isGenerating}
+                    className="bg-indigo-600/95 backdrop-blur-md text-white hover:bg-indigo-700 px-4 py-2 rounded-full shadow-lg border border-indigo-500/50 flex items-center gap-2 text-sm font-medium transition-all group disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <Sparkles size={16} className="group-hover:-rotate-12 transition-transform" />
+                    一键增加氛围感
+                  </button>
                   <button
                     onClick={() => setIsFeedbackModalOpen(true)}
                     className="bg-white/90 backdrop-blur-md text-zinc-700 hover:text-indigo-600 px-4 py-2 rounded-full shadow-lg border border-zinc-200 flex items-center gap-2 text-sm font-medium transition-colors"
