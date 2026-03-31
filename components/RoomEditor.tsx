@@ -38,6 +38,26 @@ const RECOMMENDED_INSTRUCTIONS = [
   "提取参考图中的家具，替换房间里的旧家具，并确保新家具的阴影方向与房间光源一致。"
 ];
 
+const VIBE_PROMPT = `你是一位顶级的室内设计师和高级图像合成专家。
+我提供了一张已经放置好家具的房间图片。
+【核心任务】
+为这张图片增加极致的氛围感，增加必要的软装搭配（如地毯、挂画、绿植、抱枕、窗帘等）和灯光效果（如氛围灯、落地灯、阳光洒落的光影等）。
+严禁改变里面原有的家具、柜体、吊顶等核心元素！只做软装和光影的加法，让整个空间看起来极其温馨、高级、有氛围。`;
+
+const LEGACY_VIBE_PROMPT = '增加必要的软装搭配和灯光，营造出极致的氛围感，不要改变里面原有的家具、柜体、吊顶等元素';
+
+function escapeRegExp(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function getDisplayInstruction(instruction: string | null | undefined): string {
+  if (!instruction) return '';
+  return instruction
+    .replace(new RegExp(`\\n?\\[修正反馈\\]: ${escapeRegExp(VIBE_PROMPT)}`), '')
+    .replace(new RegExp(`\\n?\\[修正反馈\\]: ${escapeRegExp(LEGACY_VIBE_PROMPT)}`), '')
+    .trim();
+}
+
 type RoomEditorProps = {
   catalog: FurnitureItem[];
   onUploadFiles: (files: File[]) => Promise<FurnitureItem[]>;
@@ -383,7 +403,7 @@ export function RoomEditor({ catalog, onUploadFiles, user }: RoomEditorProps) {
     });
     setSelectedFurnitures(item.furnitures.length > 0 ? item.furnitures : [item.furniture]);
     setCurrentGeneratedImage(item.generatedImage);
-    setCustomInstruction(item.customInstruction || '');
+    setCustomInstruction(getDisplayInstruction(item.customInstruction));
     setPlacedFurnitures([]);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -409,7 +429,7 @@ export function RoomEditor({ catalog, onUploadFiles, user }: RoomEditorProps) {
   };
 
   const handleEnhanceVibe = () => {
-    void handleGenerate('增加必要的软装搭配和灯光，营造出极致的氛围感，不要改变里面原有的家具、柜体、吊顶等元素');
+    void handleGenerate(VIBE_PROMPT);
   };
 
   const handleContinuePendingRoom = () => {
@@ -1238,11 +1258,11 @@ export function RoomEditor({ catalog, onUploadFiles, user }: RoomEditorProps) {
                         </div>
                       </div>
 
-                      {item.customInstruction && (
+                      {getDisplayInstruction(item.customInstruction) && (
                         <div className="flex items-start gap-3 mt-3 pt-3 border-t border-zinc-100">
                           <div className="text-xs font-medium text-zinc-400 uppercase tracking-wider w-12 mt-0.5">指令</div>
-                          <div className="text-xs text-zinc-600 flex-1 line-clamp-2" title={item.customInstruction}>
-                            {item.customInstruction}
+                          <div className="text-xs text-zinc-600 flex-1 line-clamp-2" title={getDisplayInstruction(item.customInstruction)}>
+                            {getDisplayInstruction(item.customInstruction)}
                           </div>
                         </div>
                       )}
