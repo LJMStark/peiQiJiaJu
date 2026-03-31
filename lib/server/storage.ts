@@ -2,14 +2,15 @@ import 'server-only';
 
 import { randomUUID } from 'node:crypto';
 import { preprocessImage } from '@/lib/server/image-preprocess';
-import { getSupabaseAdmin } from '@/lib/supabase-admin';
 import {
   ALLOWED_IMAGE_MIME_TYPES,
   MAX_IMAGE_UPLOAD_SIZE_BYTES,
-  SIGNED_URL_TTL_SECONDS,
   getStorageBucket,
+  getR2Config,
 } from '@/lib/storage-config';
 import type { AssetUploadKind } from '@/lib/dashboard-types';
+import { getS3Client } from '@/lib/server/s3-client';
+import { PutObjectCommand, GetObjectCommand, CopyObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
 
 function sanitizeSegment(value: string) {
   return value
@@ -77,14 +78,22 @@ export async function uploadImageFile(
 
   const bucket = getStorageBucket(kind);
   const storagePath = buildStoragePath(userId, kind, fileName, processed.mimeType);
-  const supabase = getSupabaseAdmin();
-  const { error } = await supabase.storage.from(bucket).upload(storagePath, processed.buffer, {
-    cacheControl: '3600',
-    contentType: processed.mimeType,
-    upsert: false,
-  });
+  
+  const s3 = getS3Client();
+  const config = getR2Config();
+  const objectKey = `${bucket}/${storagePath}`;
 
-  if (error) {
+  try {
+    await s3.send(
+      new PutObjectCommand({
+        Bucket: config.bucketName,
+        Key: objectKey,
+        Body: processed.buffer,
+        ContentType: processed.mimeType,
+        CacheControl: 'public, max-age=31536000, immutable',
+      })
+    );
+  } catch (error: any) {
     throw new Error(`Storage upload failed: ${error.message}`);
   }
 
@@ -124,14 +133,22 @@ export async function uploadGeneratedImage(userId: string, dataUrl: string, file
 
   const bucket = getStorageBucket('generated');
   const storagePath = buildStoragePath(userId, 'generated', fileName, mimeType);
-  const supabase = getSupabaseAdmin();
-  const { error } = await supabase.storage.from(bucket).upload(storagePath, buffer, {
-    cacheControl: '3600',
-    contentType: mimeType,
-    upsert: false,
-  });
+  
+  const s3 = getS3Client();
+  const config = getR2Config();
+  const objectKey = `${bucket}/${storagePath}`;
 
-  if (error) {
+  try {
+    await s3.send(
+      new PutObjectCommand({
+        Bucket: config.bucketName,
+        Key: objectKey,
+        Body: buffer,
+        ContentType: mimeType,
+        CacheControl: 'public, max-age=31536000, immutable',
+      })
+    );
+  } catch (error: any) {
     throw new Error(`Storage upload failed: ${error.message}`);
   }
 
@@ -144,16 +161,28 @@ export async function uploadGeneratedImage(userId: string, dataUrl: string, file
 }
 
 export async function downloadStoredImageBase64(kind: AssetUploadKind, storagePath: string) {
-  const supabase = getSupabaseAdmin();
   const bucket = getStorageBucket(kind);
-  const { data, error } = await supabase.storage.from(bucket).download(storagePath);
+  const s3 = getS3Client();
+  const config = getR2Config();
+  const objectKey = `${bucket}/${storagePath}`;
 
-  if (error || !data) {
-    throw new Error(`Failed to load source image: ${error?.message ?? 'Unknown storage error'}`);
+  try {
+    const data = await s3.send(
+      new GetObjectCommand({
+        Bucket: config.bucketName,
+        Key: objectKey,
+      })
+    );
+
+    if (!data.Body) {
+      throw new Error('Image body is empty');
+    }
+
+    const arrayBuffer = await data.Body.transformToByteArray();
+    return Buffer.from(arrayBuffer).toString('base64');
+  } catch (error: any) {
+    throw new Error(`Failed to load source image: ${error.message}`);
   }
-
-  const buffer = Buffer.from(await data.arrayBuffer());
-  return buffer.toString('base64');
 }
 
 export async function copyStoredImage(
@@ -162,56 +191,60 @@ export async function copyStoredImage(
   input: { sourcePath: string; mimeType: string; fileName: string }
 ) {
   const bucket = getStorageBucket(kind);
-  const supabase = getSupabaseAdmin();
-  const { data, error } = await supabase.storage.from(bucket).download(input.sourcePath);
-
-  if (error || !data) {
-    throw new Error(`Failed to copy stored image: ${error?.message ?? 'Unknown storage error'}`);
-  }
-
-  const buffer = Buffer.from(await data.arrayBuffer());
+  const sourceKey = `${bucket}/${input.sourcePath}`;
+  
   const storagePath = buildStoragePath(userId, kind, input.fileName, input.mimeType);
-  const { error: uploadError } = await supabase.storage.from(bucket).upload(storagePath, buffer, {
-    cacheControl: '3600',
-    contentType: input.mimeType,
-    upsert: false,
-  });
+  const targetKey = `${bucket}/${storagePath}`;
+  
+  const s3 = getS3Client();
+  const config = getR2Config();
 
-  if (uploadError) {
-    throw new Error(`Storage upload failed: ${uploadError.message}`);
+  try {
+    await s3.send(
+      new CopyObjectCommand({
+        Bucket: config.bucketName,
+        CopySource: `${config.bucketName}/${sourceKey}`,
+        Key: targetKey,
+        ContentType: input.mimeType,
+        MetadataDirective: 'REPLACE',
+        CacheControl: 'public, max-age=31536000, immutable',
+      })
+    );
+  } catch (error: any) {
+    throw new Error(`Storage copy failed: ${error.message}`);
   }
 
   return {
     bucket,
     storagePath,
     mimeType: input.mimeType,
-    fileSize: buffer.byteLength,
+    fileSize: 0,
   };
 }
 
-async function createSignedUrl(bucket: string, storagePath: string): Promise<string> {
-  const supabase = getSupabaseAdmin();
-  const { data, error } = await supabase.storage
-    .from(bucket)
-    .createSignedUrl(storagePath, SIGNED_URL_TTL_SECONDS);
-
-  if (error || !data?.signedUrl) {
-    throw new Error(`Failed to create signed URL: ${error?.message ?? 'Unknown error'}`);
-  }
-
-  return data.signedUrl;
-}
-
 export async function createSignedImageUrl(kind: AssetUploadKind, storagePath: string): Promise<string> {
-  return createSignedUrl(getStorageBucket(kind), storagePath);
+  const bucket = getStorageBucket(kind);
+  const config = getR2Config();
+  
+  // Custom Domain URLs on R2 look exactly like what the user configured: 
+  // assets.peiqijiaju.xyz / bucketFolderPath / file
+  return `${config.publicUrl.replace(/\/$/, '')}/${bucket}/${storagePath}`;
 }
 
 export async function removeImage(kind: AssetUploadKind, storagePath: string) {
-  const supabase = getSupabaseAdmin();
   const bucket = getStorageBucket(kind);
-  const { error } = await supabase.storage.from(bucket).remove([storagePath]);
+  const s3 = getS3Client();
+  const config = getR2Config();
+  const objectKey = `${bucket}/${storagePath}`;
 
-  if (error) {
+  try {
+    await s3.send(
+      new DeleteObjectCommand({
+        Bucket: config.bucketName,
+        Key: objectKey,
+      })
+    );
+  } catch (error: any) {
     throw new Error(`Failed to delete storage object: ${error.message}`);
   }
 }

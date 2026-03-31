@@ -57,3 +57,17 @@ export function resolveSupabaseProjectUrl() {
 export function getStorageBucket(kind: AssetUploadKind) {
   return STORAGE_BUCKETS[kind];
 }
+
+export function getR2Config() {
+  const accountId = process.env.R2_ACCOUNT_ID;
+  const accessKeyId = process.env.R2_ACCESS_KEY_ID;
+  const secretAccessKey = process.env.R2_SECRET_ACCESS_KEY;
+  const bucketName = process.env.R2_BUCKET_NAME;
+  const publicUrl = process.env.R2_PUBLIC_URL;
+
+  if (!accountId || !accessKeyId || !secretAccessKey || !bucketName || !publicUrl) {
+    throw new Error('Missing Cloudflare R2 environment variables. Please check your .env file.');
+  }
+
+  return { accountId, accessKeyId, secretAccessKey, bucketName, publicUrl };
+}
