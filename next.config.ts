@@ -26,7 +26,20 @@ function resolveSupabaseHostname() {
   return null;
 }
 
+function resolveR2Hostname() {
+  const configuredUrl = process.env.R2_PUBLIC_URL;
+  if (configuredUrl) {
+    try {
+      return new URL(configuredUrl).hostname;
+    } catch {
+      return null;
+    }
+  }
+  return null;
+}
+
 const supabaseHostname = resolveSupabaseHostname();
+const r2Hostname = resolveR2Hostname();
 
 const nextConfig: NextConfig = {
   distDir: process.env.NODE_ENV === 'development' ? '.next-dev' : '.next',
@@ -53,6 +66,16 @@ const nextConfig: NextConfig = {
               hostname: supabaseHostname,
               port: '',
               pathname: '/storage/v1/object/**',
+            },
+          ]
+        : []),
+      ...(r2Hostname
+        ? [
+            {
+              protocol: 'https' as const,
+              hostname: r2Hostname,
+              port: '',
+              pathname: '/**',
             },
           ]
         : []),
