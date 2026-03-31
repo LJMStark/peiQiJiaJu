@@ -11,8 +11,7 @@
    - 简洁的登录界面，输入公司名称即可进入。
    - 包含“家具图册”和“室内编辑器”两个主要模块。
 3. **家具图册管理 (Catalog)**：
-   - 支持拖拽或点击上传多张家具图片。
-   - 自动将图片转换为 Base64 格式在本地进行管理，无需配置复杂的后端存储。
+   - 支持多张家具图片上传管理，自动通过 Cloudflare R2 进行高效存储和全球边缘节点下发。
    - 支持图册的预览和删除。
 4. **AI 室内编辑器 (Room Editor)**：
    - **步骤 1**：上传客户的室内实景图。
@@ -23,10 +22,10 @@
 
 ## 技术栈
 - **框架**: Next.js 15 (App Router), React 19
+- **后端数据库与 Auth**: Supabase PostgreSQL + Better Auth
+- **海量图床存储**: Cloudflare R2 (基于 `@aws-sdk/client-s3` 原生桥接，Zero Egress)
 - **样式**: Tailwind CSS v4
-- **图标**: Lucide React
-- **动画**: Motion (Framer Motion)
-- **AI 模型**: `@google/genai` SDK, `gemini-3-pro-image-preview` 模型
+- **AI 算力引擎**: `@google/genai` SDK, `gemini-3-pro-image-preview` 模型
 
 ## 本地化 (Localization)
 - 整个应用界面已完全汉化，面向中国市场和用户。
@@ -38,4 +37,5 @@
 - **构建 UI 组件**：开发了 `ApiKeyGuard`, `Login`, `Dashboard`, `Catalog`, `RoomEditor` 等核心组件。
 - **集成 Gemini API**：在 `RoomEditor` 中接入 `@google/genai` SDK，实现多模态图片生成。
 - **全面汉化**：将所有英文文案替换为符合中国用户习惯的中文表达。
+- **架构优化迁移**：彻底剥离高成本的 Supabase Storage，全方位迁移至无限免流的 Cloudflare R2 对象存储，重构了底层的高效无核缓冲存取管道。
 - **编写开发文档**：记录项目功能和技术细节。
