@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { resolveDatabaseConnectionString, resolveDatabasePoolMax } from '../lib/db-config.ts';
+import { resolveGenerationConcurrencyConnectionString } from '../lib/server/generation-concurrency.ts';
 
 test('resolveDatabaseConnectionString prefers DIRECT_URL outside production', () => {
   const connectionString = resolveDatabaseConnectionString({
@@ -21,6 +22,25 @@ test('resolveDatabaseConnectionString prefers DATABASE_URL in production', () =>
   });
 
   assert.equal(connectionString, 'postgres://pooler');
+});
+
+test('production queries can stay on DATABASE_URL while generation locks use DIRECT_URL', () => {
+  assert.equal(
+    resolveDatabaseConnectionString({
+      nodeEnv: 'production',
+      databaseUrl: 'postgres://pooler',
+      directUrl: 'postgres://direct',
+    }),
+    'postgres://pooler'
+  );
+
+  assert.equal(
+    resolveGenerationConcurrencyConnectionString({
+      databaseUrl: 'postgres://pooler',
+      directUrl: 'postgres://direct',
+    }),
+    'postgres://direct'
+  );
 });
 
 test('resolveDatabaseConnectionString falls back to whichever value is present', () => {

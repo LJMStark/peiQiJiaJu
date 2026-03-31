@@ -1,7 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { createGenerationConcurrencyGuard } from '../lib/server/generation-concurrency.ts';
+import {
+  createGenerationConcurrencyGuard,
+  resolveGenerationConcurrencyConnectionString,
+} from '../lib/server/generation-concurrency.ts';
 import { RouteError } from '../lib/server/http/error-envelope.ts';
 import {
   acquireGenerationConcurrencyLease,
@@ -124,6 +127,31 @@ test('resolveGlobalGenerationConcurrencyLimit falls back to the default when the
   assert.equal(resolveGlobalGenerationConcurrencyLimit(''), 2);
   assert.equal(resolveGlobalGenerationConcurrencyLimit('0'), 2);
   assert.equal(resolveGlobalGenerationConcurrencyLimit('3'), 3);
+});
+
+test('resolveGenerationConcurrencyConnectionString prefers DIRECT_URL for session-scoped locks', () => {
+  assert.equal(
+    resolveGenerationConcurrencyConnectionString({
+      databaseUrl: 'postgres://pooler',
+      directUrl: 'postgres://direct',
+    }),
+    'postgres://direct'
+  );
+
+  assert.equal(
+    resolveGenerationConcurrencyConnectionString({
+      databaseUrl: 'postgres://pooler',
+    }),
+    'postgres://pooler'
+  );
+
+  assert.equal(
+    resolveGenerationConcurrencyConnectionString({
+      databaseUrl: 'postgres://pooler',
+      directUrl: '',
+    }),
+    'postgres://pooler'
+  );
 });
 
 test('validateGenerationConcurrencyLimit keeps database headroom for queries', () => {
