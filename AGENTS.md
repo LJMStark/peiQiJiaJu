@@ -96,7 +96,6 @@ Use the `@/*` import alias when it improves readability.
 - `node --test tests/*.test.ts tests/*.test.mjs`: run the test suite
 - `npx tsc --noEmit`: run a type-check pass
 - `npm run auth:migrate`: run auth migrations with `.env`
-- `npm run storage:migrate`: run storage migrations with `.env`
 - `npm run invite:migrate`: run invitation migrations with `.env`
 
 ## 11. Coding Style and Naming
@@ -131,3 +130,9 @@ Use the `@/*` import alias when it improves readability.
 - Keep this file concise, explicit, and repository-specific.
 - When shared instructions change, update this file first.
 - Keep `CLAUDE.md` thin and Claude-specific; it should not duplicate this file's full content.
+
+## 15. Storage & Cloud Architecture
+
+- **PostgreSQL & Auth**: Managed by Supabase.
+- **File Storage**: ALL image and asset storage is handled by Cloudflare R2 via the `@aws-sdk/client-s3` library. 
+- **CRITICAL RULE**: Do **NOT** use Supabase Storage `supabase.storage` APIs anymore. All uploads, downloads, and copies must go through the functions defined in `lib/server/storage.ts` which uses the S3 protocol to interface with R2. All media URLs point to `assets.peiqijiaju.xyz`.
