@@ -162,6 +162,54 @@ test('validateGenerationConcurrencyLimit keeps database headroom for queries', (
   );
 });
 
+test('createGenerationConcurrencyGuard maps database connectivity failures to a readable route error', async () => {
+  const guard = createGenerationConcurrencyGuard({
+    async connect() {
+      throw Object.assign(
+        new Error('connect ENETUNREACH 2406:da12:b78::5432 - Local (:::0)'),
+        {
+          address: '2406:da12:b78::5432',
+          code: 'ENETUNREACH',
+          port: 5432,
+          syscall: 'connect',
+        }
+      );
+    },
+    connectionString: 'postgresql://postgres:secret@db.project.supabase.co:5432/postgres',
+    globalLimit: 2,
+  });
+
+  await assert.rejects(
+    () => guard('user-1', async () => 'ok'),
+    (error) => {
+      assert.ok(error instanceof RouteError);
+      assert.equal(error.status, 503);
+      assert.equal(error.code, 'GENERATION_LOCK_DATABASE_UNREACHABLE');
+      assert.equal(
+        error.message,
+        '当前生成服务暂时不可用，请稍后重试；如果持续出现，请联系管理员检查数据库直连或会话池配置。'
+      );
+      return true;
+    }
+  );
+});
+
+test('createGenerationConcurrencyGuard preserves unknown connect failures', async () => {
+  const expectedError = new Error('unexpected connect failure');
+  const guard = createGenerationConcurrencyGuard({
+    async connect() {
+      throw expectedError;
+    },
+    connectionString: 'postgresql://postgres:secret@db.project.supabase.co:5432/postgres',
+    globalLimit: 2,
+  });
+
+  await assert.rejects(
+    () => guard('user-1', async () => 'ok'),
+    (error) => error === expectedError
+  );
+});
+
 test('acquireGenerationConcurrencyLease rejects when the same user already has an active generation', async () => {
   const { client, calls } = createQueryClient([
     { rows: [{ locked: false }] },

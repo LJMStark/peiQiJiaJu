@@ -1,6 +1,7 @@
 import { Pool } from 'pg';
 import { resolveDatabasePoolMax } from '../db-config.ts';
 import { shouldIgnorePgPoolError } from '../db-error.ts';
+import { createRouteError } from './http/error-envelope.ts';
 import {
   acquireGenerationConcurrencyLease,
   type AdvisoryLockClient,
@@ -15,6 +16,7 @@ type GuardClient = AdvisoryLockClient & {
 
 type GenerationConcurrencyGuardDeps = {
   connect: () => Promise<GuardClient>;
+  connectionString?: string;
   globalLimit: number;
 };
 
@@ -29,10 +31,99 @@ const globalForGenerationConcurrency = globalThis as typeof globalThis & {
   __generationConcurrencyPoolErrorHandlersRegistered?: boolean;
 };
 
+const GENERATION_CONNECTIVITY_ERROR_CODES = new Set([
+  'ECONNREFUSED',
+  'EHOSTUNREACH',
+  'ENETUNREACH',
+  'ETIMEDOUT',
+]);
+
+type GenerationConcurrencyConnectError = Error & {
+  address?: string;
+  code?: string;
+  port?: number;
+  syscall?: string;
+};
+
 function toClientReleaseError(error: unknown) {
   return error instanceof Error
     ? error
     : new Error('Failed to release generation concurrency advisory locks safely.');
+}
+
+function readConnectionTarget(connectionString?: string) {
+  if (!connectionString) {
+    return null;
+  }
+
+  try {
+    const parsed = new URL(connectionString);
+    return {
+      host: parsed.hostname,
+      port: parsed.port || null,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function isSupabaseDirectConnectionHost(host: string | null | undefined) {
+  if (!host) {
+    return false;
+  }
+
+  return host.startsWith('db.') && host.endsWith('.supabase.co');
+}
+
+function toGenerationConnectivityRouteError(
+  error: unknown
+) {
+  if (!(error instanceof Error)) {
+    return null;
+  }
+
+  const connectError = error as GenerationConcurrencyConnectError;
+  const code = connectError.code?.trim().toUpperCase();
+  const syscall = connectError.syscall?.trim().toLowerCase();
+
+  if (!code || !GENERATION_CONNECTIVITY_ERROR_CODES.has(code)) {
+    return null;
+  }
+
+  if (syscall && syscall !== 'connect') {
+    return null;
+  }
+
+  return createRouteError({
+    status: 503,
+    code: 'GENERATION_LOCK_DATABASE_UNREACHABLE',
+    message: '当前生成服务暂时不可用，请稍后重试；如果持续出现，请联系管理员检查数据库直连或会话池配置。',
+  });
+}
+
+function logGenerationConcurrencyConnectFailure(
+  error: unknown,
+  connectionString?: string
+) {
+  const connectError = error as GenerationConcurrencyConnectError;
+  const target = readConnectionTarget(connectionString);
+  const hint = isSupabaseDirectConnectionHost(target?.host) && target?.port === '5432'
+    ? 'Supabase direct host on port 5432 may require IPv6 egress. Prefer the session pooler host on port 5432 when IPv6 is unavailable.'
+    : null;
+
+  console.error(
+    '[generation-concurrency] failed to connect advisory lock database',
+    {
+      code: connectError.code ?? null,
+      syscall: connectError.syscall ?? null,
+      address: connectError.address ?? null,
+      port: connectError.port ?? null,
+      connectionHost: target?.host ?? null,
+      connectionPort: target?.port ?? null,
+      hint,
+    },
+    error
+  );
 }
 
 export function resolveGenerationConcurrencyConnectionString(
@@ -89,6 +180,10 @@ function getGenerationConcurrencyPool() {
   }
 
   if (!globalForGenerationConcurrency.__generationConcurrencyPoolErrorHandlersRegistered) {
+    if (!pool) {
+      throw new Error('Generation concurrency pool initialization failed.');
+    }
+
     pool.on('error', handleGenerationConcurrencyPoolError);
     pool.on('connect', (client) => {
       client.on('error', handleGenerationConcurrencyPoolError);
@@ -105,12 +200,24 @@ export function createGenerationConcurrencyGuard(
   return async function runWithGenerationConcurrencyGuard<T>(
     userId: string,
     action: () => Promise<T>
-  ) {
-    const client = await deps.connect();
+  ): Promise<T> {
+    let client: GuardClient | null = null;
     let actionError: unknown = null;
     let clientReleaseError: Error | null = null;
 
     try {
+      try {
+        client = await deps.connect();
+      } catch (error) {
+        const normalizedError = toGenerationConnectivityRouteError(error);
+        if (normalizedError) {
+          logGenerationConcurrencyConnectFailure(error, deps.connectionString);
+          throw normalizedError;
+        }
+
+        throw error;
+      }
+
       const lease = await acquireGenerationConcurrencyLease(
         client,
         userId,
@@ -142,12 +249,16 @@ export function createGenerationConcurrencyGuard(
       }
       throw error;
     } finally {
-      if (clientReleaseError) {
-        client.release(clientReleaseError);
-      } else {
-        client.release();
+      if (client) {
+        if (clientReleaseError) {
+          client.release(clientReleaseError);
+        } else {
+          client.release();
+        }
       }
     }
+
+    throw new Error('Generation concurrency guard finished without returning or throwing.');
   };
 }
 
@@ -171,6 +282,7 @@ async function getDefaultGenerationConcurrencyGuard() {
     async connect() {
       return pool.connect();
     },
+    connectionString: getGenerationConcurrencyConnectionString(),
     globalLimit,
   });
 
