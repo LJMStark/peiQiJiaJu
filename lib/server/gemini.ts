@@ -4,6 +4,7 @@ import { GoogleGenAI } from '@google/genai';
 import { FURNITURE_CATEGORIES } from '@/lib/dashboard-types';
 import { GEMINI_CLASSIFIER_MODEL, GEMINI_IMAGE_MODEL } from '@/lib/gemini-config';
 import { buildVisualizationPrompt } from '@/lib/room-visualization';
+import { normalizeGeminiError } from '@/lib/server/gemini-error';
 import { downloadStoredImageBase64 } from '@/lib/server/storage';
 
 type FurnitureSource = {
@@ -22,9 +23,31 @@ type RoomSource = {
   aspectRatio: string | null;
 };
 
+type GeneratedImageSource = {
+  storagePath: string;
+  mimeType: string;
+  aspectRatio: string | null;
+};
+
 const VALID_FURNITURE_CATEGORIES = new Set<string>(
   FURNITURE_CATEGORIES.filter((category) => category !== '全部')
 );
+
+const VIBE_ENHANCEMENT_PROMPT = `你是一位室内图像后期灯光与色彩专家。
+我只提供 1 张已经完成构图的室内效果图。
+
+【任务目标】
+仅通过光影、色温、明暗层次和整体色彩分级来增强氛围感，让空间更温馨、更高级。
+
+【硬性约束（必须遵守）】
+1. 严禁改变或替换任何主体元素：家具、柜体、吊顶、墙面、地面、门窗、装饰、画框等都必须保持原样。
+2. 严禁新增或删除任何实体物体，不允许生成新的家具或软装。
+3. 严禁改变主体的位置、比例、形状、朝向、数量和材质。
+4. 严禁改变镜头机位、透视关系、构图和裁切范围。
+5. 如果无法在不改变主体的前提下增强氛围，则保持原图不变。
+
+【输出要求】
+只返回一张处理后的图片。`;
 
 function getGeminiApiKey() {
   const apiKey = process.env.GEMINI_API_KEY ?? process.env.NEXT_PUBLIC_GEMINI_API_KEY;
@@ -98,52 +121,104 @@ export async function generateRoomVisualization(
     ),
   ]);
 
-  const response = await getGeminiClient().models.generateContent({
-    model: GEMINI_IMAGE_MODEL,
-    contents: {
-      parts: [
-        {
-          inlineData: {
-            data: roomBase64,
-            mimeType: input.roomImage.mimeType,
+  try {
+    const response = await getGeminiClient().models.generateContent({
+      model: GEMINI_IMAGE_MODEL,
+      contents: {
+        parts: [
+          {
+            inlineData: {
+              data: roomBase64,
+              mimeType: input.roomImage.mimeType,
+            },
           },
-        },
-        ...input.furnitureItems.map((furniture, index) => ({
-          inlineData: {
-            data: furnitureBase64List[index],
-            mimeType: furniture.mimeType,
+          ...input.furnitureItems.map((furniture, index) => ({
+            inlineData: {
+              data: furnitureBase64List[index],
+              mimeType: furniture.mimeType,
+            },
+          })),
+          {
+            text: buildVisualizationPrompt(
+              input.furnitureItems.map((furniture) => ({
+                id: furniture.id,
+                name: furniture.name,
+                category: furniture.category,
+              })),
+              input.customInstruction
+            ),
           },
-        })),
-        {
-          text: buildVisualizationPrompt(
-            input.furnitureItems.map((furniture) => ({
-              id: furniture.id,
-              name: furniture.name,
-              category: furniture.category,
-            })),
-            input.customInstruction
-          ),
-        },
-      ],
-    },
-    config: {
-      imageConfig: {
-        aspectRatio: input.roomImage.aspectRatio ?? '1:1',
-        imageSize: '2K',
+        ],
       },
-    },
-  });
+      config: {
+        imageConfig: {
+          aspectRatio: input.roomImage.aspectRatio ?? '1:1',
+          imageSize: '2K',
+        },
+      },
+    });
 
-  const imagePart = response.candidates?.[0]?.content?.parts?.find(
-    (part) => part.inlineData?.data && part.inlineData.mimeType
-  );
+    const imagePart = response.candidates?.[0]?.content?.parts?.find(
+      (part) => part.inlineData?.data && part.inlineData.mimeType
+    );
 
-  if (!imagePart?.inlineData?.data || !imagePart.inlineData.mimeType) {
-    throw new Error('Gemini did not return an image.');
+    if (!imagePart?.inlineData?.data || !imagePart.inlineData.mimeType) {
+      throw new Error('Gemini did not return an image.');
+    }
+
+    return {
+      generatedDataUrl: `data:${imagePart.inlineData.mimeType};base64,${imagePart.inlineData.data}`,
+      mimeType: imagePart.inlineData.mimeType,
+    };
+  } catch (error) {
+    throw normalizeGeminiError(error) ?? error;
   }
+}
 
-  return {
-    generatedDataUrl: `data:${imagePart.inlineData.mimeType};base64,${imagePart.inlineData.data}`,
-    mimeType: imagePart.inlineData.mimeType,
-  };
+export async function enhanceRoomVibe(
+  input: {
+    sourceImage: GeneratedImageSource;
+  }
+) {
+  const sourceBase64 = await downloadStoredImageBase64('generated', input.sourceImage.storagePath);
+
+  try {
+    const response = await getGeminiClient().models.generateContent({
+      model: GEMINI_IMAGE_MODEL,
+      contents: {
+        parts: [
+          {
+            inlineData: {
+              data: sourceBase64,
+              mimeType: input.sourceImage.mimeType,
+            },
+          },
+          {
+            text: VIBE_ENHANCEMENT_PROMPT,
+          },
+        ],
+      },
+      config: {
+        imageConfig: {
+          aspectRatio: input.sourceImage.aspectRatio ?? '1:1',
+          imageSize: '2K',
+        },
+      },
+    });
+
+    const imagePart = response.candidates?.[0]?.content?.parts?.find(
+      (part) => part.inlineData?.data && part.inlineData.mimeType
+    );
+
+    if (!imagePart?.inlineData?.data || !imagePart.inlineData.mimeType) {
+      throw new Error('Gemini did not return an image.');
+    }
+
+    return {
+      generatedDataUrl: `data:${imagePart.inlineData.mimeType};base64,${imagePart.inlineData.data}`,
+      mimeType: imagePart.inlineData.mimeType,
+    };
+  } catch (error) {
+    throw normalizeGeminiError(error) ?? error;
+  }
 }

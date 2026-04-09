@@ -11,26 +11,23 @@ type VerifiedSessionResult = {
   response: Response | null;
 };
 
-type GenerateRouteRequest = {
-  roomImageId: string;
-  historyItemId: string | null;
-  furnitureItemIds: string[];
-  customInstruction: string | null;
+type GenerateVibeRouteRequest = {
+  historyItemId: string;
 };
 
-type GenerateRouteDeps = {
+type GenerateVibeRouteDeps = {
   requireVerifiedRequestSession: (request: Request) => Promise<VerifiedSessionResult>;
   parseJsonObject: (request: Request) => Promise<Record<string, unknown>>;
-  parseGenerateRequest: (body: Record<string, unknown>) => GenerateRouteRequest;
-  generateRoomVisualizationForUserWithDefaults: (
+  parseGenerateVibeRequest: (body: Record<string, unknown>) => GenerateVibeRouteRequest;
+  generateRoomVibeForUserWithDefaults: (
     user: NonNullable<VerifiedSessionResult['session']>['user'],
-    input: GenerateRouteRequest
+    input: GenerateVibeRouteRequest
   ) => Promise<unknown>;
   errorResponse: (error: unknown, fallbackMessage: string, status?: number) => Response;
 };
 
-export function createGenerateRouteHandler(
-  deps: GenerateRouteDeps
+export function createGenerateVibeRouteHandler(
+  deps: GenerateVibeRouteDeps
 ) {
   return async function POST(request: Request) {
     const requestId = randomUUID();
@@ -38,11 +35,11 @@ export function createGenerateRouteHandler(
     let userId: string | null = null;
 
     try {
-      console.info('[api/generate] start', { requestId });
+      console.info('[api/generate-vibe] start', { requestId });
 
       const authState = await deps.requireVerifiedRequestSession(request);
       if (authState.response) {
-        console.info('[api/generate] auth rejected', {
+        console.info('[api/generate-vibe] auth rejected', {
           requestId,
           status: authState.response.status,
           durationMs: Date.now() - startedAt,
@@ -56,16 +53,14 @@ export function createGenerateRouteHandler(
 
       userId = authState.session.user.id;
       const body = await deps.parseJsonObject(request);
-      const input = deps.parseGenerateRequest(body);
-      console.info('[api/generate] accepted', {
+      const input = deps.parseGenerateVibeRequest(body);
+      console.info('[api/generate-vibe] accepted', {
         requestId,
         userId,
-        roomImageId: input.roomImageId,
-        furnitureCount: input.furnitureItemIds.length,
-        hasHistoryItemId: Boolean(input.historyItemId),
+        historyItemId: input.historyItemId,
       });
 
-      const item = await deps.generateRoomVisualizationForUserWithDefaults(
+      const item = await deps.generateRoomVibeForUserWithDefaults(
         {
           id: userId,
           role: authState.session.user.role,
@@ -74,7 +69,7 @@ export function createGenerateRouteHandler(
         input
       );
 
-      console.info('[api/generate] success', {
+      console.info('[api/generate-vibe] success', {
         requestId,
         userId,
         historyItemId: typeof item === 'object' && item !== null && 'id' in item ? item.id : null,
@@ -84,7 +79,7 @@ export function createGenerateRouteHandler(
       return Response.json({ item }, { status: 201 });
     } catch (error) {
       console.error(
-        '[api/generate] failed',
+        '[api/generate-vibe] failed',
         {
           requestId,
           userId,

@@ -375,16 +375,10 @@ export function RoomEditor({ catalog, onUploadFiles, user }: RoomEditorProps) {
         setLimitModalType('vip_expired');
         return;
       }
-      if (msg.includes("Requested entity was not found")) {
-        setError("当前 AI 服务暂不可用，请联系管理员检查 Gemini API 配置。");
-      } else if (msg.includes('Room image not found')) {
+      if (msg.includes('Room image not found')) {
         setError('当前室内图已失效，请先重新上传后再生成。');
-      } else if (msg.includes("429") || msg.toLowerCase().includes("rate limit") || msg.toLowerCase().includes("quota")) {
-        setError("AI 服务请求过于频繁，请稍后再试。");
-      } else if (msg.includes("500") || msg.includes("503")) {
-        setError("AI 服务暂时不可用，请稍后再试。");
       } else {
-        setError(msg || "生成过程中发生错误。");
+        setError(msg || '出错了，请重新生成。');
       }
     } finally {
       setIsGenerating(false);
@@ -428,8 +422,67 @@ export function RoomEditor({ catalog, onUploadFiles, user }: RoomEditorProps) {
     void handleGenerate(feedback);
   };
 
-  const handleEnhanceVibe = () => {
-    void handleGenerate(VIBE_PROMPT);
+  const handleEnhanceVibe = async () => {
+    if (!currentHistoryItem) {
+      setError('当前结果尚未同步完成，请稍后再试。');
+      setErrorDetails([]);
+      return;
+    }
+
+    const access = getGenerationAccessState({
+      role: user.role,
+      vipExpiresAt: user.vipExpiresAt,
+      generationCount: 0,
+    });
+    if (access.vipExpired) {
+      setLimitModalType('vip_expired');
+      return;
+    }
+
+    setIsGenerating(true);
+    setError(null);
+    setErrorDetails([]);
+    setPlacedFurnitures([]);
+    setCurrentGeneratedImage(null);
+
+    const sessionId = `session_${Date.now()}`;
+    setGenerationSessionId(sessionId);
+    setCurrentResultIndex(0);
+
+    try {
+      const response = await fetch('/api/generate-vibe', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          historyItemId: currentHistoryItem.id,
+        }),
+      });
+      const payload = await readJson<HistoryMutationResponse>(response);
+      const itemWithSession = { ...payload.item, sessionId };
+
+      setCurrentGeneratedImage(itemWithSession.generatedImage);
+      setHistory((previous) => [itemWithSession, ...previous]);
+    } catch (err: unknown) {
+      console.error('氛围增强错误:', err);
+      if (isFetchTransportError(err)) {
+        setError('生成请求在网络层被中断了，请稍后重试；如果持续出现，请联系管理员检查 HTTPS 或反向代理超时配置。');
+        return;
+      }
+      const msg = getErrorMessage(err);
+      if (msg.includes('免费用户生图额度已用完') || msg.includes('FREE_LIMIT_REACHED')) {
+        setLimitModalType('free_limit');
+        return;
+      }
+      if (msg.includes('会员套餐已到期') || msg.includes('VIP_EXPIRED')) {
+        setLimitModalType('vip_expired');
+        return;
+      }
+      setError(msg || '出错了，请重新生成。');
+    } finally {
+      setIsGenerating(false);
+    }
   };
 
   const handleContinuePendingRoom = () => {
@@ -510,6 +563,9 @@ export function RoomEditor({ catalog, onUploadFiles, user }: RoomEditorProps) {
   };
 
   // Compute current session results for carousel navigation
+  const currentHistoryItem = currentGeneratedImage
+    ? history.find((item) => item.generatedImage.id === currentGeneratedImage.id) ?? null
+    : null;
   const currentSessionResults = generationSessionId
       ? history.filter((item) => (item as HistoryItem & { sessionId?: string }).sessionId === generationSessionId)
       : [];
@@ -1076,7 +1132,7 @@ export function RoomEditor({ catalog, onUploadFiles, user }: RoomEditorProps) {
                 <div className="absolute bottom-4 left-1/2 -translate-x-1/2 sm:left-auto sm:translate-x-0 sm:right-4 z-30 flex items-center gap-2 w-max max-w-full">
                   <button
                     onClick={handleEnhanceVibe}
-                    disabled={isGenerating}
+                    disabled={isGenerating || !currentHistoryItem}
                     className="bg-indigo-600/95 backdrop-blur-md text-white hover:bg-indigo-700 px-4 py-2 rounded-full shadow-lg border border-indigo-500/50 flex items-center gap-2 text-sm font-medium transition-all group disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <Sparkles size={16} className="group-hover:-rotate-12 transition-transform" />
