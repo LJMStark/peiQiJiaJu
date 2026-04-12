@@ -1,16 +1,15 @@
-import { FREE_GENERATION_LIMIT, getGenerationAccessState } from '../../generation-access.ts';
 import { normalizeHistoryFurnitureSnapshots } from '../../room-visualization.ts';
 import { createGenerationHistorySchemaError } from '../generation-history-schema.ts';
 import { createRouteError } from '../http/error-envelope.ts';
+import {
+  createDefaultGenerationExecutionDeps,
+  runGenerationWithAccess,
+  type GenerationExecutionDeps,
+  type GenerationServiceUser,
+} from './generation-execution.ts';
 
 export type GenerateVibeRequest = {
   historyItemId: string;
-};
-
-export type GenerationServiceUser = {
-  id: string;
-  role?: string | null;
-  vipExpiresAt?: Date | string | null;
 };
 
 type HistoryRoomFallback = {
@@ -42,12 +41,7 @@ export type OwnedHistoryVibeSource = {
   };
 };
 
-export type GenerationVibeServiceDeps<THistoryItem = unknown> = {
-  runWithConcurrencyGuard?: <T>(
-    userId: string,
-    action: () => Promise<T>
-  ) => Promise<T>;
-  getGenerationCount: (userId: string) => Promise<number>;
+export type GenerationVibeServiceDeps<THistoryItem = unknown> = GenerationExecutionDeps & {
   getOwnedHistoryVibeSource: (
     userId: string,
     historyItemId: string
@@ -94,14 +88,6 @@ type HistoryVibeSourceRow = {
 
 function readTrimmedStringField(body: Record<string, unknown>, key: string): string {
   return typeof body[key] === 'string' ? body[key].trim() : '';
-}
-
-function getVipExpiredMessage() {
-  return '您的会员套餐已到期，请联系客服咨询续费。';
-}
-
-function getFreeLimitReachedMessage() {
-  return `免费用户生图额度已用完（共 ${FREE_GENERATION_LIMIT} 张），请联系客服咨询购买会员套餐。`;
 }
 
 function withGenerationHistorySchemaCheck<T>(action: () => Promise<T>) {
@@ -186,35 +172,7 @@ export async function generateRoomVibeForUser<THistoryItem>(
   input: GenerateVibeRequest,
   deps: GenerationVibeServiceDeps<THistoryItem>
 ) {
-  const runWithConcurrencyGuard = deps.runWithConcurrencyGuard ?? (async <T>(
-    _userId: string,
-    action: () => Promise<T>
-  ) => action());
-
-  return runWithConcurrencyGuard(user.id, async () => {
-    const generationCount = await deps.getGenerationCount(user.id);
-    const access = getGenerationAccessState({
-      role: user.role,
-      vipExpiresAt: user.vipExpiresAt,
-      generationCount,
-    });
-
-    if (access.vipExpired) {
-      throw createRouteError({
-        status: 403,
-        code: 'VIP_EXPIRED',
-        message: getVipExpiredMessage(),
-      });
-    }
-
-    if (access.freeLimitReached) {
-      throw createRouteError({
-        status: 403,
-        code: 'FREE_LIMIT_REACHED',
-        message: getFreeLimitReachedMessage(),
-      });
-    }
-
+  return runGenerationWithAccess(user, deps, async () => {
     const source = await deps.getOwnedHistoryVibeSource(user.id, input.historyItemId);
     if (!source) {
       throw createRouteError({
@@ -242,25 +200,18 @@ export async function generateRoomVibeForUser<THistoryItem>(
 async function createDefaultGenerationVibeServiceDeps() {
   const [
     { query },
-    { countUserGenerationHistory },
+    executionDeps,
     { createHistoryItem },
     { enhanceRoomVibe },
-    { runWithGenerationConcurrencyGuard },
   ] = await Promise.all([
     import('../../db.ts'),
-    import('../repositories/history-repository.ts'),
+    createDefaultGenerationExecutionDeps(),
     import('../assets.ts'),
     import('../gemini.ts'),
-    import('../generation-concurrency.ts'),
   ]);
 
   const deps: GenerationVibeServiceDeps = {
-    runWithConcurrencyGuard(userId, action) {
-      return runWithGenerationConcurrencyGuard(userId, action);
-    },
-    async getGenerationCount(userId) {
-      return countUserGenerationHistory(userId);
-    },
+    ...executionDeps,
     async getOwnedHistoryVibeSource(userId, historyItemId) {
       const result = await withGenerationHistorySchemaCheck(() =>
         query<HistoryVibeSourceRow>(

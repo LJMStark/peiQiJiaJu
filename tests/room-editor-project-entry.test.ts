@@ -6,36 +6,50 @@ import test from 'node:test';
 const projectRoot = process.cwd();
 
 test('RoomEditor switches the room header action between continue-last-room and new-project without falling back to the first room image', async () => {
-  const source = await readFile(path.join(projectRoot, 'components/RoomEditor.tsx'), 'utf8');
+  const inputPanelSource = await readFile(
+    path.join(projectRoot, 'components/room-editor/RoomEditorInputPanel.tsx'),
+    'utf8'
+  );
+  const controllerSource = await readFile(
+    path.join(projectRoot, 'components/room-editor/use-room-editor-controller.ts'),
+    'utf8'
+  );
+  const rootSource = await readFile(path.join(projectRoot, 'components/RoomEditor.tsx'), 'utf8');
 
   assert.equal(
-    source.includes('继续上次室内图'),
+    inputPanelSource.includes('继续上次室内图'),
     true,
-    'RoomEditor should expose a continue-last-room entry point'
+    'RoomEditorInputPanel should expose a continue-last-room entry point'
   );
 
   assert.equal(
-    source.includes('新建项目'),
+    inputPanelSource.includes('新建项目'),
     true,
-    'RoomEditor should expose a new-project entry point once a room is active'
+    'RoomEditorInputPanel should expose a new-project entry point once a room is active'
   );
 
   assert.match(
-    source,
+    inputPanelSource,
     /activeRoom\s*\?\s*\(/,
-    'RoomEditor should branch the room header action when a room is active'
+    'RoomEditorInputPanel should branch the room header action when a room is active'
   );
 
   assert.match(
-    source,
+    inputPanelSource,
     /pendingRoomImage\s*\?\s*\(/,
-    'RoomEditor should keep the continue-last-room action for the pending-room state'
+    'RoomEditorInputPanel should keep the continue-last-room action for the pending-room state'
   );
 
   assert.doesNotMatch(
-    source,
+    controllerSource,
     /\?\?\s*roomImages\[0\]\s*\?\?\s*null/,
-    'RoomEditor should not auto-fallback to the first room image when no active room is selected'
+    'RoomEditor controller should not auto-fallback to the first room image when no active room is selected'
+  );
+
+  assert.match(
+    rootSource,
+    /<RoomEditorInputPanel controller=\{controller\} \/>/,
+    'RoomEditor should delegate the left-side workflow to RoomEditorInputPanel'
   );
 });
 

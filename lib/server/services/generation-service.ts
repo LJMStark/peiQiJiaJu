@@ -1,19 +1,18 @@
-import { FREE_GENERATION_LIMIT, getGenerationAccessState } from '../../generation-access.ts';
 import { buildHistorySnapshotRoomId } from '../../history-room-snapshot.ts';
 import { MAX_SELECTED_FURNITURES } from '../../room-editor-limits.ts';
 import { createRouteError } from '../http/error-envelope.ts';
+import {
+  createDefaultGenerationExecutionDeps,
+  runGenerationWithAccess,
+  type GenerationExecutionDeps,
+  type GenerationServiceUser,
+} from './generation-execution.ts';
 
 export type GenerateRoomRequest = {
   roomImageId: string;
   historyItemId: string | null;
   furnitureItemIds: string[];
   customInstruction: string | null;
-};
-
-export type GenerationServiceUser = {
-  id: string;
-  role?: string | null;
-  vipExpiresAt?: Date | string | null;
 };
 
 export type OwnedRoomImageSource = {
@@ -33,12 +32,7 @@ export type OwnedFurnitureItemSource = {
   mimeType: string;
 };
 
-export type GenerationServiceDeps<THistoryItem = unknown> = {
-  runWithConcurrencyGuard?: <T>(
-    userId: string,
-    action: () => Promise<T>
-  ) => Promise<T>;
-  getGenerationCount: (userId: string) => Promise<number>;
+export type GenerationServiceDeps<THistoryItem = unknown> = GenerationExecutionDeps & {
   getOwnedRoomImage: (
     userId: string,
     roomImageId: string
@@ -112,14 +106,6 @@ function readStringArrayField(body: Record<string, unknown>, key: string): strin
     .filter(Boolean);
 }
 
-function getVipExpiredMessage() {
-  return '您的会员套餐已到期，请联系客服咨询续费。';
-}
-
-function getFreeLimitReachedMessage() {
-  return `免费用户生图额度已用完（共 ${FREE_GENERATION_LIMIT} 张），请联系客服咨询购买会员套餐。`;
-}
-
 function getTooManyFurnitureItemsMessage() {
   return `一次最多只能选择 ${MAX_SELECTED_FURNITURES} 张家具图。`;
 }
@@ -174,35 +160,7 @@ export async function generateRoomVisualizationForUser<THistoryItem>(
   input: GenerateRoomRequest,
   deps: GenerationServiceDeps<THistoryItem>
 ) {
-  const runWithConcurrencyGuard = deps.runWithConcurrencyGuard ?? (async <T>(
-    _userId: string,
-    action: () => Promise<T>
-  ) => action());
-
-  return runWithConcurrencyGuard(user.id, async () => {
-    const generationCount = await deps.getGenerationCount(user.id);
-    const access = getGenerationAccessState({
-      role: user.role,
-      vipExpiresAt: user.vipExpiresAt,
-      generationCount,
-    });
-
-    if (access.vipExpired) {
-      throw createRouteError({
-        status: 403,
-        code: 'VIP_EXPIRED',
-        message: getVipExpiredMessage(),
-      });
-    }
-
-    if (access.freeLimitReached) {
-      throw createRouteError({
-        status: 403,
-        code: 'FREE_LIMIT_REACHED',
-        message: getFreeLimitReachedMessage(),
-      });
-    }
-
+  return runGenerationWithAccess(user, deps, async () => {
     const ownedRoomImage = await deps.getOwnedRoomImage(user.id, input.roomImageId);
     const historyRoomSnapshot = !ownedRoomImage && input.historyItemId
       ? await deps.getHistoryRoomSnapshot(user.id, input.historyItemId, input.roomImageId)
@@ -293,25 +251,18 @@ export async function generateRoomVisualizationForUser<THistoryItem>(
 async function createDefaultGenerationServiceDeps() {
   const [
     { query },
-    { countUserGenerationHistory },
+    executionDeps,
     { createHistoryItem },
     { generateRoomVisualization },
-    { runWithGenerationConcurrencyGuard },
   ] = await Promise.all([
     import('../../db.ts'),
-    import('../repositories/history-repository.ts'),
+    createDefaultGenerationExecutionDeps(),
     import('../assets.ts'),
     import('../gemini.ts'),
-    import('../generation-concurrency.ts'),
   ]);
 
   const deps: GenerationServiceDeps = {
-    runWithConcurrencyGuard(userId, action) {
-      return runWithGenerationConcurrencyGuard(userId, action);
-    },
-    async getGenerationCount(userId) {
-      return countUserGenerationHistory(userId);
-    },
+    ...executionDeps,
     async getOwnedRoomImage(userId, roomImageId) {
       const roomResult = await query<RoomSourceRow>(
         `select id, name, storage_path, mime_type, file_size, aspect_ratio
