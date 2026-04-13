@@ -3,6 +3,7 @@
 import { AnimatePresence, motion } from 'motion/react';
 import { CheckCircle2, ChevronLeft, ChevronRight, CircleDashed, Download, Image as ImageIcon, Layers, Loader2, MessageSquareText, Sparkles, X } from 'lucide-react';
 import Image from 'next/image';
+import { buildAssetDownloadPath } from '@/lib/asset-download';
 import { shouldBypassImageOptimization } from '@/lib/remote-images';
 import { type FurnitureItem } from '@/lib/dashboard-types';
 import { type RoomEditorController } from './use-room-editor-controller';
@@ -12,13 +13,9 @@ type RoomEditorResultPanelProps = {
   controller: RoomEditorController;
 };
 
-function downloadCurrentImage(imageUrl: string): void {
-  const fileName = `furniture-visualization-${Date.now()}.png`;
-  const separator = imageUrl.includes('?') ? '&' : '?';
-  const downloadUrl = `${imageUrl}${separator}download=${encodeURIComponent(fileName)}`;
+function triggerDownload(downloadUrl: string): void {
   const anchor = document.createElement('a');
   anchor.href = downloadUrl;
-  anchor.download = fileName;
   document.body.appendChild(anchor);
   anchor.click();
   document.body.removeChild(anchor);
@@ -142,7 +139,7 @@ export function RoomEditorResultPanel({ catalog, controller }: RoomEditorResultP
               提示：您可以将左侧家具直接拖拽到此图片上进行手动摆放
             </span>
             <button
-              onClick={() => downloadCurrentImage(currentGeneratedImage.imageUrl)}
+              onClick={() => triggerDownload(buildAssetDownloadPath('generated', currentGeneratedImage))}
               className="text-sm flex items-center gap-1.5 text-indigo-600 hover:text-indigo-700 font-medium bg-indigo-50 px-3 py-1.5 rounded-lg transition-colors"
             >
               <Download size={16} />

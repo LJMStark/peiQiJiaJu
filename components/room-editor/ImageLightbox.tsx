@@ -7,10 +7,19 @@ import { shouldBypassImageOptimization } from '@/lib/remote-images';
 
 type ImageLightboxProps = {
   imageUrl: string;
+  downloadUrl?: string | null;
   onClose: () => void;
 };
 
-export function ImageLightbox({ imageUrl, onClose }: ImageLightboxProps) {
+function triggerDownload(downloadUrl: string): void {
+  const anchor = document.createElement('a');
+  anchor.href = downloadUrl;
+  document.body.appendChild(anchor);
+  anchor.click();
+  document.body.removeChild(anchor);
+}
+
+export function ImageLightbox({ imageUrl, downloadUrl, onClose }: ImageLightboxProps) {
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
@@ -50,31 +59,20 @@ export function ImageLightbox({ imageUrl, onClose }: ImageLightboxProps) {
           sizes="(max-width: 1280px) 100vw, 1280px"
           unoptimized={shouldBypassImageOptimization(imageUrl)}
         />
-        <div className="absolute bottom-4 right-4 z-10">
-          <button
-            className="bg-white/90 backdrop-blur-md text-zinc-700 hover:text-indigo-600 px-4 py-2 rounded-full shadow-lg border border-zinc-200 flex items-center gap-2 text-sm font-medium transition-colors"
-            onClick={async (e) => {
-              e.stopPropagation();
-              try {
-                const res = await fetch(imageUrl);
-                const blob = await res.blob();
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = 'furniture-visualization.png';
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-                URL.revokeObjectURL(url);
-              } catch (err) {
-                console.error('Download failed:', err);
-              }
-            }}
-          >
-            <Download size={16} />
-            下载图片
-          </button>
-        </div>
+        {downloadUrl ? (
+          <div className="absolute bottom-4 right-4 z-10">
+            <button
+              className="bg-white/90 backdrop-blur-md text-zinc-700 hover:text-indigo-600 px-4 py-2 rounded-full shadow-lg border border-zinc-200 flex items-center gap-2 text-sm font-medium transition-colors"
+              onClick={(e) => {
+                e.stopPropagation();
+                triggerDownload(downloadUrl);
+              }}
+            >
+              <Download size={16} />
+              下载图片
+            </button>
+          </div>
+        ) : null}
       </div>
     </div>
   );

@@ -160,7 +160,7 @@ export async function uploadGeneratedImage(userId: string, dataUrl: string, file
   };
 }
 
-export async function downloadStoredImageBase64(kind: AssetUploadKind, storagePath: string) {
+export async function downloadStoredImageBytes(kind: AssetUploadKind, storagePath: string) {
   const bucket = getStorageBucket(kind);
   const s3 = getS3Client();
   const config = getR2Config();
@@ -178,11 +178,15 @@ export async function downloadStoredImageBase64(kind: AssetUploadKind, storagePa
       throw new Error('Image body is empty');
     }
 
-    const arrayBuffer = await data.Body.transformToByteArray();
-    return Buffer.from(arrayBuffer).toString('base64');
+    return await data.Body.transformToByteArray();
   } catch (error: any) {
     throw new Error(`Failed to load source image: ${error.message}`);
   }
+}
+
+export async function downloadStoredImageBase64(kind: AssetUploadKind, storagePath: string) {
+  const bytes = await downloadStoredImageBytes(kind, storagePath);
+  return Buffer.from(bytes).toString('base64');
 }
 
 export async function copyStoredImage(

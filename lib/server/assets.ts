@@ -3,7 +3,7 @@ import 'server-only';
 import { randomUUID } from 'node:crypto';
 import type { PoolClient } from 'pg';
 import { db, query } from '@/lib/db';
-import type { FurnitureItem, HistoryItem, RoomAspectRatio, RoomImage } from '@/lib/dashboard-types';
+import type { AssetUploadKind, FurnitureItem, HistoryItem, RoomAspectRatio, RoomImage } from '@/lib/dashboard-types';
 import { buildHistorySnapshotRoomId } from '@/lib/history-room-snapshot';
 import { runWithRoomCleanupRecovery } from '@/lib/room-image-cleanup';
 import { createRoomImageCleanupPlan } from '@/lib/room-image-policy';
@@ -76,6 +76,12 @@ type HistoryRow = {
   generated_file_size: number;
   custom_instruction: string | null;
   created_at: string;
+};
+
+type AssetDownloadRow = {
+  name: string;
+  storage_path: string;
+  mime_type: string;
 };
 
 async function withGenerationHistorySchemaCheck<T>(action: () => Promise<T>) {
@@ -259,6 +265,54 @@ export async function listFurnitureItems(userId: string) {
   );
 
   return Promise.all(result.rows.map(serializeFurniture));
+}
+
+export async function findOwnedAssetDownload(
+  userId: string,
+  input: {
+    kind: AssetUploadKind;
+    storagePath: string;
+  }
+) {
+  const statements: Record<AssetUploadKind, { text: string; values: readonly unknown[] }> = {
+    furniture: {
+      text: `select name, storage_path, mime_type
+             from furniture_items
+             where user_id = $1 and storage_path = $2
+             limit 1`,
+      values: [userId, input.storagePath],
+    },
+    room: {
+      text: `select name, storage_path, mime_type
+             from room_images
+             where user_id = $1 and storage_path = $2
+             limit 1`,
+      values: [userId, input.storagePath],
+    },
+    generated: {
+      text: `select generated_name as name, generated_storage_path as storage_path, generated_mime_type as mime_type
+             from generation_history
+             where user_id = $1 and generated_storage_path = $2
+             order by created_at desc
+             limit 1`,
+      values: [userId, input.storagePath],
+    },
+  };
+
+  const statement = statements[input.kind];
+  const result = await query<AssetDownloadRow>(statement.text, statement.values);
+  const row = result.rows[0];
+
+  if (!row) {
+    return null;
+  }
+
+  return {
+    kind: input.kind,
+    storagePath: row.storage_path,
+    name: row.name,
+    mimeType: row.mime_type,
+  };
 }
 
 export async function createFurnitureItem(
