@@ -15,6 +15,7 @@ type GeminiApiErrorDetails = {
 };
 
 const GENERIC_GENERATION_RETRY_MESSAGE = '出错了，请重新生成。';
+const MODEL_HIGH_DEMAND_MESSAGE = '当前模型负载太高，稍后再试。';
 
 function readErrorStatus(error: unknown) {
   if (!error || typeof error !== 'object' || !('status' in error)) {
@@ -107,6 +108,17 @@ export function normalizeGeminiError(error: unknown) {
       status: 429,
       code: 'AI_RATE_LIMITED',
       message: GENERIC_GENERATION_RETRY_MESSAGE,
+    });
+  }
+
+  if (
+    details.providerStatus === 'UNAVAILABLE'
+    || normalizedMessage.includes('currently experiencing high demand')
+  ) {
+    return createRouteError({
+      status: 503,
+      code: 'AI_TEMPORARILY_UNAVAILABLE',
+      message: MODEL_HIGH_DEMAND_MESSAGE,
     });
   }
 

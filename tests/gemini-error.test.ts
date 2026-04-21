@@ -52,6 +52,22 @@ test('normalizeGeminiError maps quota failures to a rate-limited route error', (
   assert.equal(normalized.message, '出错了，请重新生成。');
 });
 
+test('normalizeGeminiError maps temporary Gemini overload to a retryable route error', () => {
+  const error = Object.assign(
+    new Error(
+      '{"error":{"code":503,"message":"This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later.","status":"UNAVAILABLE"}}'
+    ),
+    { name: 'ApiError', status: 503 }
+  );
+
+  const normalized = normalizeGeminiError(error);
+
+  assert.ok(normalized instanceof RouteError);
+  assert.equal(normalized.status, 503);
+  assert.equal(normalized.code, 'AI_TEMPORARILY_UNAVAILABLE');
+  assert.equal(normalized.message, '当前模型负载太高，稍后再试。');
+});
+
 test('normalizeGeminiError returns null for unrelated errors', () => {
   const normalized = normalizeGeminiError(new Error('Failed to load source image: missing key'));
 
