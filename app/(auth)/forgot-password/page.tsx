@@ -5,6 +5,7 @@ import { useState, useTransition } from 'react';
 import { Mail, ArrowRight, ArrowLeft } from 'lucide-react';
 import { requestPasswordReset } from '@/lib/auth-client';
 import { getAuthErrorMessage } from '@/lib/auth-errors';
+import { getEmailValidationError } from '@/lib/client/auth-form-validation';
 import Link from 'next/link';
 
 export default function ForgotPasswordPage() {
@@ -17,14 +18,17 @@ export default function ForgotPasswordPage() {
     event.preventDefault();
     setError('');
 
-    if (!email.trim()) {
-      setError('请输入邮箱。');
+    const emailError = getEmailValidationError(email);
+    if (emailError) {
+      setError(emailError);
       return;
     }
 
+    const normalizedEmail = email.trim().toLowerCase();
+
     startTransition(async () => {
       const response = await requestPasswordReset({
-        email: email.trim().toLowerCase(),
+        email: normalizedEmail,
         redirectTo: `${window.location.origin}/reset-password`,
       });
 
@@ -63,7 +67,7 @@ export default function ForgotPasswordPage() {
       title="重置你的密码"
       description="输入你注册时使用的邮箱地址，我们将向你发送一封包含重置密码链接的邮件。"
     >
-      <form onSubmit={handleSubmit} className="space-y-5">
+      <form onSubmit={handleSubmit} className="space-y-5" noValidate>
         <div>
           <label htmlFor="email" className="block text-sm font-medium text-zinc-700 mb-2">
             邮箱地址

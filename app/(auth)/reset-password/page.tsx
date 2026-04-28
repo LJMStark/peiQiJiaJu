@@ -121,7 +121,7 @@ function ResetPasswordForm(): React.ReactElement | null {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-5">
+    <form onSubmit={handleSubmit} className="space-y-5" noValidate>
       <PasswordInput
         id="newPassword"
         label="新密码"

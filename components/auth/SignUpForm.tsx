@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useState, useTransition } from 'react';
 import { ArrowRight, Building2, Eye, EyeOff, Link2, Lock, Mail } from 'lucide-react';
 import { getAuthErrorMessage } from '@/lib/auth-errors';
+import { getEmailValidationError } from '@/lib/client/auth-form-validation';
 import {
   getCompanyNameValidationError,
   MAX_COMPANY_NAME_LENGTH,
@@ -50,6 +51,13 @@ export function SignUpForm() {
 
     const normalizedCompanyName = normalizeCompanyNameInput(companyName);
     const normalizedInviteCode = normalizeInviteCode(inviteCode);
+    const normalizedEmail = email.trim().toLowerCase();
+
+    const emailError = getEmailValidationError(email);
+    if (emailError) {
+      setError(emailError);
+      return;
+    }
 
     if (password.length < 8) {
       setError('密码至少需要 8 位。');
@@ -62,7 +70,6 @@ export function SignUpForm() {
     }
 
     startTransition(async () => {
-      const normalizedEmail = email.trim().toLowerCase();
       const response = await fetch('/api/invitations/signup', {
         method: 'POST',
         headers: {
@@ -89,7 +96,7 @@ export function SignUpForm() {
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-5">
+    <form onSubmit={handleSubmit} className="space-y-5" noValidate>
       {isInvitedSignup ? (
         <div className="rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-3 text-sm text-indigo-700">
           这是一个邀请注册链接，邀请码已自动填写。完成邮箱验证后，会自动回到会员中心。

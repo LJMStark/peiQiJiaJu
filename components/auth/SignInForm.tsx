@@ -6,6 +6,7 @@ import { useState, useTransition } from 'react';
 import { ArrowRight, Eye, EyeOff, Lock, Mail, RefreshCw } from 'lucide-react';
 import { signIn, sendVerificationEmail } from '@/lib/auth-client';
 import { getAuthErrorMessage } from '@/lib/auth-errors';
+import { getEmailValidationError } from '@/lib/client/auth-form-validation';
 
 export function SignInForm() {
   const router = useRouter();
@@ -23,14 +24,27 @@ export function SignInForm() {
     setError('');
     setSuccess('');
 
-    if (!email.trim() || !password.trim()) {
+    const normalizedEmail = email.trim().toLowerCase();
+
+    if (!normalizedEmail && !password.trim()) {
       setError('请输入邮箱和密码。');
+      return;
+    }
+
+    const emailError = getEmailValidationError(email);
+    if (emailError) {
+      setError(emailError);
+      return;
+    }
+
+    if (!password.trim()) {
+      setError('请输入密码。');
       return;
     }
 
     startTransition(async () => {
       const response = await signIn.email({
-        email: email.trim().toLowerCase(),
+        email: normalizedEmail,
         password,
       });
 
@@ -75,7 +89,7 @@ export function SignInForm() {
   const isLoading = isPending || isResending;
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-5">
+    <form onSubmit={handleSubmit} className="space-y-5" noValidate>
       <div>
         <label htmlFor="email" className="block text-sm font-medium text-zinc-700 mb-2">
           邮箱地址
