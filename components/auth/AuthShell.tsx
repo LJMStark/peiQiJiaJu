@@ -15,13 +15,13 @@ type AuthShellProps = {
 
 export function AuthShell({ badge, title, description, children, footer }: AuthShellProps) {
   return (
-    <div className="min-h-screen flex flex-col md:flex-row bg-zinc-50 font-sans">
-      <div className="flex-1 bg-zinc-950 text-white p-8 md:p-16 flex flex-col justify-between relative overflow-hidden">
+    <div className="min-h-screen flex flex-col lg:flex-row bg-zinc-50 font-sans">
+      <div className="flex-1 bg-zinc-950 text-white p-8 md:p-10 lg:p-16 flex flex-col justify-between relative overflow-hidden">
         <div className="relative z-10">
           <motion.div
             initial={{ opacity: 0, y: -20 }}
             animate={{ opacity: 1, y: 0 }}
-            className="flex items-center gap-3 mb-16"
+            className="flex items-center gap-3 mb-10 md:mb-12 lg:mb-16"
           >
             <div className="w-12 h-12 bg-white text-zinc-950 rounded-2xl flex items-center justify-center shadow-xl shadow-white/10">
               <Sofa size={24} strokeWidth={2.5} />
@@ -35,16 +35,16 @@ export function AuthShell({ badge, title, description, children, footer }: AuthS
             transition={{ duration: 0.8, delay: 0.2 }}
             className="max-w-xl"
           >
-            <h1 className="text-5xl md:text-6xl font-semibold leading-[1.1] tracking-tight mb-8">
+            <h1 className="text-[2.625rem] sm:text-5xl lg:text-6xl font-semibold leading-[1.1] tracking-tight mb-6 lg:mb-8">
               用佩奇家具，
               <br />
               <span className="text-zinc-400">配齐您的理想家。</span>
             </h1>
-            <p className="text-zinc-400 text-lg leading-relaxed mb-12 max-w-md">
+            <p className="text-zinc-400 text-lg leading-relaxed mb-8 lg:mb-12 max-w-md">
               让家具厂商上传图册，再让客户通过 AI 直观看到家具放进真实房间后的效果。
             </p>
 
-            <div className="flex items-center gap-4 text-sm font-medium text-zinc-300">
+            <div className="flex flex-wrap items-center gap-4 text-sm font-medium text-zinc-300">
               <div className="flex items-center gap-2 bg-zinc-900/50 px-4 py-2 rounded-full border border-zinc-800 backdrop-blur-md">
                 <Sparkles size={16} className="text-indigo-400" />
                 <span>空间效果生成</span>
@@ -63,7 +63,7 @@ export function AuthShell({ badge, title, description, children, footer }: AuthS
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.8, delay: 0.4 }}
-          className="relative z-10 hidden md:flex items-center gap-4 mt-auto pt-16"
+          className="relative z-10 hidden lg:flex items-center gap-4 mt-auto pt-16"
         >
           <div className="w-24 h-24 relative rounded-xl overflow-hidden border border-zinc-800 bg-zinc-900/50 backdrop-blur-sm p-1.5 shadow-xl flex-shrink-0">
             <Image
