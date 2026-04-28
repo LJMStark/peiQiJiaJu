@@ -1,4 +1,7 @@
-import { buildHistorySnapshotRoomId } from '../../history-room-snapshot.ts';
+import {
+  buildHistorySnapshotRoomId,
+  canUseHistoryRoomSnapshotForRequest,
+} from '../../history-room-snapshot.ts';
 import { MAX_SELECTED_FURNITURES } from '../../room-editor-limits.ts';
 import { createRouteError } from '../http/error-envelope.ts';
 import {
@@ -305,16 +308,22 @@ async function createDefaultGenerationServiceDeps() {
         return null;
       }
 
-      const expectedRoomId = buildHistorySnapshotRoomId({
+      const canUseHistorySnapshot = canUseHistoryRoomSnapshotForRequest({
         historyItemId: row.id,
-        roomImageId: row.room_image_id,
+        storedRoomImageId: row.room_image_id,
+        requestedRoomImageId: roomImageId,
       });
-      if (expectedRoomId !== roomImageId) {
+      if (!canUseHistorySnapshot) {
         return null;
       }
 
+      const snapshotRoomId = buildHistorySnapshotRoomId({
+        historyItemId: row.id,
+        roomImageId: row.room_image_id,
+      });
+
       return {
-        id: expectedRoomId,
+        id: snapshotRoomId,
         name: row.room_name_snapshot,
         storagePath: row.room_storage_path_snapshot,
         mimeType: row.room_mime_type_snapshot,
