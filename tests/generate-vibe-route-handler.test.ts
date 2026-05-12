@@ -98,3 +98,87 @@ test('generate vibe route returns 429 when generation capacity is exhausted', as
     error: '当前生成请求较多，请稍后再试。',
   });
 });
+
+test('generate vibe route forwards failure metadata to recordFailure on errors', async () => {
+  const failureCalls: Array<Record<string, unknown>> = [];
+
+  const handler = createGenerateVibeRouteHandler({
+    async requireVerifiedRequestSession() {
+      return createAuthorizedSessionResult();
+    },
+    async parseJsonObject() {
+      return {};
+    },
+    parseGenerateVibeRequest() {
+      return { historyItemId: 'history-1' };
+    },
+    async generateRoomVibeForUserWithDefaults() {
+      throw createRouteError({
+        status: 404,
+        code: 'HISTORY_ITEM_NOT_FOUND',
+        message: 'History item not found.',
+      });
+    },
+    errorResponse(error, fallbackMessage, status) {
+      const spec = errorResponseSpec(error, fallbackMessage, status);
+      return Response.json(spec.body, { status: spec.status });
+    },
+    async recordFailure(input) {
+      failureCalls.push({
+        userId: input.userId,
+        requestId: input.requestId,
+        durationMs: input.durationMs,
+        error: input.error,
+      });
+    },
+  });
+
+  const response = await handler(new Request('http://localhost/api/generate-vibe', {
+    method: 'POST',
+    body: '{}',
+    headers: { 'content-type': 'application/json' },
+  }));
+
+  assert.equal(response.status, 404);
+  assert.equal(failureCalls.length, 1);
+  assert.equal(failureCalls[0]?.userId, 'user-1');
+  assert.equal(typeof failureCalls[0]?.requestId, 'string');
+});
+
+test('generate vibe route swallows recordFailure errors and still returns error response', async () => {
+  const handler = createGenerateVibeRouteHandler({
+    async requireVerifiedRequestSession() {
+      return createAuthorizedSessionResult();
+    },
+    async parseJsonObject() {
+      return {};
+    },
+    parseGenerateVibeRequest() {
+      return { historyItemId: 'history-1' };
+    },
+    async generateRoomVibeForUserWithDefaults() {
+      throw createRouteError({
+        status: 500,
+        code: 'INTERNAL_SERVER_ERROR',
+        message: '出错了，请重新生成。',
+      });
+    },
+    errorResponse(error, fallbackMessage, status) {
+      const spec = errorResponseSpec(error, fallbackMessage, status);
+      return Response.json(spec.body, { status: spec.status });
+    },
+    async recordFailure() {
+      throw new Error('telemetry persistence failed');
+    },
+  });
+
+  const response = await handler(new Request('http://localhost/api/generate-vibe', {
+    method: 'POST',
+    body: '{}',
+    headers: { 'content-type': 'application/json' },
+  }));
+  const payload = await response.json();
+
+  assert.equal(response.status, 500);
+  assert.equal(payload.code, 'INTERNAL_SERVER_ERROR');
+});

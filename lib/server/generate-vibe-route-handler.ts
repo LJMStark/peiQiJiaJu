@@ -1,5 +1,7 @@
 import { randomUUID } from 'node:crypto';
 
+const RECORD_FAILURE_TIMEOUT_MS = 500;
+
 type VerifiedSessionResult = {
   session: {
     user: {
@@ -15,6 +17,13 @@ type GenerateVibeRouteRequest = {
   historyItemId: string;
 };
 
+type RecordFailureInput = {
+  userId: string | null;
+  requestId: string;
+  durationMs: number;
+  error: unknown;
+};
+
 type GenerateVibeRouteDeps = {
   requireVerifiedRequestSession: (request: Request) => Promise<VerifiedSessionResult>;
   parseJsonObject: (request: Request) => Promise<Record<string, unknown>>;
@@ -24,6 +33,7 @@ type GenerateVibeRouteDeps = {
     input: GenerateVibeRouteRequest
   ) => Promise<unknown>;
   errorResponse: (error: unknown, fallbackMessage: string, status?: number) => Response;
+  recordFailure?: (input: RecordFailureInput) => Promise<void>;
 };
 
 export function createGenerateVibeRouteHandler(
@@ -78,15 +88,33 @@ export function createGenerateVibeRouteHandler(
 
       return Response.json({ item }, { status: 201 });
     } catch (error) {
+      const durationMs = Date.now() - startedAt;
       console.error(
         '[api/generate-vibe] failed',
         {
           requestId,
           userId,
-          durationMs: Date.now() - startedAt,
+          durationMs,
         },
         error
       );
+
+      if (deps.recordFailure) {
+        try {
+          await Promise.race([
+            deps.recordFailure({ userId, requestId, durationMs, error }),
+            new Promise<void>((_, reject) =>
+              setTimeout(
+                () => reject(new Error('recordFailure timeout')),
+                RECORD_FAILURE_TIMEOUT_MS
+              )
+            ),
+          ]);
+        } catch (logErr) {
+          console.error('[api/generate-vibe] failure log threw or timed out', logErr);
+        }
+      }
+
       return deps.errorResponse(error, '出错了，请重新生成。', 500);
     }
   };

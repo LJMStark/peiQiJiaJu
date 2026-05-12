@@ -6,6 +6,7 @@ import {
   generateRoomVisualizationForUserWithDefaults,
   parseGenerateRequest,
 } from '@/lib/server/services/generation-service';
+import { recordGenerationFailure } from '@/lib/server/generation-failure-log';
 
 export const runtime = 'nodejs';
 
@@ -15,4 +16,5 @@ export const POST = createGenerateRouteHandler({
   parseGenerateRequest,
   generateRoomVisualizationForUserWithDefaults,
   errorResponse,
+  recordFailure: (input) => recordGenerationFailure({ ...input, route: 'generate' }),
 });

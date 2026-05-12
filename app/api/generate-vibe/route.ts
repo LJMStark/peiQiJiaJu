@@ -6,6 +6,7 @@ import {
   generateRoomVibeForUserWithDefaults,
   parseGenerateVibeRequest,
 } from '@/lib/server/services/vibe-generation-service';
+import { recordGenerationFailure } from '@/lib/server/generation-failure-log';
 
 export const runtime = 'nodejs';
 
@@ -15,4 +16,5 @@ export const POST = createGenerateVibeRouteHandler({
   parseGenerateVibeRequest,
   generateRoomVibeForUserWithDefaults,
   errorResponse,
+  recordFailure: (input) => recordGenerationFailure({ ...input, route: 'generate-vibe' }),
 });

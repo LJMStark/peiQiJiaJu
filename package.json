@@ -11,7 +11,8 @@
     "auth:migrate": "node --env-file=.env scripts/migrate-better-auth.mjs",
     "storage:migrate": "node --env-file=.env scripts/migrate-storage-assets.mjs",
     "storage:migrate:history-schema": "node --env-file=.env scripts/migrate-storage-assets.mjs",
-    "invite:migrate": "node --env-file=.env scripts/migrate-invite-system.mjs"
+    "invite:migrate": "node --env-file=.env scripts/migrate-invite-system.mjs",
+    "generation-telemetry:migrate": "node --env-file=.env scripts/migrate-generation-telemetry.mjs"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1020.0",
