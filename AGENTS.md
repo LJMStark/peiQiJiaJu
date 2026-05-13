@@ -136,3 +136,12 @@ Use the `@/*` import alias when it improves readability.
 - **PostgreSQL & Auth**: Managed by Supabase.
 - **File Storage**: ALL image and asset storage is handled by Cloudflare R2 via the `@aws-sdk/client-s3` library. 
 - **CRITICAL RULE**: Do **NOT** use Supabase Storage `supabase.storage` APIs anymore. All uploads, downloads, and copies must go through the functions defined in `lib/server/storage.ts` which uses the S3 protocol to interface with R2. All media URLs point to `assets.peiqijiaju.xyz`.
+
+## 16. Deployment Platform
+
+- **Production runtime**: Zeabur, running on a self-hosted VPS as a long-lived Node.js process (`npm run start` → `scripts/start-next.mjs`). This is **NOT** a serverless / edge deployment.
+- **Implications when diagnosing issues**:
+  - There is **no Vercel-style function timeout** (no 60s/300s `maxDuration`, no `FUNCTION_INVOCATION_TIMEOUT`). Long-running requests like AI image generation are limited only by the reverse proxy / client timeouts in front of the VPS.
+  - HTML error pages (`<!DOCTYPE …`) seen by the client almost always come from **Zeabur's edge router, the upstream reverse proxy, or a Node process crash/restart** — not from a serverless cold start or timeout. Check the Zeabur logs, not Vercel.
+  - Do not add `export const maxDuration = …` or `vercel.json` configuration; they have no effect here.
+  - Concurrency is handled by a single Node.js process; in-memory state is shared across all requests on that instance.
