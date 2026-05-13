@@ -342,7 +342,7 @@ export async function getAdminInvitationSummary(): Promise<AdminInvitationSummar
       FROM invite_referrals r
       JOIN "user" u ON u.id = r.inviter_user_id
       GROUP BY r.inviter_user_id, u.name, u.email
-      ORDER BY verified_referrals DESC, total_referrals DESC, u."createdAt" ASC
+      ORDER BY verified_referrals DESC, total_referrals DESC, MIN(u."createdAt") ASC
       LIMIT 20
     `
   );
