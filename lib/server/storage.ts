@@ -253,10 +253,22 @@ export async function removeImage(kind: AssetUploadKind, storagePath: string) {
   }
 }
 
+export async function removeImageBestEffort(kind: AssetUploadKind, storagePath: string) {
+  try {
+    await removeImage(kind, storagePath);
+  } catch (error) {
+    console.error('[storage] cleanup failed', {
+      kind,
+      storagePath,
+      error,
+    });
+  }
+}
+
 export async function removeImages(kind: AssetUploadKind, storagePaths: readonly string[]) {
   if (storagePaths.length === 0) {
     return;
   }
 
-  await Promise.all(storagePaths.map((storagePath) => removeImage(kind, storagePath).catch(() => undefined)));
+  await Promise.all(storagePaths.map((storagePath) => removeImageBestEffort(kind, storagePath)));
 }

@@ -35,9 +35,7 @@ export function getS3Client() {
     requestHandler,
   });
 
-  if (process.env.NODE_ENV !== 'production') {
-    globalForS3.s3Client = s3Client;
-  }
+  globalForS3.s3Client = s3Client;
 
   return s3Client;
 }

@@ -23,6 +23,7 @@ import {
   copyStoredImage,
   createSignedImageUrl,
   removeImage,
+  removeImageBestEffort,
   removeImages,
   uploadGeneratedImage,
   uploadImageFile,
@@ -335,7 +336,7 @@ export async function createFurnitureItem(
 
     return serializeFurniture(result.rows[0]);
   } catch (error) {
-    await removeImage('furniture', uploaded.storagePath).catch(() => undefined);
+    await removeImageBestEffort('furniture', uploaded.storagePath);
     throw error;
   }
 }
@@ -477,7 +478,7 @@ export async function createRoomImage(
   } catch (error) {
     if (!didCommit) {
       await client.query('ROLLBACK').catch(() => undefined);
-      await removeImage('room', uploaded.storagePath).catch(() => undefined);
+      await removeImageBestEffort('room', uploaded.storagePath);
     }
     throw error;
   } finally {
@@ -695,11 +696,11 @@ export async function createHistoryItem(
 
       return serializeHistory(result.rows[0]);
     } catch (error) {
-      await removeImage('generated', uploaded.storagePath).catch(() => undefined);
+      await removeImageBestEffort('generated', uploaded.storagePath);
       throw error;
     }
   } catch (error) {
-    await removeImage('room', roomSnapshot.storagePath).catch(() => undefined);
+    await removeImageBestEffort('room', roomSnapshot.storagePath);
     throw error;
   }
 }
