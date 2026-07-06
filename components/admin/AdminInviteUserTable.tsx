@@ -95,21 +95,21 @@ export function AdminInviteUserTable({ users }: { users: AdminInviteUser[] }): J
   };
 
   return (
-    <section className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-      <div className="px-6 py-5 border-b border-gray-200 space-y-4">
+    <section className="bg-white rounded-xl border border-zinc-200 shadow-sm overflow-hidden">
+      <div className="px-6 py-5 border-b border-zinc-200 space-y-4">
         <div>
-          <h2 className="text-lg font-semibold text-gray-900">用户邀请链接</h2>
-          <p className="text-sm text-gray-500 mt-1">支持按公司名或邮箱检索，并强制为指定用户轮换新的邀请链接。</p>
+          <h2 className="text-lg font-semibold text-zinc-900">用户邀请链接</h2>
+          <p className="text-sm text-zinc-500 mt-1">支持按公司名或邮箱检索，并强制为指定用户轮换新的邀请链接。</p>
         </div>
 
         <div className="relative max-w-md">
-          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" />
           <input
             type="search"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder="搜索公司名或邮箱"
-            className="w-full rounded-xl border border-gray-200 bg-gray-50 py-2.5 pl-10 pr-4 text-sm text-gray-900 outline-none transition focus:border-indigo-500 focus:bg-white focus:ring-2 focus:ring-indigo-500/15"
+            className="w-full rounded-xl border border-zinc-200 bg-zinc-50 py-2.5 pl-10 pr-4 text-sm text-zinc-900 outline-none transition focus:border-indigo-500 focus:bg-white focus:ring-2 focus:ring-indigo-500/15"
           />
         </div>
 
@@ -121,8 +121,8 @@ export function AdminInviteUserTable({ users }: { users: AdminInviteUser[] }): J
       </div>
 
       <div className="overflow-x-auto">
-        <table className="w-full text-left text-sm text-gray-600">
-          <thead className="bg-gray-50 text-gray-700 text-xs uppercase font-medium">
+        <table className="w-full text-left text-sm text-zinc-600">
+          <thead className="bg-zinc-50 text-zinc-700 text-xs uppercase font-medium">
             <tr>
               <th className="px-6 py-4">用户</th>
               <th className="px-6 py-4">邮箱验证</th>
@@ -130,16 +130,16 @@ export function AdminInviteUserTable({ users }: { users: AdminInviteUser[] }): J
               <th className="px-6 py-4">操作</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-100">
+          <tbody className="divide-y divide-zinc-100">
             {filteredUsers.map((user) => {
               const isCurrentRowPending = isPending && pendingUserId === user.id;
 
               return (
-                <tr key={user.id} className="hover:bg-gray-50/60 transition-colors">
+                <tr key={user.id} className="hover:bg-zinc-50/60 transition-colors">
                   <td className="px-6 py-4">
                     <div className="flex flex-col">
-                      <span className="font-medium text-gray-900">{user.name?.trim() || '未命名'}</span>
-                      <span className="text-xs text-gray-500">{user.email}</span>
+                      <span className="font-medium text-zinc-900">{user.name?.trim() || '未命名'}</span>
+                      <span className="text-xs text-zinc-500">{user.email}</span>
                     </div>
                   </td>
                   <td className="px-6 py-4">
@@ -157,7 +157,7 @@ export function AdminInviteUserTable({ users }: { users: AdminInviteUser[] }): J
                       type="button"
                       onClick={() => handleReset(user)}
                       disabled={isCurrentRowPending || !user.emailVerified}
-                      className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+                      className="inline-flex items-center gap-2 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm font-medium text-zinc-700 transition hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       {isCurrentRowPending ? <Loader2 size={16} className="animate-spin" /> : <RefreshCcw size={16} />}
                       强制重置
@@ -169,7 +169,7 @@ export function AdminInviteUserTable({ users }: { users: AdminInviteUser[] }): J
 
             {filteredUsers.length === 0 ? (
               <tr>
-                <td colSpan={4} className="px-6 py-10 text-center text-gray-500">
+                <td colSpan={4} className="px-6 py-10 text-center text-zinc-500">
                   没有匹配的用户。
                 </td>
               </tr>

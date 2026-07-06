@@ -21,11 +21,13 @@ export function ContactQrCode(): JSX.Element {
             className="absolute bottom-16 left-0 bg-white rounded-2xl shadow-2xl border border-zinc-100 overflow-hidden"
           >
             {/* Header */}
-            <div className="bg-gradient-to-r from-green-500 to-emerald-500 px-4 py-3 flex items-center justify-between">
+            <div className="bg-gradient-to-r from-emerald-500 to-teal-500 px-4 py-3 flex items-center justify-between">
               <span className="text-white text-sm font-medium">客服微信</span>
               <button
+                type="button"
                 onClick={() => setIsExpanded(false)}
                 className="text-white/80 hover:text-white p-0.5 rounded-full hover:bg-white/20 transition-colors"
+                aria-label="关闭客服二维码"
               >
                 <X size={16} />
               </button>
@@ -50,15 +52,17 @@ export function ContactQrCode(): JSX.Element {
 
       {/* Floating trigger button */}
       <motion.button
+        type="button"
         whileHover={{ scale: 1.1 }}
         whileTap={{ scale: 0.95 }}
         onClick={() => setIsExpanded(!isExpanded)}
         className={`w-12 h-12 rounded-full shadow-lg flex items-center justify-center transition-colors ${
           isExpanded
             ? 'bg-zinc-700 text-white'
-            : 'bg-green-500 text-white hover:bg-green-600'
+            : 'bg-emerald-500 text-white hover:bg-emerald-600'
         }`}
         title="联系客服"
+        aria-label={isExpanded ? '收起客服二维码' : '展开客服二维码'}
       >
         {isExpanded ? <X size={20} /> : <MessageCircle size={20} />}
       </motion.button>

@@ -172,11 +172,8 @@ export function RoomEditorResultPanel({ catalog, controller }: RoomEditorResultP
                   正在把已选家具融合进当前室内图，请稍候片刻。
                 </p>
 
-                <div className="w-full h-4 bg-zinc-100 rounded-full overflow-hidden mb-3 shadow-inner">
-                  <div
-                    className="h-full bg-indigo-500 transition-all duration-500 ease-out rounded-full"
-                    style={{ width: '75%' }}
-                  />
+                <div className="mb-3 h-4 w-full overflow-hidden rounded-full bg-zinc-100 shadow-inner">
+                  <div className="h-full w-1/3 animate-pulse rounded-full bg-indigo-500" />
                 </div>
                 <div className="flex justify-between text-xs text-zinc-500 font-medium">
                   <span>处理中</span>
@@ -195,7 +192,7 @@ export function RoomEditorResultPanel({ catalog, controller }: RoomEditorResultP
           >
             <Image
               src={currentGeneratedImage.imageUrl}
-              alt="Generated visualization"
+              alt="生成后的室内效果图"
               fill
               className="object-contain bg-zinc-50 cursor-pointer"
               sizes="(max-width: 1024px) 100vw, 66vw"
@@ -314,11 +311,11 @@ export function RoomEditorResultPanel({ catalog, controller }: RoomEditorResultP
             animate={{ opacity: 1, y: 0 }}
             className="w-full max-w-xl"
           >
-            <div className="rounded-[28px] border border-zinc-200 bg-white/95 p-6 text-center shadow-[0_24px_60px_-32px_rgba(24,24,27,0.35)] backdrop-blur sm:p-8">
+            <div className="rounded-2xl border border-zinc-200 bg-white/95 p-6 text-center shadow-[0_24px_60px_-32px_rgba(24,24,27,0.35)] backdrop-blur sm:p-8">
               <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-zinc-900 text-white shadow-lg shadow-zinc-900/10">
                 <Layers size={28} />
               </div>
-              <p className="text-xs font-semibold uppercase tracking-[0.24em] text-indigo-500">Ready To Generate</p>
+              <p className="text-xs font-semibold text-indigo-500">准备生成</p>
               <h4 className="mt-3 text-2xl font-bold text-zinc-900">准备生成当前房间效果</h4>
               <p className="mt-3 text-sm leading-7 text-zinc-600 sm:text-base">
                 把左侧关键素材准备好后，新的空间效果图会直接出现在这里，方便你继续预览、下载和反馈。

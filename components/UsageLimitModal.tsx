@@ -1,9 +1,11 @@
 'use client';
 
 import type { JSX } from 'react';
+import { useId } from 'react';
 import { X, MessageCircle } from 'lucide-react';
 import Image from 'next/image';
 import { motion, AnimatePresence } from 'motion/react';
+import { useDialogAccessibility } from './use-dialog-accessibility';
 
 type UsageLimitModalProps = {
   type: 'free_limit' | 'vip_expired';
@@ -12,6 +14,13 @@ type UsageLimitModalProps = {
 };
 
 export function UsageLimitModal({ type, isOpen, onClose }: UsageLimitModalProps): JSX.Element | null {
+  const titleId = useId();
+  const descriptionId = useId();
+  const dialogRef = useDialogAccessibility<HTMLDivElement>({
+    isOpen,
+    onClose,
+    lockScroll: true,
+  });
   const title = type === 'free_limit' ? '免费额度已用完' : '会员套餐已到期';
   const description =
     type === 'free_limit'
@@ -34,17 +43,25 @@ export function UsageLimitModal({ type, isOpen, onClose }: UsageLimitModalProps)
 
           {/* Modal */}
           <motion.div
+            ref={dialogRef}
             initial={{ opacity: 0, scale: 0.9, y: 20 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.9, y: 20 }}
             transition={{ type: 'spring', stiffness: 300, damping: 25 }}
             className="relative bg-white rounded-3xl shadow-2xl max-w-sm w-full overflow-hidden"
             onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby={titleId}
+            aria-describedby={descriptionId}
+            tabIndex={-1}
           >
             {/* Close button */}
             <button
+              type="button"
               onClick={onClose}
               className="absolute top-4 right-4 z-10 text-zinc-400 hover:text-zinc-600 p-1 rounded-full hover:bg-zinc-100 transition-colors"
+              aria-label="关闭额度提示"
             >
               <X size={20} />
             </button>
@@ -54,8 +71,8 @@ export function UsageLimitModal({ type, isOpen, onClose }: UsageLimitModalProps)
               <div className="w-14 h-14 bg-white/20 backdrop-blur-sm rounded-2xl flex items-center justify-center mx-auto mb-4">
                 <MessageCircle size={28} />
               </div>
-              <h3 className="text-xl font-bold mb-1">{title}</h3>
-              <p className="text-amber-50 text-sm leading-relaxed opacity-90">{description}</p>
+              <h3 id={titleId} className="text-xl font-bold mb-1">{title}</h3>
+              <p id={descriptionId} className="text-amber-50 text-sm leading-relaxed opacity-90">{description}</p>
             </div>
 
             {/* QR Code */}

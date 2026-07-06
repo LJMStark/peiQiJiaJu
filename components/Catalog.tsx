@@ -64,7 +64,7 @@ export function Catalog({
     <div className="space-y-8">
       <div>
         <h2 className="text-2xl font-bold text-zinc-900 mb-1">家具图册</h2>
-        <p className="text-zinc-500">上传和管理您的家具，AI 将自动为您分类并同步到 Supabase Storage。</p>
+        <p className="text-zinc-500">上传和管理您的家具，AI 将自动为您分类并同步到云端素材库。</p>
       </div>
 
       {error && (

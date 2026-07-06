@@ -54,38 +54,38 @@ export default async function AdminInvitationsPage() {
     return (
       <div className="space-y-8">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 tracking-tight">邀请管理</h1>
-          <p className="text-sm text-gray-500 mt-1">查看邀请转化表现，并为指定用户强制轮换新的邀请链接。</p>
+          <h1 className="text-2xl font-bold text-zinc-900 tracking-tight">邀请管理</h1>
+          <p className="text-sm text-zinc-500 mt-1">查看邀请转化表现，并为指定用户强制轮换新的邀请链接。</p>
         </div>
 
-        <section className="rounded-3xl border border-gray-200 bg-white px-6 py-12 shadow-sm sm:px-10">
+        <section className="rounded-3xl border border-zinc-200 bg-white px-6 py-12 shadow-sm sm:px-10">
           <div className="mx-auto flex max-w-2xl flex-col items-center text-center">
             <div className="mb-5 flex h-16 w-16 items-center justify-center rounded-2xl bg-amber-50 text-amber-600 shadow-sm">
               <AlertTriangle size={28} />
             </div>
             <p className="text-sm font-medium tracking-[0.18em] text-amber-600">邀请管理</p>
-            <h2 className="mt-3 text-2xl font-bold text-gray-900">{errorState.title}</h2>
-            <p className="mt-3 text-sm leading-7 text-gray-600 sm:text-base">{errorState.message}</p>
+            <h2 className="mt-3 text-2xl font-bold text-zinc-900">{errorState.title}</h2>
+            <p className="mt-3 text-sm leading-7 text-zinc-600 sm:text-base">{errorState.message}</p>
 
             {errorState.setupCommand ? (
-              <div className="mt-6 w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-4 text-left">
-                <div className="flex items-center gap-2 text-sm font-medium text-gray-900">
+              <div className="mt-6 w-full rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-4 text-left">
+                <div className="flex items-center gap-2 text-sm font-medium text-zinc-900">
                   <TerminalSquare size={16} />
                   初始化命令
                 </div>
-                <code className="mt-3 block rounded-xl bg-gray-900 px-4 py-3 text-sm text-gray-100">
+                <code className="mt-3 block rounded-xl bg-zinc-900 px-4 py-3 text-sm text-zinc-100">
                   {errorState.setupCommand}
                 </code>
-                <p className="mt-3 text-xs leading-6 text-gray-500">
+                <p className="mt-3 text-xs leading-6 text-zinc-500">
                   运行完成后，请重新部署或重启当前服务实例，再刷新本页面。
                 </p>
               </div>
             ) : null}
 
             {errorState.details ? (
-              <details className="mt-6 w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-left">
-                <summary className="cursor-pointer text-sm font-medium text-gray-700">查看技术细节</summary>
-                <p className="mt-3 break-words text-xs leading-6 text-gray-500">{errorState.details}</p>
+              <details className="mt-6 w-full rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-left">
+                <summary className="cursor-pointer text-sm font-medium text-zinc-700">查看技术细节</summary>
+                <p className="mt-3 break-words text-xs leading-6 text-zinc-500">{errorState.details}</p>
               </details>
             ) : null}
           </div>
@@ -126,8 +126,8 @@ export default async function AdminInvitationsPage() {
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900 tracking-tight">邀请管理</h1>
-        <p className="text-sm text-gray-500 mt-1">查看邀请转化表现，并为指定用户强制轮换新的邀请链接。</p>
+        <h1 className="text-2xl font-bold text-zinc-900 tracking-tight">邀请管理</h1>
+        <p className="text-sm text-zinc-500 mt-1">查看邀请转化表现，并为指定用户强制轮换新的邀请链接。</p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -135,13 +135,13 @@ export default async function AdminInvitationsPage() {
           const Icon = stat.icon;
 
           return (
-            <div key={stat.title} className="bg-white rounded-xl border border-gray-200 p-6 flex items-center gap-4 shadow-sm">
+            <div key={stat.title} className="bg-white rounded-xl border border-zinc-200 p-6 flex items-center gap-4 shadow-sm">
               <div className={`p-3 rounded-lg ${stat.bgColor}`}>
                 <Icon className={`w-6 h-6 ${stat.color}`} />
               </div>
               <div>
-                <p className="text-sm font-medium text-gray-500">{stat.title}</p>
-                <p className="text-2xl font-semibold text-gray-900 mt-1">{stat.value.toLocaleString()}</p>
+                <p className="text-sm font-medium text-zinc-500">{stat.title}</p>
+                <p className="text-2xl font-semibold text-zinc-900 mt-1">{stat.value.toLocaleString()}</p>
               </div>
             </div>
           );
@@ -149,37 +149,37 @@ export default async function AdminInvitationsPage() {
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
-        <section className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-          <div className="px-6 py-5 border-b border-gray-200">
-            <h2 className="text-lg font-semibold text-gray-900">Top 邀请人</h2>
-            <p className="text-sm text-gray-500 mt-1">按已验证转化优先排序。</p>
+        <section className="bg-white rounded-xl border border-zinc-200 shadow-sm overflow-hidden">
+          <div className="px-6 py-5 border-b border-zinc-200">
+            <h2 className="text-lg font-semibold text-zinc-900">Top 邀请人</h2>
+            <p className="text-sm text-zinc-500 mt-1">按已验证转化优先排序。</p>
           </div>
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm text-gray-600">
-              <thead className="bg-gray-50 text-gray-700 text-xs uppercase font-medium">
+            <table className="w-full text-left text-sm text-zinc-600">
+              <thead className="bg-zinc-50 text-zinc-700 text-xs uppercase font-medium">
                 <tr>
                   <th className="px-6 py-4">邀请人</th>
                   <th className="px-6 py-4">已验证</th>
                   <th className="px-6 py-4">总邀请</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100">
+              <tbody className="divide-y divide-zinc-100">
                 {summary.topInviters.map((inviter) => (
-                  <tr key={inviter.inviterUserId} className="hover:bg-gray-50/60 transition-colors">
+                  <tr key={inviter.inviterUserId} className="hover:bg-zinc-50/60 transition-colors">
                     <td className="px-6 py-4">
                       <div className="flex flex-col">
-                        <span className="font-medium text-gray-900">{inviter.inviterName}</span>
-                        <span className="text-xs text-gray-500">{inviter.inviterEmail}</span>
+                        <span className="font-medium text-zinc-900">{inviter.inviterName}</span>
+                        <span className="text-xs text-zinc-500">{inviter.inviterEmail}</span>
                       </div>
                     </td>
                     <td className="px-6 py-4 font-medium text-emerald-600">{inviter.verifiedReferrals}</td>
-                    <td className="px-6 py-4 font-medium text-gray-900">{inviter.totalReferrals}</td>
+                    <td className="px-6 py-4 font-medium text-zinc-900">{inviter.totalReferrals}</td>
                   </tr>
                 ))}
 
                 {summary.topInviters.length === 0 ? (
                   <tr>
-                    <td colSpan={3} className="px-6 py-10 text-center text-gray-500">
+                    <td colSpan={3} className="px-6 py-10 text-center text-zinc-500">
                       暂无邀请排行数据。
                     </td>
                   </tr>
@@ -189,14 +189,14 @@ export default async function AdminInvitationsPage() {
           </div>
         </section>
 
-        <section className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-          <div className="px-6 py-5 border-b border-gray-200">
-            <h2 className="text-lg font-semibold text-gray-900">最近转化</h2>
-            <p className="text-sm text-gray-500 mt-1">展示最近发生的邀请注册和验证记录。</p>
+        <section className="bg-white rounded-xl border border-zinc-200 shadow-sm overflow-hidden">
+          <div className="px-6 py-5 border-b border-zinc-200">
+            <h2 className="text-lg font-semibold text-zinc-900">最近转化</h2>
+            <p className="text-sm text-zinc-500 mt-1">展示最近发生的邀请注册和验证记录。</p>
           </div>
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm text-gray-600">
-              <thead className="bg-gray-50 text-gray-700 text-xs uppercase font-medium">
+            <table className="w-full text-left text-sm text-zinc-600">
+              <thead className="bg-zinc-50 text-zinc-700 text-xs uppercase font-medium">
                 <tr>
                   <th className="px-6 py-4">邀请人</th>
                   <th className="px-6 py-4">被邀请人</th>
@@ -204,19 +204,19 @@ export default async function AdminInvitationsPage() {
                   <th className="px-6 py-4">归因时间</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100">
+              <tbody className="divide-y divide-zinc-100">
                 {summary.recentReferrals.map((referral) => (
-                  <tr key={referral.id} className="hover:bg-gray-50/60 transition-colors">
+                  <tr key={referral.id} className="hover:bg-zinc-50/60 transition-colors">
                     <td className="px-6 py-4">
                       <div className="flex flex-col">
-                        <span className="font-medium text-gray-900">{referral.inviterName}</span>
-                        <span className="text-xs text-gray-500">{referral.inviterEmail}</span>
+                        <span className="font-medium text-zinc-900">{referral.inviterName}</span>
+                        <span className="text-xs text-zinc-500">{referral.inviterEmail}</span>
                       </div>
                     </td>
                     <td className="px-6 py-4">
                       <div className="flex flex-col">
-                        <span className="font-medium text-gray-900">{referral.inviteeEmail}</span>
-                        <span className="text-xs text-gray-500">{referral.inviteeCompany || '未填写公司名称'}</span>
+                        <span className="font-medium text-zinc-900">{referral.inviteeEmail}</span>
+                        <span className="text-xs text-zinc-500">{referral.inviteeCompany || '未填写公司名称'}</span>
                       </div>
                     </td>
                     <td className="px-6 py-4">
@@ -229,7 +229,7 @@ export default async function AdminInvitationsPage() {
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="flex flex-col">
                         <span>{formatDateTime(referral.attributedAt)}</span>
-                        <span className="text-xs text-gray-500">验证：{formatDateTime(referral.verifiedAt)}</span>
+                        <span className="text-xs text-zinc-500">验证：{formatDateTime(referral.verifiedAt)}</span>
                       </div>
                     </td>
                   </tr>
@@ -237,7 +237,7 @@ export default async function AdminInvitationsPage() {
 
                 {summary.recentReferrals.length === 0 ? (
                   <tr>
-                    <td colSpan={4} className="px-6 py-10 text-center text-gray-500">
+                    <td colSpan={4} className="px-6 py-10 text-center text-zinc-500">
                       暂无最近转化记录。
                     </td>
                   </tr>

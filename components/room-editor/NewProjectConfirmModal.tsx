@@ -1,7 +1,9 @@
 'use client';
 
+import { useId } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { Loader2, Sparkles, X } from 'lucide-react';
+import { useDialogAccessibility } from '@/components/use-dialog-accessibility';
 
 type NewProjectConfirmModalProps = {
   isOpen: boolean;
@@ -16,6 +18,15 @@ export function NewProjectConfirmModal({
   onClose,
   onConfirm,
 }: NewProjectConfirmModalProps) {
+  const titleId = useId();
+  const descriptionId = useId();
+  const dialogRef = useDialogAccessibility<HTMLDivElement>({
+    isOpen,
+    onClose,
+    isDismissDisabled: isSubmitting,
+    lockScroll: true,
+  });
+
   return (
     <AnimatePresence>
       {isOpen && (
@@ -28,13 +39,19 @@ export function NewProjectConfirmModal({
             onClick={isSubmitting ? undefined : onClose}
           />
           <motion.div
+            ref={dialogRef}
             initial={{ opacity: 0, scale: 0.95, y: 20 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 20 }}
             className="relative w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-2xl"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby={titleId}
+            aria-describedby={descriptionId}
+            tabIndex={-1}
           >
             <div className="flex items-center justify-between border-b border-zinc-100 p-5">
-              <h3 className="flex items-center gap-2 text-lg font-bold text-zinc-900">
+              <h3 id={titleId} className="flex items-center gap-2 text-lg font-bold text-zinc-900">
                 <Sparkles size={20} className="text-zinc-700" />
                 新建项目
               </h3>
@@ -49,7 +66,7 @@ export function NewProjectConfirmModal({
               </button>
             </div>
             <div className="space-y-5 p-5">
-              <p className="text-sm leading-6 text-zinc-600">
+              <p id={descriptionId} className="text-sm leading-6 text-zinc-600">
                 这会清空当前室内图、已选家具和本次生成结果，历史记录会保留。
               </p>
               <div className="flex gap-3">

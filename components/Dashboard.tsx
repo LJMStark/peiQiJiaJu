@@ -162,7 +162,7 @@ export function Dashboard({ companyName, user, onLogout }: DashboardProps) {
         setCatalog(payload.items);
         setCatalogError(null);
       } catch (error) {
-        setCatalogError(error instanceof Error ? error.message : 'Failed to load catalog.');
+        setCatalogError(error instanceof Error ? error.message : '图册加载失败，请刷新页面重试。');
       } finally {
         setIsCatalogLoading(false);
       }
@@ -243,7 +243,7 @@ export function Dashboard({ companyName, user, onLogout }: DashboardProps) {
         setCatalog(previousCatalog);
       }
 
-      setCatalogError(error instanceof Error ? error.message : 'Failed to delete furniture item.');
+      setCatalogError(error instanceof Error ? error.message : '家具删除失败，请稍后重试。');
     } finally {
       pendingCatalogDeletionIdRef.current = null;
       setPendingCatalogDeletionId(null);

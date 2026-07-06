@@ -1,8 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { Sofa, Image as ImageIcon, Sparkles, X, ChevronRight } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { useDialogAccessibility } from './use-dialog-accessibility';
 
 type WelcomeGuideModalProps = {
   isOpen: boolean;
@@ -12,6 +13,12 @@ type WelcomeGuideModalProps = {
 
 export function WelcomeGuideModal({ isOpen, onClose, userName }: WelcomeGuideModalProps) {
   const [activeStep, setActiveStep] = useState(0);
+  const titleId = useId();
+  const descriptionId = useId();
+  const dialogRef = useDialogAccessibility<HTMLDivElement>({
+    isOpen,
+    onClose,
+  });
 
   const steps = [
     {
@@ -43,14 +50,22 @@ export function WelcomeGuideModal({ isOpen, onClose, userName }: WelcomeGuideMod
     <AnimatePresence>
       <div className="fixed inset-x-4 bottom-4 z-50 pointer-events-none md:left-auto md:right-4 md:w-[26rem]">
         <motion.div
+          ref={dialogRef}
           initial={{ opacity: 0, scale: 0.95, y: 20 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.95, y: 20 }}
           className="pointer-events-auto relative w-full rounded-2xl border border-zinc-200 bg-white shadow-2xl overflow-hidden"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby={titleId}
+          aria-describedby={descriptionId}
+          tabIndex={-1}
         >
           <button
+            type="button"
             onClick={onClose}
             className="absolute top-4 right-4 p-2 text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100 rounded-full transition-colors z-20"
+            aria-label="关闭快速上手指引"
           >
             <X size={20} />
           </button>
@@ -58,8 +73,8 @@ export function WelcomeGuideModal({ isOpen, onClose, userName }: WelcomeGuideMod
           <div className="flex flex-col h-full">
             <div className="bg-zinc-900 text-white p-6">
               <div>
-                <h2 className="text-xl font-bold mb-2">快速上手</h2>
-                <p className="text-zinc-400 text-sm leading-relaxed mt-3">
+                <h2 id={titleId} className="text-xl font-bold mb-2">快速上手</h2>
+                <p id={descriptionId} className="text-zinc-400 text-sm leading-relaxed mt-3">
                   {userName ? `你好，${userName}！` : '你好！'}
                   使用前看一眼这 3 步，就能更顺畅地完成首次上传和生图。
                 </p>
@@ -111,6 +126,7 @@ export function WelcomeGuideModal({ isOpen, onClose, userName }: WelcomeGuideMod
               <div className="mt-6 flex items-center justify-end gap-3 pt-4 border-t border-zinc-100">
                 {activeStep > 0 && (
                   <button
+                    type="button"
                     onClick={() => setActiveStep((prev) => prev - 1)}
                     className="px-4 py-2.5 text-sm font-medium text-zinc-600 hover:text-zinc-900 transition-colors"
                   >
@@ -120,6 +136,7 @@ export function WelcomeGuideModal({ isOpen, onClose, userName }: WelcomeGuideMod
                 
                 {activeStep < steps.length - 1 ? (
                   <button
+                    type="button"
                     onClick={() => setActiveStep((prev) => prev + 1)}
                     className="px-6 py-2.5 bg-zinc-900 text-white text-sm font-medium rounded-xl hover:bg-zinc-800 transition-colors flex items-center gap-2"
                   >
@@ -128,6 +145,7 @@ export function WelcomeGuideModal({ isOpen, onClose, userName }: WelcomeGuideMod
                   </button>
                 ) : (
                   <button
+                    type="button"
                     onClick={onClose}
                     className="px-6 py-2.5 bg-indigo-600 text-white text-sm font-medium rounded-xl hover:bg-indigo-700 transition-colors flex items-center gap-2 shadow-sm shadow-indigo-600/20"
                   >

@@ -52,7 +52,7 @@ function formatShortDate(day: string): string {
 export function DashboardTrendChart({ points }: { points: TrendPoint[] }) {
   if (points.length === 0) {
     return (
-      <div className="px-6 py-12 text-center text-sm text-gray-500">
+      <div className="px-6 py-12 text-center text-sm text-zinc-500">
         暂无趋势数据。
       </div>
     );
@@ -84,14 +84,14 @@ export function DashboardTrendChart({ points }: { points: TrendPoint[] }) {
     <div className="px-6 py-5">
       <div className="flex flex-wrap items-center gap-4 mb-4">
         {SERIES.map((series) => (
-          <div key={series.key} className="flex items-center gap-2 text-xs text-gray-600">
+          <div key={series.key} className="flex items-center gap-2 text-xs text-zinc-600">
             <span
               className="inline-block w-3 h-3 rounded-sm"
               style={{ backgroundColor: series.color }}
               aria-hidden
             />
             <span>{series.label}</span>
-            <span className="text-gray-400">
+            <span className="text-zinc-400">
               （{points.length} 天合计：
               {series.key === 'generations' ? totalGen : totalReg}）
             </span>
@@ -166,7 +166,7 @@ export function DashboardTrendChart({ points }: { points: TrendPoint[] }) {
         </svg>
       </div>
 
-      <p className="mt-3 text-xs text-gray-400">
+      <p className="mt-3 text-xs text-zinc-400">
         最近更新：{formatBeijingDateTime(new Date())}
       </p>
     </div>

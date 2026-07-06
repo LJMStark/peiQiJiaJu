@@ -16,12 +16,14 @@ export default function Error({
   return (
     <div className="min-h-screen flex items-center justify-center bg-zinc-50">
       <div className="text-center">
-        <h2 className="text-2xl font-bold text-zinc-900 mb-2">Something went wrong!</h2>
+        <h2 className="text-2xl font-bold text-zinc-900 mb-2">页面暂时无法打开</h2>
+        <p className="mb-4 text-sm text-zinc-500">请重试一次；如果仍然失败，请联系管理员查看服务日志。</p>
         <button
           onClick={reset}
+          type="button"
           className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
         >
-          Try again
+          重新加载
         </button>
       </div>
     </div>

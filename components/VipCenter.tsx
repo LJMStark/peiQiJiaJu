@@ -97,7 +97,7 @@ export function VipCenter({ user }: VipCenterProps): JSX.Element {
                     <span className="text-4xl font-bold text-zinc-900">{daysLeft}</span>
                     <span className="text-zinc-500 mb-1">天剩余</span>
                   </div>
-                  <div className="items-center gap-2 text-sm text-green-600 font-medium bg-green-50 px-3 py-1.5 rounded-lg inline-flex">
+                  <div className="items-center gap-2 text-sm text-emerald-600 font-medium bg-emerald-50 px-3 py-1.5 rounded-lg inline-flex">
                     <CheckCircle2 size={16} />
                     <span>高级会员生效中</span>
                   </div>
@@ -144,7 +144,7 @@ export function VipCenter({ user }: VipCenterProps): JSX.Element {
                 )}
 
                 {status === 'success' && (
-                  <div className="flex items-center gap-2 text-sm text-green-700 bg-green-50 p-3 rounded-lg border border-green-200">
+                  <div className="flex items-center gap-2 text-sm text-emerald-700 bg-emerald-50 p-3 rounded-lg border border-emerald-200">
                     <CheckCircle2 size={16} className="shrink-0" />
                     <span>{message}</span>
                   </div>

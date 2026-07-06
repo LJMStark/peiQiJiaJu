@@ -62,5 +62,5 @@ export function getAdminNavLinkClass(pathname: string, href: string) {
     return `${baseClass} bg-indigo-50 text-indigo-700 hover:bg-indigo-100`;
   }
 
-  return `${baseClass} text-gray-700 hover:bg-gray-100`;
+  return `${baseClass} text-zinc-700 hover:bg-zinc-100`;
 }
