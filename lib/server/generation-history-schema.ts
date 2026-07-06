@@ -129,36 +129,7 @@ export function getGenerationHistoryCountByFurnitureQuery(mode: GenerationHistor
        )`;
 }
 
-export function getGenerationHistoryInsertQuery(mode: GenerationHistoryQueryMode = 'modern') {
-  if (mode === 'legacy') {
-    return `insert into generation_history (
-        id,
-        user_id,
-        room_image_id,
-        furniture_item_id,
-        room_name_snapshot,
-        room_storage_path_snapshot,
-        room_mime_type_snapshot,
-        room_file_size_snapshot,
-        room_aspect_ratio_snapshot,
-        furniture_name_snapshot,
-        furniture_storage_path_snapshot,
-        furniture_mime_type_snapshot,
-        furniture_file_size_snapshot,
-        furniture_category_snapshot,
-        generated_name,
-        generated_storage_path,
-        generated_mime_type,
-        generated_file_size,
-        custom_instruction
-      ) values (
-        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
-        $11, $12, $13, $14, $15, $16, $17, $18, $19
-      )
-      returning
-        ${getReturningProjection('legacy')}`;
-  }
-
+export function getGenerationHistoryInsertQuery() {
   return `insert into generation_history (
         id,
         user_id,

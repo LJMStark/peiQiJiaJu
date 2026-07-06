@@ -1,5 +1,7 @@
 # Supabase Storage Implementation Plan
 
+> **已废弃（2026-07）**：本计划描述的是项目早期的 Supabase Storage 方案。当前图片与资产存储已迁移到 Cloudflare R2，生产代码必须使用 `lib/server/storage.ts` 和 `@aws-sdk/client-s3`。本文仅保留为历史记录，不再作为实现依据。
+
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
 **Goal:** Persist all furniture, room, and generated images in Supabase Storage while keeping metadata and ownership in Supabase Postgres.

@@ -27,7 +27,6 @@ npm run auth:migrate                    # better-auth 表
 npm run invite:migrate                  # invite_links / invite_referrals
 npm run generation-telemetry:migrate    # generation_failures
 npm run storage:migrate                 # furniture/room/history 表 + modern 列
-# storage:migrate:history-schema 与 storage:migrate 指同一文件（历史遗留，不是两个迁移）
 
 # 隐藏脚本（无 npm 别名，AGENTS.md 未记载）：
 node --env-file=.env scripts/migrate-vip-system.mjs   # user 表 role/vipExpiresAt 列 + redemption_codes

@@ -33,23 +33,26 @@ test('isMissingGenerationHistorySelectionColumnError only matches the optional h
   );
 });
 
-test('legacy generation history queries project null compatibility columns and omit unsupported writes', () => {
+test('legacy generation history reads project null compatibility columns', () => {
   const selectSql = getGenerationHistorySelectQuery('legacy');
-  const insertSql = getGenerationHistoryInsertQuery('legacy');
   const countSql = getGenerationHistoryCountByFurnitureQuery('legacy');
 
   assert.match(selectSql, /null::text\[\] as selected_furniture_item_ids/i);
   assert.match(selectSql, /null::jsonb as selected_furnitures_snapshot/i);
   assert.doesNotMatch(selectSql, /\n\s*selected_furniture_item_ids,\n\s*selected_furnitures_snapshot,\n/i);
 
-  const insertColumnsSection = insertSql.split(') values')[0] ?? '';
-  assert.doesNotMatch(insertColumnsSection, /selected_furniture_item_ids/i);
-  assert.doesNotMatch(insertColumnsSection, /selected_furnitures_snapshot/i);
-  assert.match(insertSql, /null::text\[\] as selected_furniture_item_ids/i);
-  assert.match(insertSql, /null::jsonb as selected_furnitures_snapshot/i);
-
   assert.doesNotMatch(countSql, /selected_furniture_item_ids/i);
   assert.match(countSql, /where user_id = \$1 and furniture_item_id = \$2/i);
+});
+
+test('generation history writes always use modern multi-furniture columns', () => {
+  const insertSql = getGenerationHistoryInsertQuery();
+  const insertColumnsSection = insertSql.split(') values')[0] ?? '';
+
+  assert.match(insertColumnsSection, /selected_furniture_item_ids/i);
+  assert.match(insertColumnsSection, /selected_furnitures_snapshot/i);
+  assert.match(insertSql, /returning[\s\S]*selected_furniture_item_ids/i);
+  assert.match(insertSql, /returning[\s\S]*selected_furnitures_snapshot/i);
 });
 
 test('history page query uses cursor pagination with a deterministic tie-breaker', () => {

@@ -24,7 +24,7 @@ description: 排查登录/注册/邮箱验证/莫名被踢下线/密码重置，
 - 邀请 cookie 存活 `INVITE_ATTRIBUTION_WINDOW_DAYS = 7` 天（点链接 → 注册的窗口）。
 - late-claim（先注册、后点链接的补领）窗口 `INVITE_LATE_CLAIM_WINDOW_HOURS = 24`，**从被邀请者的 `createdAt` 起算**。
 - 两个窗口不对称是已知设计现状（`lib/invitations.ts:12-13`）。排查「为什么没归因上」先画时间线：点击时间、注册时间、验证时间。
-- `/i/[code]` 是 **GET 且会写库**（`claimInviteFromLink`）——爬虫/浏览器预取可能提前消费 late-claim。遇到诡异归因把它列入怀疑名单（在册隐患 → [archaeology-live-traps]）。
+- `/i/[code]` 的 GET 只校验邀请、设置 cookie 或展示确认页；登录用户的 late-claim 归因必须由确认页 POST 显式提交。排查诡异归因时先确认用户是否真正提交过 POST。
 
 ## 邀请错误的字符串协定（改文案前必读）
 
@@ -36,4 +36,4 @@ description: 排查登录/注册/邮箱验证/莫名被踢下线/密码重置，
 - 邮件走 resend（`lib/send-email.ts`）；**没配 `RESEND_API_KEY` 时：非生产把邮件内容打到日志而不是真发（本地「收不到邮件」先看终端输出），生产则在发送时直接抛错**。
 
 ## 姊妹文档
-[contract-api-auth-envelope]（鉴权拓扑与公开端点白名单）· [change-control-schema-migrations]（user 表加字段的双改姿势）· [archaeology-live-traps]（GET 写库隐患）
+[contract-api-auth-envelope]（鉴权拓扑与公开端点白名单）· [change-control-schema-migrations]（user 表加字段的双改姿势）· [archaeology-live-traps]（现役 auth/邀请相邻地雷）

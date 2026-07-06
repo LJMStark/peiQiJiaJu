@@ -1,5 +1,7 @@
 # Supabase Storage Integration Design
 
+> **已废弃（2026-07）**：本设计对应早期 Supabase Storage 方案。当前图片与资产存储已迁移到 Cloudflare R2，生产代码必须使用 `lib/server/storage.ts` 和 `@aws-sdk/client-s3`。本文仅保留为历史记录，不再作为实现依据。
+
 **Date:** 2026-03-14
 
 ## Goal

@@ -1,7 +1,7 @@
 'use client';
 
 import type { LucideIcon } from 'lucide-react';
-import { useEffect, useRef, useState, useTransition } from 'react';
+import { useEffect, useRef, useState, useSyncExternalStore, useTransition } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { LayoutGrid, Loader2, LogOut, Sofa, Sparkles, Crown, ShieldAlert, PencilLine, Check, X } from 'lucide-react';
 import { Catalog } from './Catalog';
@@ -76,6 +76,18 @@ function getGuideStorageKey(userId: string): string {
   return `has_seen_onboarding_${userId}`;
 }
 
+function subscribeToGuideStorage() {
+  return () => undefined;
+}
+
+function shouldShowStoredGuide(userId: string): boolean {
+  if (typeof window === 'undefined') {
+    return false;
+  }
+
+  return !window.localStorage.getItem(getGuideStorageKey(userId));
+}
+
 function getDashboardTabClassName(
   tab: DashboardTabConfig,
   activeTab: DashboardTab,
@@ -100,18 +112,37 @@ export function Dashboard({ companyName, user, onLogout }: DashboardProps) {
   const searchParams = useSearchParams();
   const requestedLocation = resolveDashboardLocation(searchParams.get('tab'), searchParams.get('section'));
   const activeTab = requestedLocation.activeTab;
+  const guideKey = getGuideStorageKey(user.id);
+  const shouldShowWelcomeGuide = useSyncExternalStore(
+    subscribeToGuideStorage,
+    () => shouldShowStoredGuide(user.id),
+    () => false
+  );
   const [catalog, setCatalog] = useState<FurnitureItem[]>([]);
   const [isUploading, setIsUploading] = useState(false);
   const [isCatalogLoading, setIsCatalogLoading] = useState(true);
   const [catalogError, setCatalogError] = useState<string | null>(null);
-  const [showWelcomeGuide, setShowWelcomeGuide] = useState(false);
-  const [displayCompanyName, setDisplayCompanyName] = useState(companyName);
-  const [companyNameDraft, setCompanyNameDraft] = useState(companyName);
+  const [dismissedGuideKey, setDismissedGuideKey] = useState<string | null>(null);
+  const [companyNameState, setCompanyNameState] = useState({
+    source: companyName,
+    display: companyName,
+    draft: companyName,
+  });
   const [isEditingCompanyName, setIsEditingCompanyName] = useState(false);
   const [companyNameError, setCompanyNameError] = useState('');
   const [pendingCatalogDeletionId, setPendingCatalogDeletionId] = useState<string | null>(null);
   const [isSavingCompanyName, startSavingCompanyName] = useTransition();
   const pendingCatalogDeletionIdRef = useRef<string | null>(null);
+  if (companyNameState.source !== companyName) {
+    setCompanyNameState({
+      source: companyName,
+      display: companyName,
+      draft: companyName,
+    });
+  }
+  const displayCompanyName = companyNameState.display;
+  const companyNameDraft = companyNameState.draft;
+  const showWelcomeGuide = shouldShowWelcomeGuide && dismissedGuideKey !== guideKey;
 
   useEffect(() => {
     if (requestedLocation.canonicalPath) {
@@ -119,22 +150,9 @@ export function Dashboard({ companyName, user, onLogout }: DashboardProps) {
     }
   }, [requestedLocation.canonicalPath, router]);
 
-  useEffect(() => {
-    const guideKey = getGuideStorageKey(user.id);
-    if (!localStorage.getItem(guideKey)) {
-      setShowWelcomeGuide(true);
-    }
-  }, [user.id]);
-
-  useEffect(() => {
-    setDisplayCompanyName(companyName);
-    setCompanyNameDraft(companyName);
-  }, [companyName]);
-
   const handleCloseWelcomeGuide = () => {
-    const guideKey = getGuideStorageKey(user.id);
     localStorage.setItem(guideKey, 'true');
-    setShowWelcomeGuide(false);
+    setDismissedGuideKey(guideKey);
   };
 
   useEffect(() => {
@@ -233,13 +251,19 @@ export function Dashboard({ companyName, user, onLogout }: DashboardProps) {
   };
 
   const handleStartEditingCompanyName = () => {
-    setCompanyNameDraft(displayCompanyName);
+    setCompanyNameState((current) => ({
+      ...current,
+      draft: displayCompanyName,
+    }));
     setCompanyNameError('');
     setIsEditingCompanyName(true);
   };
 
   const handleCancelEditingCompanyName = () => {
-    setCompanyNameDraft(displayCompanyName);
+    setCompanyNameState((current) => ({
+      ...current,
+      draft: displayCompanyName,
+    }));
     setCompanyNameError('');
     setIsEditingCompanyName(false);
   };
@@ -270,8 +294,11 @@ export function Dashboard({ companyName, user, onLogout }: DashboardProps) {
         return;
       }
 
-      setDisplayCompanyName(normalizedCompanyName);
-      setCompanyNameDraft(normalizedCompanyName);
+      setCompanyNameState((current) => ({
+        source: current.source,
+        display: normalizedCompanyName,
+        draft: normalizedCompanyName,
+      }));
       setIsEditingCompanyName(false);
       router.refresh();
     });
@@ -295,7 +322,12 @@ export function Dashboard({ companyName, user, onLogout }: DashboardProps) {
                   <input
                     type="text"
                     value={companyNameDraft}
-                    onChange={(event) => setCompanyNameDraft(event.target.value)}
+                    onChange={(event) =>
+                      setCompanyNameState((current) => ({
+                        ...current,
+                        draft: event.target.value,
+                      }))
+                    }
                     onKeyDown={(event) => {
                       if (event.key === 'Enter') {
                         event.preventDefault();

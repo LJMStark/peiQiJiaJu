@@ -1,8 +1,8 @@
 'use client';
 
 import Link from 'next/link';
-import { useRouter, useSearchParams } from 'next/navigation';
-import { useEffect, useState, useTransition } from 'react';
+import { useRouter } from 'next/navigation';
+import { useState, useTransition } from 'react';
 import { ArrowRight, Building2, Eye, EyeOff, Link2, Lock, Mail } from 'lucide-react';
 import { getAuthErrorMessage } from '@/lib/auth-errors';
 import { getEmailValidationError } from '@/lib/client/auth-form-validation';
@@ -18,15 +18,17 @@ function buildVerifyEmailPath(email: string, inviteCode: string): string {
   return `/verify-email?email=${encodeURIComponent(email)}${callbackQuery}`;
 }
 
-export function SignUpForm() {
+type SignUpFormProps = {
+  initialInviteCode: string;
+  isInvitedSignup: boolean;
+};
+
+export function SignUpForm({ initialInviteCode, isInvitedSignup }: SignUpFormProps) {
   const router = useRouter();
-  const searchParams = useSearchParams();
   const [isPending, startTransition] = useTransition();
-  const inviteCodeFromQuery = normalizeInviteCode(searchParams.get('code') ?? '');
-  const isInvitedSignup = searchParams.get('invited') === '1' || Boolean(inviteCodeFromQuery);
   const [companyName, setCompanyName] = useState('');
   const [email, setEmail] = useState('');
-  const [inviteCode, setInviteCode] = useState(inviteCodeFromQuery);
+  const [inviteCode, setInviteCode] = useState(initialInviteCode);
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState('');
@@ -34,10 +36,6 @@ export function SignUpForm() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const inviteCodeLabel = isInvitedSignup ? '邀请码' : '邀请码（选填）';
   const inviteCodePlaceholder = isInvitedSignup ? '邀请码已自动带入' : '如有邀请码可填写';
-
-  useEffect(() => {
-    setInviteCode(inviteCodeFromQuery);
-  }, [inviteCodeFromQuery]);
 
   const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();

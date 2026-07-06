@@ -1,44 +1,9 @@
-import { createClient } from '@supabase/supabase-js';
 import { Client } from 'pg';
 
 const databaseUrl = process.env.DATABASE_URL ?? process.env.DIRECT_URL;
-const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-const supabaseUrl =
-  process.env.NEXT_PUBLIC_SUPABASE_URL ??
-  (() => {
-    const candidate = process.env.DIRECT_URL ?? process.env.DATABASE_URL;
-    if (!candidate) {
-      return null;
-    }
-
-    try {
-      const parsed = new URL(candidate);
-      const directMatch = parsed.hostname.match(/^db\.([a-z0-9]+)\.supabase\.co$/i);
-      if (directMatch?.[1]) {
-        return `https://${directMatch[1]}.supabase.co`;
-      }
-
-      const poolerUsernameMatch = parsed.username.match(/^postgres\.([a-z0-9]+)$/i);
-      if (poolerUsernameMatch?.[1]) {
-        return `https://${poolerUsernameMatch[1]}.supabase.co`;
-      }
-    } catch {
-      return null;
-    }
-
-    return null;
-  })();
 
 if (!databaseUrl) {
   throw new Error('DATABASE_URL or DIRECT_URL must be set before running storage:migrate.');
-}
-
-if (!supabaseUrl) {
-  throw new Error('NEXT_PUBLIC_SUPABASE_URL must be set before running storage:migrate.');
-}
-
-if (!serviceRoleKey) {
-  throw new Error('SUPABASE_SERVICE_ROLE_KEY must be set before running storage:migrate.');
 }
 
 const client = new Client({
@@ -130,44 +95,6 @@ create index if not exists generation_history_user_id_created_at_id_idx
 await client.connect();
 await client.query(sql);
 
-const supabase = createClient(supabaseUrl, serviceRoleKey, {
-  auth: {
-    autoRefreshToken: false,
-    persistSession: false,
-  },
-});
-
-const buckets = [
-  { name: 'furniture-assets', mimeTypes: ['image/jpeg', 'image/png', 'image/webp'] },
-  { name: 'room-assets', mimeTypes: ['image/jpeg', 'image/png', 'image/webp'] },
-  { name: 'generated-assets', mimeTypes: ['image/jpeg', 'image/png', 'image/webp'] },
-];
-
-const { data: existingBuckets, error: listError } = await supabase.storage.listBuckets();
-if (listError) {
-  throw new Error(`Failed to list buckets: ${listError.message}`);
-}
-
-for (const bucket of buckets) {
-  const exists = existingBuckets?.some((item) => item.name === bucket.name);
-  if (exists) {
-    console.log(`Bucket already exists: ${bucket.name}`);
-    continue;
-  }
-
-  const { error } = await supabase.storage.createBucket(bucket.name, {
-    public: false,
-    allowedMimeTypes: bucket.mimeTypes,
-    fileSizeLimit: 10 * 1024 * 1024,
-  });
-
-  if (error) {
-    throw new Error(`Failed to create bucket ${bucket.name}: ${error.message}`);
-  }
-
-  console.log(`Created bucket: ${bucket.name}`);
-}
-
-console.log('Storage tables and buckets are ready.');
+console.log('Storage tables are ready. R2 buckets are managed outside this database migration.');
 
 await client.end();

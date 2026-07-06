@@ -169,19 +169,6 @@ export function useRoomEditorController({
     }
   }
 
-  useEffect(() => {
-    if (roomImages.length === 0) {
-      if (activeRoomId !== null) {
-        setActiveRoomId(null);
-      }
-      return;
-    }
-
-    if (activeRoomId && !roomImages.some((room) => room.id === activeRoomId)) {
-      setActiveRoomId(roomImages[0].id);
-    }
-  }, [activeRoomId, roomImages]);
-
   function createGenerationSession(): string {
     setIsGenerating(true);
     setError(null);

@@ -687,30 +687,9 @@ export async function createHistoryItem(
         uploaded.fileSize,
         normalizeInstruction(input.customInstruction),
       ] as const;
-      const legacyInsertValues = [
-        id,
-        userId,
-        roomSnapshot.id,
-        resolvedFurnitureSelection.primaryHistoryFurnitureId,
-        roomSnapshot.name,
-        roomSnapshot.storagePath,
-        roomSnapshot.mimeType,
-        roomSnapshot.fileSize,
-        roomSnapshot.aspectRatio,
-        primaryFurnitureSnapshot.name,
-        primaryFurnitureSnapshot.storagePath,
-        primaryFurnitureSnapshot.mimeType,
-        primaryFurnitureSnapshot.fileSize,
-        primaryFurnitureSnapshot.category,
-        generatedName,
-        uploaded.storagePath,
-        uploaded.mimeType,
-        uploaded.fileSize,
-        normalizeInstruction(input.customInstruction),
-      ] as const;
 
       const result = await withGenerationHistorySchemaCheck(() =>
-        query<HistoryRow>(getGenerationHistoryInsertQuery('modern'), modernInsertValues)
+        query<HistoryRow>(getGenerationHistoryInsertQuery(), modernInsertValues)
       );
 
       return serializeHistory(result.rows[0]);
