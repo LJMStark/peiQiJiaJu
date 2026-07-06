@@ -21,10 +21,14 @@ export function useDialogAccessibility<T extends HTMLElement>({
 }: UseDialogAccessibilityOptions) {
   const dialogRef = useRef<T | null>(null);
   const onCloseRef = useRef(onClose);
+  const closeOnEscapeRef = useRef(closeOnEscape);
+  const isDismissDisabledRef = useRef(isDismissDisabled);
 
   useEffect(() => {
     onCloseRef.current = onClose;
-  }, [onClose]);
+    closeOnEscapeRef.current = closeOnEscape;
+    isDismissDisabledRef.current = isDismissDisabled;
+  }, [onClose, closeOnEscape, isDismissDisabled]);
 
   useEffect(() => {
     if (!isOpen) {
@@ -36,7 +40,7 @@ export function useDialogAccessibility<T extends HTMLElement>({
       : null;
     const previousBodyOverflow = document.body.style.overflow;
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape' || !closeOnEscape || isDismissDisabled) {
+      if (event.key !== 'Escape' || !closeOnEscapeRef.current || isDismissDisabledRef.current) {
         return;
       }
 
@@ -69,7 +73,7 @@ export function useDialogAccessibility<T extends HTMLElement>({
         previousActiveElement.focus({ preventScroll: true });
       }
     };
-  }, [closeOnEscape, initialFocusRef, isDismissDisabled, isOpen, lockScroll]);
+  }, [initialFocusRef, isOpen, lockScroll]);
 
   return dialogRef;
 }

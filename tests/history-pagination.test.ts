@@ -28,6 +28,14 @@ test('history cursor decoding rejects malformed payloads', () => {
     () => decodeHistoryCursor(Buffer.from(JSON.stringify({ createdAt: 'bad-date', id: 'history-1' })).toString('base64url')),
     /INVALID_HISTORY_CURSOR/
   );
+  assert.throws(
+    () => decodeHistoryCursor(Buffer.from(JSON.stringify({ createdAt: '2026-03-21T10:15:30.000Z' })).toString('base64url')),
+    /INVALID_HISTORY_CURSOR/
+  );
+  assert.throws(
+    () => decodeHistoryCursor(Buffer.from(JSON.stringify({ createdAt: '2026-03-21T10:15:30.000Z', id: '   ' })).toString('base64url')),
+    /INVALID_HISTORY_CURSOR/
+  );
 });
 
 test('history page size defaults, clamps, and rejects invalid values', () => {
