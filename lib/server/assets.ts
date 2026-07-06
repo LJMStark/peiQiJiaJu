@@ -12,8 +12,13 @@ import {
   createGenerationHistorySchemaError,
   getGenerationHistoryCountByFurnitureQuery,
   getGenerationHistoryInsertQuery,
-  getGenerationHistorySelectQuery,
+  getGenerationHistorySelectPageQuery,
 } from '@/lib/server/generation-history-schema';
+import {
+  DEFAULT_HISTORY_PAGE_SIZE,
+  encodeHistoryCursor,
+  type HistoryCursor,
+} from '@/lib/server/history-pagination';
 import {
   normalizeHistoryFurnitureSnapshots,
   resolveHistoryFurnitureSelection,
@@ -531,12 +536,26 @@ export async function deleteRoomImage(userId: string, id: string) {
   };
 }
 
-export async function listHistoryItems(userId: string) {
+export async function listHistoryItems(
+  userId: string,
+  input: { cursor?: HistoryCursor | null; limit?: number } = {}
+) {
+  const pageSize = input.limit ?? DEFAULT_HISTORY_PAGE_SIZE;
   const result = await withGenerationHistorySchemaCheck(() =>
-    query<HistoryRow>(getGenerationHistorySelectQuery('modern'), [userId])
+    query<HistoryRow>(
+      getGenerationHistorySelectPageQuery('modern'),
+      [userId, input.cursor?.createdAt ?? null, input.cursor?.id ?? null, pageSize + 1]
+    )
   );
+  const pageRows = result.rows.slice(0, pageSize);
+  const lastPageRow = pageRows.at(-1);
 
-  return Promise.all(result.rows.map(serializeHistory));
+  return {
+    items: await Promise.all(pageRows.map(serializeHistory)),
+    nextCursor: result.rows.length > pageSize && lastPageRow
+      ? encodeHistoryCursor({ createdAt: lastPageRow.created_at, id: lastPageRow.id })
+      : null,
+  };
 }
 
 export async function createHistoryItem(

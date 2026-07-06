@@ -96,7 +96,21 @@ export function getGenerationHistorySelectQuery(mode: GenerationHistoryQueryMode
         ${getReturningProjection(mode)}
       from generation_history
       where user_id = $1
-      order by created_at desc`;
+      order by created_at desc, id desc`;
+}
+
+export function getGenerationHistorySelectPageQuery(mode: GenerationHistoryQueryMode = 'modern') {
+  return `select
+        ${getReturningProjection(mode)}
+      from generation_history
+      where user_id = $1
+        and (
+          $2::timestamptz is null
+          or created_at < $2::timestamptz
+          or (created_at = $2::timestamptz and id < $3::text)
+        )
+      order by created_at desc, id desc
+      limit $4`;
 }
 
 export function getGenerationHistoryCountByFurnitureQuery(mode: GenerationHistoryQueryMode = 'modern') {

@@ -99,6 +99,7 @@ export type RoomMutationResponse = {
 
 export type HistoryResponse = {
   items: HistoryItem[];
+  nextCursor?: string | null;
   error?: string;
 };
 

@@ -7,6 +7,7 @@ import {
   createGenerationHistorySchemaError,
   getGenerationHistoryCountByFurnitureQuery,
   getGenerationHistoryInsertQuery,
+  getGenerationHistorySelectPageQuery,
   getGenerationHistorySelectQuery,
   isGenerationHistorySchemaError,
   isMissingGenerationHistorySelectionColumnError,
@@ -51,6 +52,16 @@ test('legacy generation history queries project null compatibility columns and o
   assert.match(countSql, /where user_id = \$1 and furniture_item_id = \$2/i);
 });
 
+test('history page query uses cursor pagination with a deterministic tie-breaker', () => {
+  const selectSql = getGenerationHistorySelectPageQuery('modern');
+
+  assert.match(selectSql, /where user_id = \$1/i);
+  assert.match(selectSql, /created_at < \$2::timestamptz/i);
+  assert.match(selectSql, /created_at = \$2::timestamptz and id < \$3::text/i);
+  assert.match(selectSql, /order by created_at desc, id desc/i);
+  assert.match(selectSql, /limit \$4/i);
+});
+
 test('missing history-selection columns require an explicit storage migration', () => {
   const error = createGenerationHistorySchemaError({
     code: '42703',
@@ -78,4 +89,11 @@ test('request paths no longer contain runtime ALTER TABLE fallbacks for generati
     false,
     'lib/server/assets.ts should not attempt runtime schema repair'
   );
+});
+
+test('storage migration includes the history pagination index', async () => {
+  const source = await readFile(path.join(projectRoot, 'scripts/migrate-storage-assets.mjs'), 'utf8');
+
+  assert.match(source, /generation_history_user_id_created_at_id_idx/i);
+  assert.match(source, /on generation_history \(user_id, created_at desc, id desc\)/i);
 });

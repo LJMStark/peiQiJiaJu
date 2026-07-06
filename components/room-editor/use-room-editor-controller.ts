@@ -83,7 +83,8 @@ export function useRoomEditorController({
   const [feedbackText, setFeedbackText] = useState('');
   const [lightboxImageUrl, setLightboxImageUrl] = useState<string | null>(null);
   const [errorDetails, setErrorDetails] = useState<string[]>([]);
-  const [historyDisplayCount, setHistoryDisplayCount] = useState(12);
+  const [historyNextCursor, setHistoryNextCursor] = useState<string | null>(null);
+  const [isLoadingMoreHistory, setIsLoadingMoreHistory] = useState(false);
   const [limitModalType, setLimitModalType] = useState<'free_limit' | 'vip_expired' | null>(null);
   const [isNewProjectModalOpen, setIsNewProjectModalOpen] = useState(false);
   const [isStartingNewProject, setIsStartingNewProject] = useState(false);
@@ -108,6 +109,7 @@ export function useRoomEditorController({
   useEffect(() => {
     const loadPersistedAssets = async () => {
       try {
+        let initialHistoryNextCursor: string | null = null;
         const nextState = await loadRoomEditorBootstrapState({
           loadRooms: async () => {
             const response = await fetch('/api/rooms', { cache: 'no-store' });
@@ -117,6 +119,7 @@ export function useRoomEditorController({
           loadHistory: async () => {
             const response = await fetch('/api/history', { cache: 'no-store' });
             const payload = await readJson<HistoryResponse>(response);
+            initialHistoryNextCursor = payload.nextCursor ?? null;
             return payload.items;
           },
         });
@@ -125,6 +128,7 @@ export function useRoomEditorController({
         setPendingRoomImage(nextState.pendingRoomImage);
         setActiveRoomId(nextState.activeRoomId);
         setHistory(nextState.history);
+        setHistoryNextCursor(initialHistoryNextCursor);
         setError(nextState.error);
         setErrorDetails(nextState.errorDetails);
       } catch (loadError) {
@@ -137,6 +141,33 @@ export function useRoomEditorController({
 
     void loadPersistedAssets();
   }, []);
+
+  async function loadMoreHistory(): Promise<void> {
+    if (!historyNextCursor || isLoadingMoreHistory) {
+      return;
+    }
+
+    setIsLoadingMoreHistory(true);
+
+    try {
+      const response = await fetch(`/api/history?cursor=${encodeURIComponent(historyNextCursor)}`, {
+        cache: 'no-store',
+      });
+      const payload = await readJson<HistoryResponse>(response);
+
+      setHistory((previousHistory) => {
+        const existingIds = new Set(previousHistory.map((item) => item.id));
+        const nextItems = payload.items.filter((item) => !existingIds.has(item.id));
+        return [...previousHistory, ...nextItems];
+      });
+      setHistoryNextCursor(payload.nextCursor ?? null);
+    } catch (loadError) {
+      setError(loadError instanceof Error ? loadError.message : '加载更多历史记录失败，请稍后重试。');
+      setErrorDetails([]);
+    } finally {
+      setIsLoadingMoreHistory(false);
+    }
+  }
 
   useEffect(() => {
     if (roomImages.length === 0) {
@@ -617,7 +648,8 @@ export function useRoomEditorController({
     feedbackText,
     lightboxImageUrl,
     errorDetails,
-    historyDisplayCount,
+    historyNextCursor,
+    isLoadingMoreHistory,
     limitModalType,
     isNewProjectModalOpen,
     isStartingNewProject,
@@ -636,7 +668,6 @@ export function useRoomEditorController({
     setIsFeedbackModalOpen,
     setFeedbackText,
     setLightboxImageUrl,
-    setHistoryDisplayCount,
     setLimitModalType,
     setIsNewProjectModalOpen,
     handleFurnitureUpload,
@@ -645,6 +676,7 @@ export function useRoomEditorController({
     toggleFurniture,
     handleGenerate,
     loadHistoryItem,
+    loadMoreHistory,
     handleRecommendInstruction,
     handleAddFurnitureTag,
     handleFeedbackSubmit,

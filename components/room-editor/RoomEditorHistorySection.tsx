@@ -15,9 +15,10 @@ type RoomEditorHistorySectionProps = {
 export function RoomEditorHistorySection({ controller }: RoomEditorHistorySectionProps) {
   const {
     history,
-    historyDisplayCount,
+    historyNextCursor,
+    isLoadingMoreHistory,
     loadHistoryItem,
-    setHistoryDisplayCount,
+    loadMoreHistory,
   } = controller;
 
   if (history.length === 0) {
@@ -46,7 +47,7 @@ export function RoomEditorHistorySection({ controller }: RoomEditorHistorySectio
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
         <AnimatePresence>
-          {history.slice(0, historyDisplayCount).map((item, index) => {
+          {history.map((item, index) => {
             const historyFurnitures = item.furnitures.length > 0 ? item.furnitures : [item.furniture];
 
             return (
@@ -147,13 +148,17 @@ export function RoomEditorHistorySection({ controller }: RoomEditorHistorySectio
         </AnimatePresence>
       </div>
 
-      {history.length > historyDisplayCount && (
+      {historyNextCursor && (
         <div className="flex justify-center mt-6">
           <button
-            onClick={() => setHistoryDisplayCount((previous) => previous + 12)}
-            className="px-6 py-2 bg-white border border-zinc-200 rounded-xl text-sm font-medium text-zinc-700 hover:bg-zinc-50 hover:border-zinc-300 transition-colors shadow-sm"
+            type="button"
+            onClick={() => {
+              void loadMoreHistory();
+            }}
+            disabled={isLoadingMoreHistory}
+            className="px-6 py-2 bg-white border border-zinc-200 rounded-xl text-sm font-medium text-zinc-700 hover:bg-zinc-50 hover:border-zinc-300 transition-colors shadow-sm disabled:cursor-not-allowed disabled:opacity-60"
           >
-            加载更多 ({Math.max(0, history.length - historyDisplayCount)} 条剩余)
+            {isLoadingMoreHistory ? '加载中...' : '加载更多'}
           </button>
         </div>
       )}

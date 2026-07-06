@@ -20,3 +20,18 @@ test('history listing fails fast instead of silently dropping serialization fail
     'listHistoryItems should not silently discard failed history rows'
   );
 });
+
+test('history listing serializes only the requested page', async () => {
+  const source = await readFile(path.join(projectRoot, 'lib/server/assets.ts'), 'utf8');
+
+  assert.equal(
+    source.includes('pageSize + 1'),
+    true,
+    'listHistoryItems should fetch one extra row to detect the next page'
+  );
+  assert.equal(
+    source.includes('pageRows.map(serializeHistory)'),
+    true,
+    'listHistoryItems should serialize only current page rows'
+  );
+});

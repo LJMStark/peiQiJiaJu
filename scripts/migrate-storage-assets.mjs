@@ -122,6 +122,9 @@ create index if not exists room_images_user_id_created_at_idx
 
 create index if not exists generation_history_user_id_created_at_idx
   on generation_history (user_id, created_at desc);
+
+create index if not exists generation_history_user_id_created_at_id_idx
+  on generation_history (user_id, created_at desc, id desc);
 `;
 
 await client.connect();
