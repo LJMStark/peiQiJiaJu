@@ -7,26 +7,22 @@ import { resolveAdminInvitationErrorState } from '@/lib/invite-center-error-stat
 export const dynamic = 'force-dynamic';
 
 async function loadAdminInvitationsPageData() {
-  try {
-    const [summary, users] = await Promise.all([
-      getAdminInvitationSummary(),
-      getUsersList(500, 0),
-    ]);
+  const [summaryResult, usersResult] = await Promise.allSettled([
+    getAdminInvitationSummary(),
+    getUsersList(500, 0),
+  ] as const);
+  const summaryError = summaryResult.status === 'rejected' ? summaryResult.reason : null;
+  const usersError = usersResult.status === 'rejected' ? usersResult.reason : null;
 
-    return {
-      summary,
-      users,
-      errorState: null,
-    };
-  } catch (error) {
-    console.error('[admin invitations] failed to load invitation summary:', error);
+  if (summaryError) console.error('[admin invitations] failed to load invitation summary:', summaryError);
+  if (usersError) console.error('[admin invitations] failed to load users:', usersError);
 
-    return {
-      summary: null,
-      users: null,
-      errorState: resolveAdminInvitationErrorState(error),
-    };
-  }
+  return {
+    summary: summaryResult.status === 'fulfilled' ? summaryResult.value : null,
+    users: usersResult.status === 'fulfilled' ? usersResult.value : [],
+    errorState: summaryError ? resolveAdminInvitationErrorState(summaryError) : null,
+    usersError: usersError ? '用户列表加载失败，请稍后刷新重试。' : '',
+  };
 }
 
 function formatDateTime(value: string | Date | null) {
@@ -90,12 +86,26 @@ export default async function AdminInvitationsPage() {
             ) : null}
           </div>
         </section>
+
+        {pageData.usersError ? (
+          <div role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{pageData.usersError}</div>
+        ) : (
+          <AdminInviteUserTable
+            users={pageData.users.map((user) => ({
+              id: user.id,
+              name: user.name,
+              email: user.email,
+              emailVerified: Boolean(user.emailVerified),
+              createdAt: user.createdAt,
+            }))}
+          />
+        )}
       </div>
     );
   }
 
   const { summary, users } = pageData;
-  if (!summary || !users) {
+  if (!summary) {
     throw new Error('Admin invitations page data is missing.');
   }
 
@@ -248,15 +258,19 @@ export default async function AdminInvitationsPage() {
         </section>
       </div>
 
-      <AdminInviteUserTable
-        users={users.map((user) => ({
-          id: user.id,
-          name: user.name,
-          email: user.email,
-          emailVerified: Boolean(user.emailVerified),
-          createdAt: user.createdAt,
-        }))}
-      />
+      {pageData.usersError ? (
+        <div role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{pageData.usersError}</div>
+      ) : (
+        <AdminInviteUserTable
+          users={users.map((user) => ({
+            id: user.id,
+            name: user.name,
+            email: user.email,
+            emailVerified: Boolean(user.emailVerified),
+            createdAt: user.createdAt,
+          }))}
+        />
+      )}
     </div>
   );
 }

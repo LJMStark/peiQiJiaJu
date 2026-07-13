@@ -12,7 +12,7 @@ export default function AdminCodesPage(): JSX.Element {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-2xl font-bold text-zinc-900">兑换码管理</h1>
+          <h1 className="text-2xl font-semibold text-zinc-900">兑换码管理</h1>
           <p className="text-zinc-500 text-sm mt-1">生成和管理 VIP 兑换码</p>
         </div>
       </div>
@@ -69,12 +69,12 @@ function CodesManager(): JSX.Element {
   };
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-zinc-100 p-6">
+    <div className="rounded-xl border border-zinc-200 bg-white p-4 sm:p-6">
       <div className="flex gap-4 mb-6">
         <button
           type="button"
           onClick={() => setIsModalOpen(true)}
-          className="flex items-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-indigo-700 transition"
+          className="flex min-h-11 items-center gap-2 rounded-lg bg-zinc-900 px-4 py-2 font-medium text-white transition hover:bg-zinc-800"
         >
           <Plus size={18} />
           <span>批量生成</span>
@@ -140,14 +140,14 @@ function CodesManager(): JSX.Element {
                 />
               </div>
               
-              {error && <p className="text-red-500 text-sm mt-2">{error}</p>}
+              {error && <p role="alert" className="mt-2 text-sm text-red-600">{error}</p>}
 
               <div className="flex justify-end gap-3 mt-6">
                 <button
                   type="button"
                   onClick={closeGenerateModal}
                   disabled={isPending}
-                  className="px-4 py-2 text-zinc-600 hover:text-zinc-900 font-medium"
+                  className="min-h-11 rounded-lg px-4 py-2 font-medium text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900"
                 >
                   取消
                 </button>
@@ -155,7 +155,7 @@ function CodesManager(): JSX.Element {
                   type="button"
                   onClick={handleGenerate}
                   disabled={isPending}
-                  className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg font-medium hover:bg-indigo-700 disabled:opacity-50"
+                  className="flex min-h-11 items-center gap-2 rounded-lg bg-zinc-900 px-4 py-2 font-medium text-white hover:bg-zinc-800 disabled:opacity-50"
                 >
                   {isPending ? <Loader2 className="animate-spin" size={18} /> : <span>确认生成</span>}
                 </button>
