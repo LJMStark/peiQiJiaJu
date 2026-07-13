@@ -1,167 +1,96 @@
 'use client';
 
-import { AnimatePresence, motion } from 'motion/react';
+import { useState } from 'react';
 import { Clock, History } from 'lucide-react';
 import Image from 'next/image';
+import { Button } from '@/components/ui/Button';
 import { formatBeijingTime } from '@/lib/beijing-time';
 import { shouldBypassImageOptimization } from '@/lib/remote-images';
 import { getDisplayInstruction } from './room-editor-prompt';
-import { type RoomEditorController } from './use-room-editor-controller';
+import type { RoomEditorController } from './use-room-editor-controller';
 
 type RoomEditorHistorySectionProps = {
   controller: RoomEditorController;
 };
 
 export function RoomEditorHistorySection({ controller }: RoomEditorHistorySectionProps) {
-  const {
-    history,
-    historyNextCursor,
-    isLoadingMoreHistory,
-    loadHistoryItem,
-    loadMoreHistory,
-  } = controller;
-
-  if (history.length === 0) {
-    return null;
-  }
+  const { history, historyNextCursor, isLoadingMoreHistory, loadHistoryItem, loadMoreHistory } = controller;
+  const [isExpanded, setIsExpanded] = useState(false);
+  const visibleHistory = isExpanded ? history : history.slice(0, 4);
 
   return (
-    <div className="pt-10 mt-10 border-t border-zinc-200">
-      <div className="flex items-center justify-between mb-8">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-zinc-100 rounded-xl flex items-center justify-center text-zinc-600">
-            <History size={20} />
-          </div>
-          <div>
-            <h3 className="text-xl font-bold text-zinc-900 flex items-center gap-2">
-              生成历史
-              <span className="bg-zinc-900 text-white text-xs font-bold px-2 py-0.5 rounded-full">
-                {history.length}
-              </span>
-            </h3>
-            <p className="text-sm text-zinc-500 mt-1">点击任意卡片即可恢复家具、指令与结果预览</p>
-            <p className="text-xs text-amber-600 mt-1">生成结果保留 30 天，请及时下载保存。</p>
-          </div>
+    <section className="border-t border-zinc-200 pt-6 sm:pt-8" aria-labelledby="room-editor-history-title">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h3 id="room-editor-history-title" className="flex items-center gap-2 text-lg font-semibold text-zinc-900 sm:text-xl">
+            <History aria-hidden="true" size={20} className="text-zinc-500" />
+            最近历史
+            {history.length > 0 ? <span className="text-sm font-normal text-zinc-500">{history.length} 条已加载</span> : null}
+          </h3>
+          <p className="mt-1 text-sm text-zinc-600">点击结果可以恢复当时的室内图、家具和补充要求。</p>
         </div>
+        {history.length > 4 ? (
+          <Button variant="secondary" size="compact" onClick={() => setIsExpanded((current) => !current)}>
+            {isExpanded ? '收起历史' : '展开全部历史'}
+          </Button>
+        ) : null}
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
-        <AnimatePresence>
-          {history.map((item, index) => {
-            const historyFurnitures = item.furnitures.length > 0 ? item.furnitures : [item.furniture];
+      {history.length === 0 ? (
+        <div className="rounded-xl border border-dashed border-zinc-300 bg-white px-5 py-8 text-center text-sm text-zinc-600">
+          生成后的效果图会自动保存在这里。
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          {visibleHistory.map((item) => {
+            const furnitures = item.furnitures.length > 0 ? item.furnitures : [item.furniture];
+            const instruction = getDisplayInstruction(item.customInstruction);
 
             return (
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: index * 0.05 }}
+              <button
+                type="button"
                 key={item.id}
                 onClick={() => loadHistoryItem(item)}
-                className="bg-white border border-zinc-200 rounded-2xl overflow-hidden shadow-sm hover:shadow-xl hover:-translate-y-1.5 transition-all duration-300 cursor-pointer group flex flex-col"
+                className="group overflow-hidden rounded-xl border border-zinc-200 bg-white text-left transition-colors hover:border-zinc-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
               >
-                <div className="relative aspect-[4/3] bg-zinc-100 overflow-hidden">
+                <span className="relative block aspect-[4/3] overflow-hidden bg-zinc-100">
                   <Image
                     src={item.generatedImage.imageUrl}
-                    alt="History result"
+                    alt="历史生成结果"
                     fill
-                    className="object-cover transition-transform duration-700 ease-out group-hover:scale-110"
+                    className="object-cover transition-transform duration-300 group-hover:scale-[1.03]"
                     sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
                     unoptimized={shouldBypassImageOptimization(item.generatedImage.imageUrl)}
                   />
-
-                  <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col items-center justify-center gap-3 backdrop-blur-sm">
-                    <motion.div
-                      initial={{ scale: 0.8 }}
-                      whileInView={{ scale: 1 }}
-                      className="bg-white/90 text-zinc-900 font-medium text-sm px-4 py-2 rounded-full shadow-lg transform translate-y-4 group-hover:translate-y-0 transition-transform duration-300"
-                    >
-                      点击恢复此状态
-                    </motion.div>
-                  </div>
-
-                  <div className="absolute top-3 right-3 bg-white/90 backdrop-blur-md text-zinc-700 text-xs font-medium px-2.5 py-1.5 rounded-lg shadow-sm flex items-center gap-1.5">
-                    <Clock size={12} />
+                  <span className="absolute right-2 top-2 flex items-center gap-1 rounded-lg bg-white/95 px-2 py-1 text-xs text-zinc-700 shadow-sm">
+                    <Clock aria-hidden="true" size={12} />
                     {formatBeijingTime(item.createdAt)}
-                  </div>
-                </div>
-
-                <div className="p-4 bg-white flex-1 flex flex-col justify-between border-t border-zinc-100">
-                  <div className="flex items-center gap-3 mb-3">
-                    <div className="text-xs font-medium text-zinc-400 uppercase tracking-wider w-12">家具</div>
-                    <div className="flex items-center gap-2 bg-zinc-50 px-2 py-1.5 rounded-lg flex-1 border border-zinc-100 overflow-hidden group-hover:bg-zinc-100/50 transition-colors">
-                      <div className="flex -space-x-2 shrink-0">
-                        {historyFurnitures.slice(0, 3).map((furniture) => (
-                          <div
-                            key={`${item.id}-${furniture.id}`}
-                            className="relative w-6 h-6 rounded-md overflow-hidden bg-white border border-zinc-200 shadow-sm"
-                          >
-                            <Image
-                              src={furniture.imageUrl}
-                              alt={furniture.name}
-                              fill
-                              className="object-contain p-0.5"
-                              sizes="24px"
-                              unoptimized={shouldBypassImageOptimization(furniture.imageUrl)}
-                            />
-                          </div>
-                        ))}
-                      </div>
-                      <span className="text-sm font-medium text-zinc-700 truncate">
-                        {historyFurnitures.length === 1
-                          ? historyFurnitures[0].name
-                          : `${historyFurnitures[0].name} 等 ${historyFurnitures.length} 件家具`}
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-3">
-                    <div className="text-xs font-medium text-zinc-400 uppercase tracking-wider w-12">场景</div>
-                    <div className="flex items-center gap-2 bg-zinc-50 px-2 py-1.5 rounded-lg flex-1 border border-zinc-100 overflow-hidden group-hover:bg-zinc-100/50 transition-colors">
-                      <div className="relative w-6 h-6 rounded-md overflow-hidden bg-zinc-200 shrink-0 shadow-sm">
-                        <Image
-                          src={item.roomImage.imageUrl}
-                          alt={item.roomImage.name}
-                          fill
-                          className="object-cover"
-                          sizes="24px"
-                          unoptimized={shouldBypassImageOptimization(item.roomImage.imageUrl)}
-                        />
-                      </div>
-                      <span className="text-sm text-zinc-600 truncate">
-                        原始室内图
-                      </span>
-                    </div>
-                  </div>
-
-                  {getDisplayInstruction(item.customInstruction) && (
-                    <div className="flex items-start gap-3 mt-3 pt-3 border-t border-zinc-100">
-                      <div className="text-xs font-medium text-zinc-400 uppercase tracking-wider w-12 mt-0.5">指令</div>
-                      <div className="text-xs text-zinc-600 flex-1 line-clamp-2" title={getDisplayInstruction(item.customInstruction)}>
-                        {getDisplayInstruction(item.customInstruction)}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </motion.div>
+                  </span>
+                </span>
+                <span className="block p-3">
+                  <span className="block truncate text-sm font-medium text-zinc-900">
+                    {furnitures.length === 1 ? furnitures[0].name : `${furnitures[0].name} 等 ${furnitures.length} 件家具`}
+                  </span>
+                  <span className="mt-1 block truncate text-xs text-zinc-500">{instruction || '未填写补充要求'}</span>
+                </span>
+              </button>
             );
           })}
-        </AnimatePresence>
-      </div>
-
-      {historyNextCursor && (
-        <div className="flex justify-center mt-6">
-          <button
-            type="button"
-            onClick={() => {
-              void loadMoreHistory();
-            }}
-            disabled={isLoadingMoreHistory}
-            className="px-6 py-2 bg-white border border-zinc-200 rounded-xl text-sm font-medium text-zinc-700 hover:bg-zinc-50 hover:border-zinc-300 transition-colors shadow-sm disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {isLoadingMoreHistory ? '加载中...' : '加载更多'}
-          </button>
         </div>
       )}
-    </div>
+
+      {isExpanded && historyNextCursor ? (
+        <div className="mt-5 flex justify-center">
+          <Button
+            variant="secondary"
+            onClick={() => void loadMoreHistory()}
+            isLoading={isLoadingMoreHistory}
+            loadingLabel="正在加载..."
+          >
+            加载更多
+          </Button>
+        </div>
+      ) : null}
+    </section>
   );
 }

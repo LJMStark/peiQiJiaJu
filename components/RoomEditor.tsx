@@ -77,13 +77,13 @@ export function RoomEditor({ catalog, onUploadFiles, user }: RoomEditorProps) {
   })();
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6 sm:space-y-8">
       <div>
-        <h2 className="text-2xl font-bold text-zinc-900 mb-1">室内编辑器</h2>
-        <p className="text-zinc-500">选择当前室内图，并将已选家具一次性融合到同一张效果图中。</p>
+        <h1 className="text-2xl font-semibold tracking-tight text-zinc-900 sm:text-[28px]">室内编辑器</h1>
+        <p className="mt-1 text-sm leading-6 text-zinc-600 sm:text-base">上传房间、选择家具，然后生成可直接给客户查看的效果图。</p>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 lg:gap-8 lg:h-[calc(100vh-180px)]">
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-[340px_minmax(0,1fr)] lg:items-start lg:gap-6">
         <RoomEditorInputPanel controller={controller} />
         <RoomEditorResultPanel catalog={catalog} controller={controller} />
       </div>

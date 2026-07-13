@@ -3,6 +3,9 @@
 import Image from 'next/image';
 import { AnimatePresence, motion } from 'motion/react';
 import { CheckCircle2, Layers, Loader2, Maximize2, Upload, X } from 'lucide-react';
+import { useId } from 'react';
+import { Button } from '@/components/ui/Button';
+import { useDialogAccessibility } from '@/components/use-dialog-accessibility';
 import { FURNITURE_CATEGORIES, type FurnitureItem } from '@/lib/dashboard-types';
 import { shouldBypassImageOptimization } from '@/lib/remote-images';
 
@@ -33,6 +36,8 @@ export function FurnitureDrawer({
   uploadInputId,
   isUploading,
 }: FurnitureDrawerProps) {
+  const titleId = useId();
+  const dialogRef = useDialogAccessibility<HTMLDivElement>({ isOpen, onClose, lockScroll: true });
   const filteredCatalog = activeCategory === '全部'
     ? catalog
     : catalog.filter(item => item.category === activeCategory || (!item.category && activeCategory === '其他'));
@@ -52,17 +57,24 @@ export function FurnitureDrawer({
             initial={{ x: '100%' }}
             animate={{ x: 0 }}
             exit={{ x: '100%' }}
-            transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-            className="relative w-full max-w-md bg-white h-full shadow-2xl flex flex-col"
+              transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+            ref={dialogRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby={titleId}
+            tabIndex={-1}
+            className="relative flex h-full w-full flex-col bg-white shadow-2xl outline-none sm:max-w-md"
           >
             <div className="p-4 border-b border-zinc-200 flex items-center justify-between bg-zinc-50">
               <div className="flex items-center gap-2">
                 <Layers size={20} className="text-indigo-600" />
-                <h3 className="text-lg font-bold text-zinc-900">选择家具</h3>
+                <h3 id={titleId} className="text-lg font-bold text-zinc-900">选择家具</h3>
               </div>
-              <button
-                onClick={onClose}
-                className="p-2 text-zinc-500 hover:text-zinc-900 hover:bg-zinc-200 rounded-lg transition-colors"
+                  <button
+                    type="button"
+                    onClick={onClose}
+                    aria-label="关闭家具选择"
+                    className="flex h-11 w-11 items-center justify-center rounded-lg text-zinc-500 transition-colors hover:bg-zinc-200 hover:text-zinc-900"
               >
                 <X size={20} />
               </button>
@@ -71,8 +83,9 @@ export function FurnitureDrawer({
             <div className="p-4 border-b border-zinc-100">
               <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-2">
                 {FURNITURE_CATEGORIES.map(category => (
-                  <button
-                    key={category}
+                      <button
+                        type="button"
+                        key={category}
                     onClick={() => onCategoryChange(category)}
                     className={`px-3 py-1.5 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${
                       activeCategory === category
@@ -119,12 +132,6 @@ export function FurnitureDrawer({
                       onDragStart={(e) => {
                         e.dataTransfer.setData('application/json', JSON.stringify({ type: 'NEW', furnitureId: item.id }));
                       }}
-                      onClick={() => {
-                        if (selectionLimitReached) {
-                          return;
-                        }
-                        onToggleFurniture(item);
-                      }}
                       className={`relative aspect-square rounded-xl overflow-hidden border-2 transition-all cursor-pointer group ${
                         isSelected
                           ? 'border-indigo-500 ring-2 ring-indigo-500/20'
@@ -133,26 +140,40 @@ export function FurnitureDrawer({
                           : 'border-zinc-100 hover:border-zinc-300'
                       }`}
                     >
-                      <Image
-                        src={item.imageUrl}
-                        alt={item.name}
-                        fill
-                        className="object-contain bg-zinc-50 p-2"
-                        sizes="(max-width: 640px) 40vw, 120px"
-                        unoptimized={shouldBypassImageOptimization(item.imageUrl)}
-                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (!selectionLimitReached) {
+                            onToggleFurniture(item);
+                          }
+                        }}
+                        disabled={selectionLimitReached}
+                        aria-pressed={isSelected}
+                        aria-label={`${isSelected ? '取消选择' : '选择'}${item.name}`}
+                        className="relative h-full w-full"
+                      >
+                        <Image
+                          src={item.imageUrl}
+                          alt={item.name}
+                          fill
+                          className="object-contain bg-zinc-50 p-2"
+                          sizes="(max-width: 640px) 40vw, 120px"
+                          unoptimized={shouldBypassImageOptimization(item.imageUrl)}
+                        />
+                      </button>
                       {isSelected && (
                         <div className="absolute top-2 right-2 bg-indigo-500 text-white rounded-full p-0.5 z-10 shadow-sm">
                           <CheckCircle2 size={16} />
                         </div>
                       )}
                       <button
+                        type="button"
                         onClick={(e) => {
                           e.stopPropagation();
                           onPreview(item);
                         }}
                         className="absolute bottom-2 right-2 bg-white/90 text-zinc-700 p-1.5 rounded-md opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity hover:bg-zinc-100 hover:text-zinc-900 shadow-sm z-10"
-                        title="放大查看"
+                        aria-label={`放大查看${item.name}`}
                       >
                         <Maximize2 size={14} />
                       </button>
@@ -166,12 +187,9 @@ export function FurnitureDrawer({
               <p className="text-xs text-zinc-500 mb-3 text-center">
                 当前最多选择 {maxSelections} 张家具图
               </p>
-              <button
-                onClick={onClose}
-                className="w-full py-3 bg-zinc-900 text-white rounded-xl font-medium hover:bg-zinc-800 transition-colors shadow-sm flex items-center justify-center gap-2"
-              >
+              <Button onClick={onClose} className="w-full">
                 确认选择 ({selectedFurnitures.length} 件)
-              </button>
+              </Button>
             </div>
           </motion.div>
         </div>

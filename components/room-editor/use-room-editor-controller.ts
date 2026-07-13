@@ -610,6 +610,16 @@ export function useRoomEditorController({
     setCurrentGeneratedImage(currentSessionResults[newIndex].generatedImage);
   }
 
+  function selectSessionResult(index: number): void {
+    const item = currentSessionResults[index];
+    if (!item) {
+      return;
+    }
+
+    setCurrentResultIndex(index);
+    setCurrentGeneratedImage(item.generatedImage);
+  }
+
   return {
     furnitureUploadInputId,
     roomImages,
@@ -672,6 +682,7 @@ export function useRoomEditorController({
     handleStartNewProject,
     handleResultPrev,
     handleResultNext,
+    selectSessionResult,
   };
 }
 
