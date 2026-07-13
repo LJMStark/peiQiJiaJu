@@ -1,17 +1,57 @@
 'use client';
 
-import { AnimatePresence, motion } from 'motion/react';
-import { History, Layers, Lightbulb, Loader2, Sofa, Sparkles, Upload, X } from 'lucide-react';
+import { useState } from 'react';
+import { ChevronDown, History, Layers, Lightbulb, Loader2, Sparkles, Upload, X } from 'lucide-react';
 import Image from 'next/image';
-import { type RoomEditorController } from './use-room-editor-controller';
-import { SwipeableRoomCard } from './SwipeableRoomCard';
-import { COMMON_FURNITURE } from './room-editor-prompt';
+import { Button } from '@/components/ui/Button';
+import { StatusNotice } from '@/components/ui/StatusNotice';
 import { MAX_SELECTED_FURNITURES } from '@/lib/room-editor-limits';
 import { shouldBypassImageOptimization } from '@/lib/remote-images';
+import { COMMON_FURNITURE } from './room-editor-prompt';
+import { SwipeableRoomCard } from './SwipeableRoomCard';
+import type { RoomEditorController } from './use-room-editor-controller';
 
 type RoomEditorInputPanelProps = {
   controller: RoomEditorController;
 };
+
+type StepNumber = 1 | 2 | 3;
+
+function StepHeader({
+  number,
+  title,
+  summary,
+  isOpen,
+  onToggle,
+}: {
+  number: StepNumber;
+  title: string;
+  summary: string;
+  isOpen: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      aria-expanded={isOpen}
+      aria-controls={`editor-step-${number}`}
+      className="flex min-h-14 w-full items-center gap-3 text-left md:pointer-events-none"
+    >
+      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-zinc-900 text-sm font-semibold text-white">
+        {number}
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block text-sm font-semibold text-zinc-900">{title}</span>
+        <span className="block truncate text-xs text-zinc-500 md:hidden">{summary}</span>
+      </span>
+      <ChevronDown
+        aria-hidden="true"
+        className={`h-5 w-5 shrink-0 text-zinc-400 transition-transform md:hidden ${isOpen ? 'rotate-180' : ''}`}
+      />
+    </button>
+  );
+}
 
 export function RoomEditorInputPanel({ controller }: RoomEditorInputPanelProps) {
   const {
@@ -35,7 +75,6 @@ export function RoomEditorInputPanel({ controller }: RoomEditorInputPanelProps) 
     pendingRoomImage,
     removeRoom,
     roomImages,
-    roomStatusLabel,
     selectedFurnitures,
     setActiveRoomId,
     setCustomInstruction,
@@ -44,55 +83,50 @@ export function RoomEditorInputPanel({ controller }: RoomEditorInputPanelProps) 
     setLightboxImageUrl,
     toggleFurniture,
   } = controller;
+  const [openStep, setOpenStep] = useState<StepNumber>(1);
+
+  const missingRequirements = [
+    !activeRoom ? '还需上传室内图' : null,
+    selectedFurnitures.length === 0 ? '还需选择家具' : null,
+  ].filter((item): item is string => Boolean(item));
+  const canGenerate = missingRequirements.length === 0 && !isGenerating;
 
   return (
-    <div className="flex flex-col space-y-5 lg:space-y-6 lg:col-span-1 overflow-y-auto scrollbar-hide pb-2 relative rounded-2xl">
-      <div className="bg-white p-4 sm:p-5 rounded-2xl border border-zinc-200 shadow-sm hover:shadow-md transition-shadow duration-300">
-        <div className="flex items-center justify-between mb-4 gap-3">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-full bg-zinc-100 text-zinc-900 font-bold flex items-center justify-center text-sm">1</div>
-            <h3 className="font-medium text-zinc-900">上传室内图</h3>
-          </div>
-          <div className="flex items-center gap-2 shrink-0">
-            {activeRoom ? (
-              <button
-                type="button"
-                onClick={() => setIsNewProjectModalOpen(true)}
-                disabled={isUploadingRooms || isGenerating || isStartingNewProject}
-                className="inline-flex items-center rounded-lg px-2.5 py-1.5 text-xs font-medium text-zinc-600 transition-colors hover:bg-zinc-100 hover:text-zinc-900 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                新建项目
-              </button>
-            ) : pendingRoomImage ? (
-              <button
-                type="button"
-                onClick={handleContinuePendingRoom}
-                disabled={isUploadingRooms}
-                className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-zinc-600 transition-colors hover:bg-zinc-100 hover:text-zinc-900 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                <History size={14} />
-                继续上次室内图
-              </button>
-            ) : null}
-            <span className="text-xs font-medium bg-zinc-100 text-zinc-600 px-2 py-1 rounded-md">
-              {roomStatusLabel}
-            </span>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-2 gap-2 mb-3">
-          <AnimatePresence>
-            {roomImages.map((room) => (
-              <motion.div
-                layout
-                initial={{ opacity: 0, scale: 0.9 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.9 }}
-                transition={{ duration: 0.2 }}
-                key={room.id}
-                className="group"
-              >
+    <aside className="self-start overflow-hidden rounded-2xl border border-zinc-200 bg-white lg:sticky lg:top-24">
+      <div className="divide-y divide-zinc-200 md:grid md:grid-cols-2 md:divide-x md:divide-y-0 lg:block lg:divide-x-0 lg:divide-y">
+        <section className="px-4 sm:px-5">
+          <StepHeader
+            number={1}
+            title="选择室内图"
+            summary={activeRoom ? '室内图已选择' : '等待上传室内图'}
+            isOpen={openStep === 1}
+            onToggle={() => setOpenStep(1)}
+          />
+          <div id="editor-step-1" className={`${openStep === 1 ? 'block' : 'hidden'} pb-5 md:block`}>
+            <div className="mb-3 flex min-h-11 items-center justify-between gap-3">
+              <span className="text-xs font-medium text-zinc-500">
+                {activeRoom ? '当前室内图已就绪' : roomImages.length > 0 ? `可选 ${roomImages.length} 张` : '支持常见图片格式'}
+              </span>
+              {activeRoom ? (
+                <Button
+                  variant="ghost"
+                  size="compact"
+                  onClick={() => setIsNewProjectModalOpen(true)}
+                  disabled={isUploadingRooms || isGenerating || isStartingNewProject}
+                >
+                  新建项目
+                </Button>
+              ) : pendingRoomImage ? (
+                <Button variant="ghost" size="compact" onClick={handleContinuePendingRoom} disabled={isUploadingRooms}>
+                  <History aria-hidden="true" size={14} />
+                  继续上次室内图
+                </Button>
+              ) : null}
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              {roomImages.map((room) => (
                 <SwipeableRoomCard
+                  key={room.id}
                   room={room}
                   isActive={activeRoom?.id === room.id}
                   isDeleting={deletingRoomIds.includes(room.id)}
@@ -100,245 +134,171 @@ export function RoomEditorInputPanel({ controller }: RoomEditorInputPanelProps) 
                   onDelete={removeRoom}
                   onPreview={setLightboxImageUrl}
                 />
-              </motion.div>
-            ))}
-          </AnimatePresence>
-          <div
-            className={`relative aspect-video border-2 border-dashed rounded-xl transition-colors ${
-              isUploadingRooms
-                ? 'border-zinc-200 bg-zinc-50 text-zinc-400'
-                : 'border-zinc-200 text-zinc-500 hover:bg-zinc-50 hover:border-zinc-300'
-            }`}
-          >
-            <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
-              {isUploadingRooms ? (
-                <>
-                  <Loader2 size={20} className="mb-1 text-indigo-500 animate-spin" />
-                  <span className="text-xs font-medium text-indigo-500">上传中...</span>
-                </>
-              ) : (
-                <>
-                  <Upload size={20} className="mb-1 text-zinc-400" />
-                  <span className="text-xs font-medium">{activeRoom ? '替换室内图' : '上传室内图'}</span>
-                </>
-              )}
+              ))}
+              <label
+                className={`relative flex aspect-video min-h-20 cursor-pointer flex-col items-center justify-center rounded-xl border border-dashed text-xs font-medium transition-colors ${
+                  isUploadingRooms
+                    ? 'cursor-not-allowed border-zinc-200 bg-zinc-50 text-zinc-400'
+                    : 'border-zinc-300 text-zinc-600 hover:border-indigo-300 hover:bg-indigo-50/40'
+                }`}
+              >
+                {isUploadingRooms ? <Loader2 aria-hidden="true" className="mb-2 h-5 w-5 animate-spin text-indigo-600" /> : <Upload aria-hidden="true" className="mb-2 h-5 w-5" />}
+                {isUploadingRooms ? '上传中...' : activeRoom ? '替换室内图' : '上传室内图'}
+                <input
+                  type="file"
+                  onChange={handleRoomUpload}
+                  className="sr-only"
+                  accept="image/*"
+                  disabled={isUploadingRooms}
+                />
+              </label>
             </div>
+          </div>
+        </section>
+
+        <section className="px-4 sm:px-5">
+          <StepHeader
+            number={2}
+            title="选择家具"
+            summary={selectedFurnitures.length > 0 ? `已选 ${selectedFurnitures.length} 件家具` : '尚未选择家具'}
+            isOpen={openStep === 2}
+            onToggle={() => setOpenStep(2)}
+          />
+          <div id="editor-step-2" className={`${openStep === 2 ? 'block' : 'hidden'} pb-5 md:block`}>
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <span className="text-xs text-zinc-500">最多选择 {MAX_SELECTED_FURNITURES} 件</span>
+              <Button variant="secondary" size="compact" onClick={() => setIsDrawerOpen(true)}>
+                <Layers aria-hidden="true" size={16} />
+                打开图册
+              </Button>
+            </div>
+            {selectedFurnitures.length > 0 ? (
+              <div className="flex flex-wrap gap-2">
+                {selectedFurnitures.map((item) => (
+                  <div key={item.id} className="group relative h-20 w-20 overflow-hidden rounded-lg border border-zinc-200 bg-zinc-50">
+                    <button
+                      type="button"
+                      onClick={() => setLightboxImageUrl(item.imageUrl)}
+                      aria-label={`查看${item.name}`}
+                      className="relative h-full w-full"
+                    >
+                      <Image
+                        src={item.imageUrl}
+                        alt={item.name}
+                        fill
+                        className="object-contain p-1"
+                        sizes="80px"
+                        unoptimized={shouldBypassImageOptimization(item.imageUrl)}
+                      />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => toggleFurniture(item)}
+                      aria-label={`移除${item.name}`}
+                      className="absolute right-1 top-1 flex h-8 w-8 items-center justify-center rounded-lg bg-white/95 text-red-600 shadow-sm opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100"
+                    >
+                      <X aria-hidden="true" size={14} />
+                    </button>
+                  </div>
+                ))}
+                <Button variant="ghost" size="icon" onClick={() => setIsDrawerOpen(true)} ariaLabel="继续选择家具" className="h-20 w-20 border-dashed">
+                  <Layers aria-hidden="true" size={18} />
+                </Button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setIsDrawerOpen(true)}
+                className="flex min-h-24 w-full items-center justify-center rounded-xl border border-dashed border-zinc-300 bg-zinc-50 text-sm font-medium text-zinc-700 hover:border-indigo-300 hover:bg-indigo-50/40"
+              >
+                从图册选择家具
+              </button>
+            )}
             <input
+              id={furnitureUploadInputId}
               type="file"
-              onChange={handleRoomUpload}
-              className={`absolute inset-0 h-full w-full opacity-0 ${isUploadingRooms ? 'cursor-not-allowed' : 'cursor-pointer'}`}
+              onChange={handleFurnitureUpload}
+              className="sr-only"
               accept="image/*"
-              disabled={isUploadingRooms}
-              aria-label={activeRoom ? '替换室内图' : '上传室内图'}
+              multiple
+              disabled={isUploadingFurniture}
             />
           </div>
-        </div>
-      </div>
+        </section>
 
-      <div className="bg-white p-4 sm:p-5 rounded-2xl border border-zinc-200 shadow-sm hover:shadow-md transition-shadow duration-300 flex flex-col">
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-full bg-zinc-100 text-zinc-900 font-bold flex items-center justify-center text-sm">2</div>
-            <h3 className="font-medium text-zinc-900">选择家具</h3>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-medium bg-zinc-100 text-zinc-600 px-2 py-1 rounded-md">
-              最多 {MAX_SELECTED_FURNITURES} 张
-            </span>
-            <button
-              onClick={() => setIsDrawerOpen(true)}
-              className="text-sm text-indigo-600 hover:text-indigo-700 font-medium flex items-center gap-1.5 bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded-lg transition-colors"
-            >
-              <Layers size={16} />
-              打开图册
-            </button>
-          </div>
-        </div>
-
-        {selectedFurnitures.length === 0 ? (
-          <div className="text-sm text-zinc-500 bg-zinc-50 p-6 rounded-xl border border-dashed border-zinc-200 text-center flex flex-col items-center gap-2">
-            <Sofa size={24} className="text-zinc-300" />
-            <p>尚未选择家具</p>
-            <button
-              onClick={() => setIsDrawerOpen(true)}
-              className="mt-2 px-4 py-2 bg-white border border-zinc-200 rounded-lg text-sm font-medium hover:bg-zinc-50 transition-colors"
-            >
-              从图册选择
-            </button>
-          </div>
-        ) : (
-          <div className="flex flex-wrap gap-2">
-            <AnimatePresence>
-              {selectedFurnitures.map((item) => (
-                <motion.div
-                  layout
-                  initial={{ opacity: 0, scale: 0.8 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  exit={{ opacity: 0, scale: 0.8 }}
-                  transition={{ duration: 0.2 }}
-                  key={item.id}
-                  className="relative w-20 h-20 rounded-lg border border-zinc-200 overflow-hidden group shadow-sm hover:shadow-md transition-shadow cursor-pointer"
-                  onClick={() => setLightboxImageUrl(item.imageUrl)}
+        <section className="px-4 sm:px-5 md:col-span-2 md:border-t md:border-zinc-200 lg:col-span-1 lg:border-t-0">
+          <StepHeader
+            number={3}
+            title="补充要求"
+            summary={customInstruction.trim() ? '已填写补充要求' : '可选'}
+            isOpen={openStep === 3}
+            onToggle={() => setOpenStep(3)}
+          />
+          <div id="editor-step-3" className={`${openStep === 3 ? 'block' : 'hidden'} pb-5 md:block`}>
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+              <span className="text-xs text-zinc-500">可选，不填也能生成</span>
+              <Button variant="ghost" size="compact" onClick={handleRecommendInstruction}>
+                <Lightbulb aria-hidden="true" size={14} />
+                推荐一句
+              </Button>
+            </div>
+            <div className="mb-3 flex flex-wrap gap-2">
+              {COMMON_FURNITURE.map((item) => (
+                <button
+                  type="button"
+                  key={item}
+                  onClick={() => handleAddFurnitureTag(item)}
+                  className="min-h-9 rounded-full border border-zinc-200 bg-zinc-50 px-3 text-xs text-zinc-700 hover:bg-zinc-100"
                 >
-                  <Image
-                    src={item.imageUrl}
-                    alt={item.name}
-                    fill
-                    className="object-contain bg-zinc-50 p-1 transition-transform duration-500 group-hover:scale-110"
-                    sizes="80px"
-                    unoptimized={shouldBypassImageOptimization(item.imageUrl)}
-                  />
-                  <button
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      toggleFurniture(item);
-                    }}
-                    className="absolute top-1 right-1 bg-white/90 backdrop-blur-md text-red-500 p-1 rounded-md opacity-0 group-hover:opacity-100 transition-all hover:bg-red-50 hover:scale-110 shadow-sm z-10"
-                  >
-                    <X size={12} />
-                  </button>
-                </motion.div>
+                  {item}
+                </button>
               ))}
-            </AnimatePresence>
-            <button
-              type="button"
-              onClick={() => setIsDrawerOpen(true)}
-              disabled={isUploadingFurniture}
-              className={`w-20 h-20 border-2 border-dashed rounded-lg flex flex-col items-center justify-center transition-colors ${
-                isUploadingFurniture
-                  ? 'border-zinc-200 bg-zinc-50 text-zinc-400 cursor-not-allowed'
-                  : 'border-zinc-200 text-zinc-500 hover:bg-zinc-50 hover:border-zinc-300 cursor-pointer'
-              }`}
-            >
-              {isUploadingFurniture ? (
-                <>
-                  <Loader2 size={16} className="mb-1 text-indigo-500 animate-spin" />
-                  <span className="text-[10px] font-medium text-indigo-500">识别中...</span>
-                </>
-              ) : (
-                <>
-                  <Layers size={16} className="mb-1 text-zinc-400" />
-                  <span className="text-[10px] font-medium">继续选择</span>
-                </>
-              )}
-            </button>
+            </div>
+            {hasDuplicateFurnitureTypes ? (
+              <StatusNotice tone="warning" className="mb-3">
+                选中了同类家具，请在补充要求里说明每件家具的用途或位置。
+              </StatusNotice>
+            ) : null}
+            <label className="sr-only" htmlFor="editor-instruction">补充要求</label>
+            <textarea
+              id="editor-instruction"
+              value={customInstruction}
+              onChange={(event) => setCustomInstruction(event.target.value)}
+              placeholder="例如：把双人沙发放在窗边，保留原有墙面和地板。"
+              className="h-24 w-full resize-none rounded-xl border border-zinc-200 px-3 py-3 text-sm text-zinc-900 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
+            />
           </div>
-        )}
-        <input
-          id={furnitureUploadInputId}
-          type="file"
-          onChange={handleFurnitureUpload}
-          className="sr-only"
-          accept="image/*"
-          multiple
-          disabled={isUploadingFurniture}
-        />
+        </section>
       </div>
 
-      <div className="bg-white p-4 sm:p-5 rounded-2xl border border-zinc-200 shadow-sm hover:shadow-md transition-shadow duration-300">
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-full bg-zinc-100 text-zinc-900 font-bold flex items-center justify-center text-sm">3</div>
-            <h3 className="font-medium text-zinc-900">附加指令 <span className="text-zinc-400 text-sm font-normal">(可选)</span></h3>
-          </div>
-          <button
-            onClick={handleRecommendInstruction}
-            className="flex items-center gap-1.5 text-xs font-medium text-indigo-600 hover:text-indigo-700 bg-indigo-50 hover:bg-indigo-100 px-2.5 py-1.5 rounded-lg transition-colors"
-            title="随机填入一条实用指令"
-          >
-            <Lightbulb size={14} />
-            推荐指令
-          </button>
-        </div>
-
-        <div className="mb-3">
-          <div className="text-xs text-zinc-500 mb-2">快捷选择要替换的家具：</div>
-          <div className="flex flex-wrap gap-2">
-            {COMMON_FURNITURE.map((item) => (
-              <button
-                key={item}
-                onClick={() => handleAddFurnitureTag(item)}
-                className="text-xs px-3 py-1.5 bg-zinc-50 border border-zinc-200 text-zinc-600 rounded-full hover:bg-zinc-100 hover:border-zinc-300 transition-colors"
-              >
-                {item}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {hasDuplicateFurnitureTypes && (
-          <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
-            <p className="text-sm text-amber-800 leading-relaxed">
-              友情提醒：当前选择中包含同类家具。建议您在下方附加指令里补充更细的描述，例如“双人沙发”“餐椅”“梳妆凳”，帮助 AI 更准确地区分它们，并把所有家具放进同一张空间效果图中。
-            </p>
-          </div>
-        )}
-
-        <textarea
-          value={customInstruction}
-          onChange={(event) => setCustomInstruction(event.target.value)}
-          placeholder="例如：第1件家具是双人沙发，第2件家具是餐椅，第3件家具是落地灯。请把这些家具同时放进当前房间..."
-          className="w-full px-4 py-3 rounded-xl border border-zinc-200 focus:border-zinc-900 focus:ring-1 focus:ring-zinc-900 outline-none transition-all resize-none h-24 text-sm"
-        />
-      </div>
-
-      <div className="sticky bottom-0 pt-4 pb-2 bg-gradient-to-t from-zinc-50 via-zinc-50/90 to-transparent backdrop-blur-[2px] z-20 mt-auto -mx-1 px-1">
-        <button
+      <div className="sticky bottom-0 border-t border-zinc-200 bg-white p-4 sm:p-5">
+        {missingRequirements.length > 0 ? (
+          <p className="mb-3 text-sm text-zinc-600">{missingRequirements.join('，')}</p>
+        ) : null}
+        <Button
           onClick={() => handleGenerate()}
-          disabled={!activeRoom || selectedFurnitures.length === 0 || isGenerating}
-          className={`w-full py-4 rounded-2xl font-medium flex items-center justify-center gap-2 transition-all duration-300 active:scale-[0.98] group ${
-            !activeRoom || selectedFurnitures.length === 0
-              ? 'bg-zinc-100 text-zinc-400 cursor-not-allowed border border-zinc-200'
-              : isGenerating
-                ? 'bg-indigo-500 text-white cursor-wait shadow-lg shadow-indigo-500/20'
-                : 'bg-zinc-900 text-white hover:bg-zinc-800 shadow-md hover:shadow-xl hover:-translate-y-0.5'
-          }`}
+          disabled={!canGenerate}
+          isLoading={isGenerating}
+          loadingLabel="正在生成效果图..."
+          className="w-full"
         >
-          {isGenerating ? (
-            <>
-              <Loader2 size={20} className="animate-spin" />
-              正在生成当前室内图...
-            </>
-          ) : (
-            <>
-              {selectedFurnitures.length > 1 ? <Layers size={20} className="group-hover:rotate-6 transition-transform" /> : <Sparkles size={20} className="group-hover:rotate-12 transition-transform" />}
-              <span className="group-hover:tracking-wider transition-all duration-300">
-                {selectedFurnitures.length > 1
-                  ? `将 ${selectedFurnitures.length} 件家具放入当前房间`
-                  : '在当前房间中可视化'}
-              </span>
-            </>
-          )}
-        </button>
-
-        <AnimatePresence>
-          {error && (
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: 10 }}
-              className="mt-3 p-3 bg-red-50 text-red-600 text-sm rounded-xl border border-red-200 shadow-sm"
-            >
-              <p>{error}</p>
-              {errorDetails.length > 0 && (
-                <details className="mt-2">
-                  <summary className="cursor-pointer text-xs text-red-500 hover:text-red-700">
-                    查看详细错误 ({errorDetails.length})
-                  </summary>
-                  <ul className="mt-2 max-h-32 overflow-y-auto space-y-1 text-xs text-red-500">
-                    {errorDetails.map((detail, index) => (
-                      <li key={index} className="flex items-start gap-1">
-                        <span className="shrink-0">#{index + 1}</span>
-                        <span>{detail}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </details>
-              )}
-            </motion.div>
-          )}
-        </AnimatePresence>
+          <Sparkles aria-hidden="true" size={18} />
+          {selectedFurnitures.length > 1 ? `生成含 ${selectedFurnitures.length} 件家具的效果图` : '生成效果图'}
+        </Button>
+        {error ? (
+          <StatusNotice tone="error" className="mt-3" title="这次没有完成">
+            <p>{error}</p>
+            {errorDetails.length > 0 ? (
+              <details className="mt-2 text-xs">
+                <summary className="cursor-pointer">查看详细信息</summary>
+                <ul className="mt-2 space-y-1">
+                  {errorDetails.map((detail, index) => <li key={`${index}-${detail}`}>{detail}</li>)}
+                </ul>
+              </details>
+            ) : null}
+          </StatusNotice>
+        ) : null}
       </div>
-    </div>
+    </aside>
   );
 }

@@ -5,6 +5,8 @@ import { useDeferredValue, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { Loader2, RefreshCcw, Search } from 'lucide-react';
 import { postJson } from '@/lib/client/api';
+import { Button } from '@/components/ui/Button';
+import { DialogFrame } from '@/components/ui/DialogFrame';
 
 type AdminInviteUser = {
   id: string;
@@ -46,7 +48,7 @@ function getNoticeClassName(tone: NoticeTone): string {
     return 'border border-emerald-200 bg-emerald-50 text-emerald-700';
   }
 
-  return 'border border-rose-200 bg-rose-50 text-rose-700';
+  return 'border border-red-200 bg-red-50 text-red-700';
 }
 
 function getUserDisplayName(user: AdminInviteUser): string {
@@ -61,6 +63,7 @@ export function AdminInviteUserTable({ users }: { users: AdminInviteUser[] }): J
   const [notice, setNotice] = useState('');
   const [noticeTone, setNoticeTone] = useState<NoticeTone>('success');
   const [isPending, startTransition] = useTransition();
+  const [resetTarget, setResetTarget] = useState<AdminInviteUser | null>(null);
 
   const filteredUsers = users.filter((user) => {
     if (!deferredQuery) {
@@ -72,6 +75,7 @@ export function AdminInviteUserTable({ users }: { users: AdminInviteUser[] }): J
   });
 
   const handleReset = (user: AdminInviteUser) => {
+    setResetTarget(null);
     setPendingUserId(user.id);
     setNotice('');
 
@@ -95,7 +99,8 @@ export function AdminInviteUserTable({ users }: { users: AdminInviteUser[] }): J
   };
 
   return (
-    <section className="bg-white rounded-xl border border-zinc-200 shadow-sm overflow-hidden">
+    <>
+    <section className="overflow-hidden rounded-xl border border-zinc-200 bg-white">
       <div className="px-6 py-5 border-b border-zinc-200 space-y-4">
         <div>
           <h2 className="text-lg font-semibold text-zinc-900">用户邀请链接</h2>
@@ -114,7 +119,7 @@ export function AdminInviteUserTable({ users }: { users: AdminInviteUser[] }): J
         </div>
 
         {notice ? (
-          <div className={`rounded-xl px-4 py-3 text-sm ${getNoticeClassName(noticeTone)}`}>
+          <div role={noticeTone === 'error' ? 'alert' : 'status'} className={`rounded-xl px-4 py-3 text-sm ${getNoticeClassName(noticeTone)}`}>
             {notice}
           </div>
         ) : null}
@@ -155,9 +160,9 @@ export function AdminInviteUserTable({ users }: { users: AdminInviteUser[] }): J
                   <td className="px-6 py-4">
                     <button
                       type="button"
-                      onClick={() => handleReset(user)}
+                      onClick={() => setResetTarget(user)}
                       disabled={isCurrentRowPending || !user.emailVerified}
-                      className="inline-flex items-center gap-2 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm font-medium text-zinc-700 transition hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-50"
+                      className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm font-medium text-zinc-700 transition hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       {isCurrentRowPending ? <Loader2 size={16} className="animate-spin" /> : <RefreshCcw size={16} />}
                       强制重置
@@ -178,5 +183,25 @@ export function AdminInviteUserTable({ users }: { users: AdminInviteUser[] }): J
         </table>
       </div>
     </section>
+    <DialogFrame
+      isOpen={resetTarget !== null}
+      title="重置邀请链接"
+      description="重置后，旧链接和旧邀请码会立即失效。"
+      onClose={() => setResetTarget(null)}
+      isDismissDisabled={isPending}
+      footer={resetTarget ? (
+        <>
+          <Button variant="secondary" onClick={() => setResetTarget(null)} disabled={isPending}>取消</Button>
+          <Button variant="danger" onClick={() => handleReset(resetTarget)} isLoading={isPending} loadingLabel="正在重置...">确认重置</Button>
+        </>
+      ) : null}
+    >
+      {resetTarget ? (
+        <p className="text-sm leading-6 text-zinc-700">
+          确定要重置 <strong className="font-semibold text-zinc-900">{getUserDisplayName(resetTarget)}</strong> 的邀请链接吗？操作完成后，页面会显示新的邀请码。
+        </p>
+      ) : null}
+    </DialogFrame>
+    </>
   );
 }

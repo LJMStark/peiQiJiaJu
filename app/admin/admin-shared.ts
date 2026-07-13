@@ -56,7 +56,7 @@ export function isAdminNavActive(pathname: string, href: string) {
 
 export function getAdminNavLinkClass(pathname: string, href: string) {
   const baseClass =
-    'px-4 py-2 rounded-lg font-medium transition-colors';
+    'inline-flex min-h-11 shrink-0 items-center rounded-lg px-4 py-2 font-medium transition-colors';
 
   if (isAdminNavActive(pathname, href)) {
     return `${baseClass} bg-indigo-50 text-indigo-700 hover:bg-indigo-100`;

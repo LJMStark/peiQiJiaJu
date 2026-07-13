@@ -19,6 +19,7 @@ import {
   TrendingUp,
   CheckCircle2,
   CalendarRange,
+  AlertTriangle,
 } from 'lucide-react';
 import { redirect } from 'next/navigation';
 import { getServerSession } from '@/lib/auth';
@@ -80,13 +81,24 @@ const EMPTY_RETENTION: CohortRetention = {
   cohorts: [],
 };
 
-async function settle<T>(promise: Promise<T>, fallback: T): Promise<T> {
-  try {
-    return await promise;
-  } catch (error) {
-    console.error('[admin dashboard] section load failed:', error);
-    return fallback;
+function readSettled<T>(result: PromiseSettledResult<T>, fallback: T, section: string) {
+  if (result.status === 'fulfilled') {
+    return { data: result.value, failed: false };
   }
+
+  console.error(`[admin dashboard] ${section} load failed:`, result.reason);
+  return { data: fallback, failed: true };
+}
+
+function SectionLoadError({ failed }: { failed: boolean }) {
+  if (!failed) return null;
+
+  return (
+    <div role="alert" className="flex items-center gap-2 border-b border-red-200 bg-red-50 px-6 py-3 text-sm text-red-700">
+      <AlertTriangle className="h-4 w-4 shrink-0" />
+      这部分数据加载失败，其他数据不受影响。请稍后刷新重试。
+    </div>
+  );
 }
 
 export default async function AdminDashboardPage() {
@@ -96,25 +108,33 @@ export default async function AdminDashboardPage() {
     redirect('/');
   }
 
-  const [
-    stats,
-    users,
-    trendPoints,
-    vipStats,
-    redemptionStats,
-    leaderboard,
-    successStats,
-    retention,
-  ] = await Promise.all([
-    settle<DashboardStats>(getDashboardStats(), EMPTY_DASHBOARD_STATS),
-    settle<UserListRow[]>(getUsersList(), []),
-    settle<TrendPoint[]>(getDashboardTrends(30), []),
-    settle<VipStats>(getVipStats(), EMPTY_VIP_STATS),
-    settle<RedemptionStats>(getRedemptionStats(), EMPTY_REDEMPTION_STATS),
-    settle<LeaderboardRow[]>(getGenerationLeaderboard(10), []),
-    settle<SuccessStats>(getGenerationSuccessStats(30), EMPTY_SUCCESS_STATS),
-    settle<CohortRetention>(getCohortRetention(8), EMPTY_RETENTION),
-  ]);
+  const [statsResult, usersResult, trendsResult, vipResult, redemptionResult, leaderboardResult, successResult, retentionResult] = await Promise.allSettled([
+    getDashboardStats(),
+    getUsersList(),
+    getDashboardTrends(30),
+    getVipStats(),
+    getRedemptionStats(),
+    getGenerationLeaderboard(10),
+    getGenerationSuccessStats(30),
+    getCohortRetention(8),
+  ] as const);
+  const statsSection = readSettled<DashboardStats>(statsResult, EMPTY_DASHBOARD_STATS, 'stats');
+  const usersSection = readSettled<UserListRow[]>(usersResult, [], 'users');
+  const trendsSection = readSettled<TrendPoint[]>(trendsResult, [], 'trends');
+  const vipSection = readSettled<VipStats>(vipResult, EMPTY_VIP_STATS, 'vip');
+  const redemptionSection = readSettled<RedemptionStats>(redemptionResult, EMPTY_REDEMPTION_STATS, 'redemption');
+  const leaderboardSection = readSettled<LeaderboardRow[]>(leaderboardResult, [], 'leaderboard');
+  const successSection = readSettled<SuccessStats>(successResult, EMPTY_SUCCESS_STATS, 'success');
+  const retentionSection = readSettled<CohortRetention>(retentionResult, EMPTY_RETENTION, 'retention');
+  const stats = statsSection.data;
+  const users = usersSection.data;
+  const trendPoints = trendsSection.data;
+  const vipStats = vipSection.data;
+  const redemptionStats = redemptionSection.data;
+  const leaderboard = leaderboardSection.data;
+  const successStats = successSection.data;
+  const retention = retentionSection.data;
+  const hasSectionFailure = [statsSection, usersSection, trendsSection, vipSection, redemptionSection, leaderboardSection, successSection, retentionSection].some((section) => section.failed);
 
   const statCards = [
     {
@@ -135,15 +155,15 @@ export default async function AdminDashboardPage() {
       title: '今日新增',
       value: stats.newUsers,
       icon: UserPlus,
-      color: 'text-purple-600',
-      bgColor: 'bg-purple-100',
+      color: 'text-indigo-600',
+      bgColor: 'bg-indigo-100',
     },
     {
       title: '总生成次数',
       value: stats.totalGenerations,
       icon: ImageIcon,
-      color: 'text-orange-600',
-      bgColor: 'bg-orange-100',
+      color: 'text-amber-700',
+      bgColor: 'bg-amber-100',
     },
   ];
 
@@ -159,8 +179,17 @@ export default async function AdminDashboardPage() {
         <p className="text-sm text-zinc-500 mt-1">系统核心运行数据及用户列表</p>
       </div>
 
+      {hasSectionFailure ? (
+        <div role="alert" className="flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          <AlertTriangle className="h-4 w-4 shrink-0" />
+          部分数据加载失败。失败的数据块已单独标出，其余内容仍可正常查看。
+        </div>
+      ) : null}
+
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="space-y-3">
+        <SectionLoadError failed={statsSection.failed} />
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
         {statCards.map((stat, idx) => {
           const Icon = stat.icon;
           return (
@@ -175,6 +204,7 @@ export default async function AdminDashboardPage() {
             </div>
           );
         })}
+        </div>
       </div>
 
       {/* 30 天趋势 */}
@@ -188,6 +218,7 @@ export default async function AdminDashboardPage() {
             <p className="text-xs text-zinc-500 mt-0.5">按北京时间统计每日注册数与生成数</p>
           </div>
         </div>
+        <SectionLoadError failed={trendsSection.failed} />
         <DashboardTrendChart points={trendPoints} />
       </div>
 
@@ -204,6 +235,7 @@ export default async function AdminDashboardPage() {
               <p className="text-xs text-zinc-500 mt-0.5">用户付费 / 验证状态分布</p>
             </div>
           </div>
+          <SectionLoadError failed={vipSection.failed} />
           <dl className="px-6 py-5 grid grid-cols-2 gap-x-4 gap-y-4 text-sm">
             <div>
               <dt className="text-zinc-500">当前 VIP</dt>
@@ -238,6 +270,7 @@ export default async function AdminDashboardPage() {
               <p className="text-xs text-zinc-500 mt-0.5">使用率 {redemptionUsageRate}%（已用 / 总数）</p>
             </div>
           </div>
+          <SectionLoadError failed={redemptionSection.failed} />
           <dl className="px-6 py-5 grid grid-cols-2 gap-x-4 gap-y-4 text-sm">
             <div>
               <dt className="text-zinc-500">总发放</dt>
@@ -278,14 +311,15 @@ export default async function AdminDashboardPage() {
         {/* 重度用户 */}
         <div className="bg-white rounded-xl border border-zinc-200 shadow-sm overflow-hidden">
           <div className="px-6 py-5 border-b border-zinc-200 flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-rose-100">
-              <Trophy className="w-5 h-5 text-rose-600" />
+            <div className="p-2 rounded-lg bg-red-100">
+              <Trophy className="w-5 h-5 text-red-600" />
             </div>
             <div>
               <h2 className="text-lg font-semibold text-zinc-900">近 30 天 Top 用户</h2>
               <p className="text-xs text-zinc-500 mt-0.5">按生成次数排序</p>
             </div>
           </div>
+          <SectionLoadError failed={leaderboardSection.failed} />
           <ol className="divide-y divide-zinc-100 text-sm">
             {leaderboard.map((user, index) => {
               const isActiveVip =
@@ -337,6 +371,7 @@ export default async function AdminDashboardPage() {
             </p>
           </div>
         </div>
+        <SectionLoadError failed={successSection.failed} />
         <div className="grid grid-cols-1 md:grid-cols-3 gap-0 divide-y md:divide-y-0 md:divide-x divide-zinc-100">
           <div className="px-6 py-5">
             <p className="text-sm text-zinc-500">成功率</p>
@@ -391,8 +426,8 @@ export default async function AdminDashboardPage() {
       {/* 周留存矩阵 */}
       <div className="bg-white rounded-xl border border-zinc-200 shadow-sm overflow-hidden">
         <div className="px-6 py-5 border-b border-zinc-200 flex items-center gap-3">
-          <div className="p-2 rounded-lg bg-violet-100">
-            <CalendarRange className="w-5 h-5 text-violet-600" />
+          <div className="p-2 rounded-lg bg-indigo-100">
+            <CalendarRange className="w-5 h-5 text-indigo-600" />
           </div>
           <div>
             <h2 className="text-lg font-semibold text-zinc-900">周留存矩阵</h2>
@@ -401,6 +436,7 @@ export default async function AdminDashboardPage() {
             </p>
           </div>
         </div>
+        <SectionLoadError failed={retentionSection.failed} />
         <div className="overflow-x-auto">
           {retention.cohorts.length === 0 ? (
             <div className="px-6 py-10 text-center text-sm text-zinc-500">
@@ -435,7 +471,7 @@ export default async function AdminDashboardPage() {
                       const bg =
                         rate == null
                           ? 'transparent'
-                          : `rgba(124, 58, 237, ${0.08 + intensity * 0.55})`;
+                          : `rgba(79, 70, 229, ${0.08 + intensity * 0.55})`;
                       const textColor =
                         intensity >= 0.6 ? 'text-white' : 'text-zinc-800';
                       return (
@@ -470,6 +506,7 @@ export default async function AdminDashboardPage() {
         <div className="px-6 py-5 border-b border-zinc-200">
           <h2 className="text-lg font-semibold text-zinc-900">最近注册用户 (Top 50)</h2>
         </div>
+        <SectionLoadError failed={usersSection.failed} />
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm text-zinc-600">
             <thead className="bg-zinc-50 text-zinc-700 text-xs uppercase font-medium">
@@ -493,7 +530,7 @@ export default async function AdminDashboardPage() {
                   </td>
                   <td className="px-6 py-4">
                     <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium
-                      ${user.role === 'admin' ? 'bg-purple-100 text-purple-800' : 'bg-zinc-100 text-zinc-800'}
+                      ${user.role === 'admin' ? 'bg-indigo-100 text-indigo-800' : 'bg-zinc-100 text-zinc-800'}
                     `}>
                       {user.role}
                     </span>

@@ -6,7 +6,7 @@ export async function register() {
   const proxyUrl = process.env.GEMINI_HTTPS_PROXY?.trim();
   if (!proxyUrl) return;
 
-  const undici = await import('undici');
+  const undici = await import(/* webpackIgnore: true */ 'undici');
   const direct = undici.getGlobalDispatcher();
   const proxy = new undici.ProxyAgent(proxyUrl);
 
