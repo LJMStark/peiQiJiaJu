@@ -65,7 +65,7 @@ function getNoticeClassName(tone: NoticeTone): string {
     return 'border border-emerald-200 bg-emerald-50 text-emerald-700';
   }
 
-  return 'border border-rose-200 bg-rose-50 text-rose-700';
+  return 'border border-red-200 bg-red-50 text-red-700';
 }
 
 async function requestInviteCenterData(): Promise<InviteCenterResponse> {
@@ -207,12 +207,12 @@ export function InviteCenter(): JSX.Element {
     const errorState = resolveInviteCenterErrorState(error);
 
     return (
-      <div className="rounded-3xl border border-zinc-200 bg-white px-6 py-12 shadow-sm sm:px-10">
+      <div className="rounded-2xl border border-zinc-200 bg-white px-6 py-12 sm:px-10">
         <div className="mx-auto flex max-w-xl flex-col items-center text-center">
-          <div className="mb-5 flex h-16 w-16 items-center justify-center rounded-2xl bg-rose-50 text-rose-500 shadow-sm">
+          <div className="mb-5 flex h-16 w-16 items-center justify-center rounded-2xl bg-red-50 text-red-600">
             <AlertTriangle size={28} />
           </div>
-          <p className="text-sm font-medium tracking-[0.18em] text-rose-500">邀请链接</p>
+          <p className="text-sm font-medium text-red-600">邀请链接</p>
           <h2 className="mt-3 text-2xl font-bold text-zinc-900">{errorState.title}</h2>
           <p className="mt-3 text-sm leading-7 text-zinc-600 sm:text-base">
             {errorState.message}
@@ -264,12 +264,12 @@ export function InviteCenter(): JSX.Element {
   ];
 
   return (
-    <div className="max-w-5xl mx-auto space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-      <section className="bg-white rounded-2xl shadow-sm border border-zinc-200 overflow-hidden">
+    <div className="mx-auto max-w-5xl space-y-6">
+      <section className="overflow-hidden rounded-2xl border border-zinc-200 bg-white">
         <div className="px-6 py-5 border-b border-zinc-200">
           <div className="space-y-1">
             <h3 className="text-lg font-semibold text-zinc-900 flex items-center gap-2">
-              <Link2 size={18} className="text-sky-600" />
+              <Link2 size={18} className="text-indigo-600" />
               邀请系统
             </h3>
             <p className="text-sm leading-6 text-zinc-500">
@@ -285,7 +285,7 @@ export function InviteCenter(): JSX.Element {
                 <div className="space-y-2 min-w-0">
                   <p className="text-sm font-medium text-zinc-500">当前邀请链接</p>
                   <div className="flex items-center gap-2 text-zinc-900">
-                    <Link2 size={18} className="text-sky-600 shrink-0" />
+                    <Link2 size={18} className="shrink-0 text-indigo-600" />
                     <p className="font-medium break-all">{data.inviteLink.inviteUrl}</p>
                   </div>
                   <p className="text-xs text-zinc-500">邀请码：{data.inviteLink.code}</p>
@@ -363,7 +363,7 @@ export function InviteCenter(): JSX.Element {
         </div>
       </section>
 
-      <section className="bg-white rounded-2xl border border-zinc-200 shadow-sm overflow-hidden">
+      <section className="overflow-hidden rounded-2xl border border-zinc-200 bg-white">
         <div className="px-6 py-5 border-b border-zinc-200 flex items-center justify-between gap-3">
           <div>
             <h3 className="text-lg font-semibold text-zinc-900">最近邀请记录</h3>
