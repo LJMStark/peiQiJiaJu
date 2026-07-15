@@ -1,1 +1,23 @@
 @import "tailwindcss";
+
+/*
+ * 落地页（营销面）设计 token —— 编辑部/画廊风，仅 components/landing 使用。
+ * 工作台仍走 zinc + indigo 现行规范（见 .claude/skills/acceptance-ui-changes）。
+ */
+@theme {
+  --color-paper: #f5f1e8;
+  --color-cream: #eae4d6;
+  --color-ink: #221d16;
+  --color-umber: #6f6557;
+  --color-linen: #d9d0bf;
+  --color-clay: #a34a24;
+  --color-clay-deep: #7f3719;
+  --color-clay-light: #d08a5c;
+  --font-display: var(--font-serif-sc), 'Songti SC', 'STSong', 'SimSun', serif;
+}
+
+/* 纸张颗粒质感：静态 SVG 噪点，配合低透明度叠加层使用 */
+.texture-grain {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='grain'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.82' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23grain)' opacity='0.55'/%3E%3C/svg%3E");
+  background-size: 160px 160px;
+}

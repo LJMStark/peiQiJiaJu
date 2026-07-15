@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation';
 import { DashboardShell } from '@/components/DashboardShell';
-import { Login } from '@/components/Login';
+import { LandingPage } from '@/components/landing/LandingPage';
 import { getServerSession, isSessionEmailVerified } from '@/lib/auth';
 import { getDisplayCompanyName } from '@/lib/company-name';
 
@@ -8,7 +8,7 @@ export default async function Home() {
   const session = await getServerSession();
 
   if (!session) {
-    return <Login />;
+    return <LandingPage />;
   }
 
   if (!isSessionEmailVerified(session)) {
