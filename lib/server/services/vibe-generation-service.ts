@@ -207,7 +207,7 @@ async function createDefaultGenerationVibeServiceDeps() {
     import('../../db.ts'),
     createDefaultGenerationExecutionDeps(),
     import('../assets.ts'),
-    import('../gemini.ts'),
+    import('../duomi-image.ts'),
   ]);
 
   const deps: GenerationVibeServiceDeps = {

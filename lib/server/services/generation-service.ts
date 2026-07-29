@@ -261,7 +261,7 @@ async function createDefaultGenerationServiceDeps() {
     import('../../db.ts'),
     createDefaultGenerationExecutionDeps(),
     import('../assets.ts'),
-    import('../gemini.ts'),
+    import('../duomi-image.ts'),
   ]);
 
   const deps: GenerationServiceDeps = {
