@@ -145,3 +145,8 @@ Use the `@/*` import alias when it improves readability.
   - HTML error pages (`<!DOCTYPE …`) seen by the client almost always come from **Zeabur's edge router, the upstream reverse proxy, or a Node process crash/restart** — not from a serverless cold start or timeout. Check the Zeabur logs, not Vercel.
   - Do not add `export const maxDuration = …` or `vercel.json` configuration; they have no effect here.
   - Concurrency is handled by a single Node.js process; in-memory state is shared across all requests on that instance.
+
+## Deployment (Zeabur)
+
+- Zeabur builds the root `Dockerfile` (multi-stage). The runtime image only carries the standalone output (`node server.js`, port 8080) with `.next/static` and `public` laid out next to it; `scripts/start-next.mjs` is for running a local build, not the container.
+- Any env var the build needs (`NEXT_PUBLIC_*`, and `NEXT_PUBLIC_SUPABASE_URL` / `DIRECT_URL` / `R2_PUBLIC_URL`, which `next.config.ts` turns into allowed image hosts) must have an `ARG` line in the builder stage, or Zeabur will not pass it into the build.

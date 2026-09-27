@@ -11,3 +11,11 @@ dist
 tmp
 *.log
 tsconfig.tsbuildinfo
+
+# Local-only material (not used by the build or at runtime)
+.claude
+.gstack
+.github
+docs
+tests
+*.md
